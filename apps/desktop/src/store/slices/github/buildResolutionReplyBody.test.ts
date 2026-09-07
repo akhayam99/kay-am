@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { ATTRIBUTION_FOOTER } from '../../../shared/utils/attribution';
 import { buildResolutionReplyBody } from './buildResolutionReplyBody';
 
 const PR_URL = 'https://github.com/o/r/pull/9';
@@ -84,7 +83,7 @@ describe('buildResolutionReplyBody', () => {
         prUrl: PR_URL,
         isAttributed: true,
       }),
-    ).toBe(`answered inline\n\n${ATTRIBUTION_FOOTER}`);
+    ).toBe(`answered inline\n\n*Written by Goodboy*`);
   });
 
   it('leaves a blank closure unsigned when attribution is enabled', () => {

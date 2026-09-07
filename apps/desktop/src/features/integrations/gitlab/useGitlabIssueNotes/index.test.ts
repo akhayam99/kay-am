@@ -4,7 +4,6 @@ import type { WorkspaceId } from '@goodboy/types';
 import type { OverrideSettings } from '@goodboy/types';
 import type { GitlabIssue, GitlabIssueNote } from '../client';
 import { overridesWithAttribution } from '../../../../__tests__/helpers/attributionOverrides';
-import { ATTRIBUTION_FOOTER } from '../../../../shared/utils/attribution';
 
 type StoreGitlabIntegration = { provider: string; config: { host: string } };
 
@@ -115,7 +114,7 @@ describe('useGitlabIssueNotes', () => {
       host: 'https://gitlab.com',
       projectPath: 'acme/web',
       issueIid: 7,
-      body: `looks good\n\n${ATTRIBUTION_FOOTER}`,
+      body: `looks good\n\n*Written by Goodboy*`,
       projectId: undefined,
     });
     await waitFor(() => expect(h.list).toHaveBeenCalledTimes(2));

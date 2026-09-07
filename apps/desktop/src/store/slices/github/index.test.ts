@@ -35,7 +35,6 @@ import type {
   ProjectScript,
   ProjectScriptId,
 } from '@goodboy/types';
-import { ATTRIBUTION_FOOTER } from '../../../shared/utils/attribution';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(async () => null),
@@ -1351,7 +1350,7 @@ describe('store contract', () => {
       expect(addReplySpy).toHaveBeenCalledWith(
         expect.anything(),
         persisted.threadId,
-        `${persisted.reply}\n\n${ATTRIBUTION_FOOTER}`,
+        `${persisted.reply}\n\n*Written by Goodboy*`,
         expect.anything(),
       );
     });
@@ -1497,7 +1496,7 @@ describe('store contract', () => {
       expect(addReplySpy).toHaveBeenCalledWith(
         expect.anything(),
         'PRRT_1',
-        `**Not applying.**\n\n**Resolution.** Closed without a change: the requested behavior is intentional\n\n${ATTRIBUTION_FOOTER}`,
+        `**Not applying.**\n\n**Resolution.** Closed without a change: the requested behavior is intentional\n\n*Written by Goodboy*`,
         expect.anything(),
       );
       expect(resolveThreadSpy).toHaveBeenCalledOnce();

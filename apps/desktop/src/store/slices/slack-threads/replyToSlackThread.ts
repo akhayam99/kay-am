@@ -8,6 +8,7 @@ export const replyToSlackThread = (get: GetFn) => {
     const attributedText = appendAttribution({
       body: text,
       isEnabled: isAttributionEnabled({ overrides: get().workspaceOverrides[workspaceId] }),
+      syntax: 'mrkdwn',
     });
     await runSlackWrite({
       get,

@@ -4,7 +4,6 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { WorkspaceId } from '@goodboy/types';
 import { overridesWithAttribution } from '../../../__tests__/helpers/attributionOverrides';
-import { ATTRIBUTION_FOOTER } from '../../../shared/utils/attribution';
 import { useAppStore } from '../../../store';
 import { useLinearIssueComments } from './useLinearIssueComments';
 
@@ -80,7 +79,7 @@ describe('useLinearIssueComments', () => {
     expect(createComment).toHaveBeenCalledWith({
       workspaceId: WORKSPACE_ID,
       issueId: 'issue-1',
-      body: `Looks good\n\n${ATTRIBUTION_FOOTER}`,
+      body: `Looks good\n\n*Written by Goodboy*`,
       projectId: undefined,
     });
     expect(result.current.comments.map((comment) => comment.id)).toEqual([

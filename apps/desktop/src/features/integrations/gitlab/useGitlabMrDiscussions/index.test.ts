@@ -18,7 +18,6 @@ vi.mock('../client', () => ({
 }));
 
 import { overridesWithAttribution } from '../../../../__tests__/helpers/attributionOverrides';
-import { ATTRIBUTION_FOOTER } from '../../../../shared/utils/attribution';
 import { useAppStore } from '../../../../store';
 import { useGitlabMrDiscussions } from './index';
 
@@ -84,7 +83,7 @@ describe('useGitlabMrDiscussions', () => {
       TARGET.host,
       TARGET.projectPath,
       TARGET.mrIid,
-      `looks good\n\n${ATTRIBUTION_FOOTER}`,
+      `looks good\n\n*Written by Goodboy*`,
     );
     await waitFor(() => expect(h.list).toHaveBeenCalledTimes(2));
   });
@@ -118,7 +117,7 @@ describe('useGitlabMrDiscussions', () => {
     expect(h.reply).toHaveBeenCalledWith({
       ...TARGET,
       discussionId: 'disc-1',
-      body: `fixed\n\n${ATTRIBUTION_FOOTER}`,
+      body: `fixed\n\n*Written by Goodboy*`,
     });
     await waitFor(() => expect(h.list).toHaveBeenCalledTimes(2));
   });

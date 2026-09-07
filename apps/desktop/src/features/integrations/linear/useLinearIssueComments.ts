@@ -69,7 +69,7 @@ export const useLinearIssueComments = ({ workspaceId, issueId, projectId }: Para
       const created = await linearCreateComment({
         workspaceId,
         issueId,
-        body: appendAttribution({ body, isEnabled: isAttributed }),
+        body: appendAttribution({ body, isEnabled: isAttributed, syntax: 'markdown' }),
         projectId,
       });
       setComments((current) => [...current, created]);

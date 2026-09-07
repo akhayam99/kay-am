@@ -72,7 +72,7 @@ export const useGithubIssueComments = ({ workspaceId, rootPath, issueNumber }: P
       await ghCreateIssueComment({
         cwd: rootPath,
         issueNumber,
-        body: appendAttribution({ body, isEnabled: isAttributed }),
+        body: appendAttribution({ body, isEnabled: isAttributed, syntax: 'markdown' }),
         workspaceId,
       });
       setReloadToken((token) => token + 1);

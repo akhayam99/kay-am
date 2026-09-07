@@ -92,7 +92,7 @@ export const useGitlabIssueNotes = ({ issue, workspaceId, projectId }: Params): 
         host,
         projectPath,
         issueIid,
-        body: appendAttribution({ body, isEnabled: isAttributed }),
+        body: appendAttribution({ body, isEnabled: isAttributed, syntax: 'markdown' }),
         projectId,
       });
       setReloadToken((token) => token + 1);

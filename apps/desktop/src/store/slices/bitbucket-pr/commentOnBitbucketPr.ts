@@ -9,6 +9,7 @@ export const commentOnBitbucketPr = (set: SetFn, get: GetFn) => {
     const attributedBody = appendAttribution({
       body,
       isEnabled: isSessionAttributionEnabled({ get, sessionId }),
+      syntax: 'markdown',
     });
     await runBitbucketPrWrite({
       set,

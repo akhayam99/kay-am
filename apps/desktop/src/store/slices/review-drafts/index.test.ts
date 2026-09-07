@@ -12,7 +12,6 @@ import type {
 import type { AppStore } from '../../store';
 import type { SetFn } from './types';
 import { overridesWithAttribution } from '../../../__tests__/helpers/attributionOverrides';
-import { ATTRIBUTION_FOOTER } from '../../../shared/utils/attribution';
 import { createReviewDraftsSlice } from './index';
 
 const {
@@ -244,13 +243,13 @@ describe('review-drafts slice', () => {
     const [, input] = addPullRequestReviewSpy.mock.calls[0]!;
     expect(input.pullRequestId).toBe('PR_node1');
     expect(input.event).toBe('APPROVE');
-    expect(input.body).toBe(`lgtm\n\n${ATTRIBUTION_FOOTER}`);
+    expect(input.body).toBe(`lgtm\n\n*Written by Goodboy*`);
     expect(input.threads).toHaveLength(2);
     expect(input.threads[0]).toEqual(
       expect.objectContaining({ path: 'src/a.ts', line: 2, side: 'RIGHT' }),
     );
     for (const thread of input.threads) {
-      expect(thread.body).not.toContain(ATTRIBUTION_FOOTER);
+      expect(thread.body).not.toContain('Written by Goodboy');
     }
     expect(markPublishedSpy).toHaveBeenCalledWith(
       expect.objectContaining({ ids: ['draft-1', 'draft-2'] }),
@@ -272,7 +271,7 @@ describe('review-drafts slice', () => {
     await slice.publishPrReview(SESSION_ID, { verdict: 'comment', body: 'a few notes' });
 
     const [, input] = addPullRequestReviewSpy.mock.calls[0]!;
-    expect(input.body).toBe(`a few notes\n\n${ATTRIBUTION_FOOTER}`);
+    expect(input.body).toBe(`a few notes\n\n*Written by Goodboy*`);
     expect(input.threads.map((thread: { body: string }) => thread.body)).toEqual([
       'guard the null case',
       'guard the null case',
@@ -367,7 +366,7 @@ describe('review-drafts slice', () => {
       'https://gitlab.com',
       'acme/web',
       10,
-      `Request changes: overall notes\n\n${ATTRIBUTION_FOOTER}`,
+      `Request changes: overall notes\n\n*Written by Goodboy*`,
     );
     expect(result.published).toBe(1);
     expect(result.failed).toHaveLength(1);
