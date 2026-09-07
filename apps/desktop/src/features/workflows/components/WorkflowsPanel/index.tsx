@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ProviderId, StepDef, Workflow, WorkflowId, WorkspaceId } from '@goodboy/types';
+import type {
+  ProjectId,
+  ProviderId,
+  StepDef,
+  Workflow,
+  WorkflowId,
+  WorkspaceId,
+} from '@goodboy/types';
 import { formatError, StudioRailLayout } from '@goodboy/ui';
 import { EMPTY_ARRAY, useAppStore } from '../../../../store';
 import { primaryProjectRoot } from '../../../workspace/primaryProjectRoot';
@@ -13,10 +20,13 @@ import {
 } from '../../engine';
 import { useWorkflowDraft } from '../../engine/useWorkflowDraft';
 import { useWorkflowDrag } from '../../hooks/useWorkflowDrag';
+import { isImportableWorkflow } from '../../isImportableWorkflow';
 import { DragGhost } from '../WorkflowStudio/DragGhost';
 import { WorkflowComposer } from '../WorkflowStudio/WorkflowComposer';
+import { WorkflowImportSection } from '../WorkflowStudio/WorkflowImportSection';
 import { WorkflowStarter } from '../WorkflowStudio/WorkflowStarter';
 import { WorkflowsRail } from '../WorkflowStudio/WorkflowsRail';
+import { invokeWorkflowList } from '../../workflows';
 
 type Props = { readonly workspaceId: WorkspaceId };
 
@@ -35,6 +45,8 @@ export const WorkflowsPanel = ({ workspaceId }: Props) => {
     (state) => state.stepLibrary[workspaceId] ?? (EMPTY_ARRAY as ReadonlyArray<StepDef>),
   );
   const providers = useAppStore((state) => state.providers);
+  const projects = useAppStore((state) => state.projects);
+  const workspaces = useAppStore((state) => state.workspaces);
   const workspaceRoot = useAppStore((state) =>
     primaryProjectRoot({ projects: state.projects, workspaceId }),
   );
@@ -42,6 +54,7 @@ export const WorkflowsPanel = ({ workspaceId }: Props) => {
   const generation = useAppStore((state) => state.workflowGenerations[workspaceId]);
   const loadPhaseTemplates = useAppStore((state) => state.loadPhaseTemplates);
   const loadStepLibrary = useAppStore((state) => state.loadStepLibrary);
+  const copyWorkflowFromWorkspace = useAppStore((state) => state.copyWorkflowFromWorkspace);
   const savePhaseTemplate = useAppStore((state) => state.savePhaseTemplate);
   const deleteWorkflow = useAppStore((state) => state.deleteWorkflow);
   const saveStepDef = useAppStore((state) => state.saveStepDef);
@@ -78,8 +91,16 @@ export const WorkflowsPanel = ({ workspaceId }: Props) => {
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmDefaults, setConfirmDefaults] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [sourceProjectId, setSourceProjectId] = useState<ProjectId | null>(null);
+  const [sourceWorkflows, setSourceWorkflows] = useState<ReadonlyArray<Workflow>>([]);
+  const [sourceWorkflowId, setSourceWorkflowId] = useState<WorkflowId | null>(null);
+  const [isLoadingSource, setIsLoadingSource] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [sourceLoadError, setSourceLoadError] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
   const editingIdRef = useRef<WorkflowId | null>(restoredWorkflow?.id ?? null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sourceLoadRequest = useRef(0);
   const formRef = useRef(form);
   const savedFormRef = useRef(
     restoredWorkflow === null
@@ -87,6 +108,10 @@ export const WorkflowsPanel = ({ workspaceId }: Props) => {
       : JSON.stringify(draftFromWorkflow({ workflow: restoredWorkflow })),
   );
   formRef.current = form;
+  const sourceProjects = useMemo(
+    () => projects.filter((project) => project.workspaceId !== workspaceId),
+    [projects, workspaceId],
+  );
 
   useEffect(() => {
     void loadPhaseTemplates(workspaceId);
@@ -221,6 +246,62 @@ export const WorkflowsPanel = ({ workspaceId }: Props) => {
     setFormError(null);
   };
 
+  type SelectSourceProjectParams = {
+    readonly projectId: ProjectId;
+  };
+
+  const selectSourceProject = async ({ projectId }: SelectSourceProjectParams) => {
+    const project = sourceProjects.find((candidate) => candidate.id === projectId);
+    if (project === undefined) {
+      return;
+    }
+    const requestId = sourceLoadRequest.current + 1;
+    sourceLoadRequest.current = requestId;
+    setSourceProjectId(project.id);
+    setSourceWorkflowId(null);
+    setSourceWorkflows([]);
+    setSourceLoadError(null);
+    setImportError(null);
+    setIsLoadingSource(true);
+    try {
+      const loaded = await invokeWorkflowList(project.workspaceId);
+      if (sourceLoadRequest.current !== requestId) {
+        return;
+      }
+      setSourceWorkflows(loaded.filter(isImportableWorkflow));
+    } catch (error) {
+      if (sourceLoadRequest.current !== requestId) {
+        return;
+      }
+      setSourceLoadError(formatError(error));
+    } finally {
+      if (sourceLoadRequest.current === requestId) {
+        setIsLoadingSource(false);
+      }
+    }
+  };
+
+  const importSelectedWorkflow = async () => {
+    const sourceProject = sourceProjects.find((project) => project.id === sourceProjectId);
+    if (sourceProject === undefined || sourceWorkflowId === null) {
+      return;
+    }
+    setIsImporting(true);
+    setImportError(null);
+    try {
+      const saved = await copyWorkflowFromWorkspace({
+        sourceWorkspaceId: sourceProject.workspaceId,
+        sourceWorkflowId,
+        targetWorkspaceId: workspaceId,
+      });
+      openEdit(saved);
+    } catch (error) {
+      setImportError(formatError(error));
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   const duplicate = async (workflow: Workflow) => {
     const source = draftFromWorkflow({ workflow });
     const saved = await savePhaseTemplate(
@@ -341,6 +422,22 @@ export const WorkflowsPanel = ({ workspaceId }: Props) => {
                 setConfirmDefaults(false);
               });
             }}
+            importSection={
+              <WorkflowImportSection
+                projects={sourceProjects}
+                workspaces={workspaces}
+                sourceProjectId={sourceProjectId}
+                workflows={sourceWorkflows}
+                sourceWorkflowId={sourceWorkflowId}
+                isLoadingWorkflows={isLoadingSource}
+                isImporting={isImporting}
+                loadError={sourceLoadError}
+                importError={importError}
+                onSelectProject={(projectId) => void selectSourceProject({ projectId })}
+                onSelectWorkflow={setSourceWorkflowId}
+                onImport={() => void importSelectedWorkflow()}
+              />
+            }
           />
         }
         detail={
