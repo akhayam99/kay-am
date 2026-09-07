@@ -515,7 +515,7 @@ export const sendTurn = (set: SetFn, get: GetFn) => {
     const isResolverTurn = turnAgentKind === 'resolver';
     const agentRowForLease = isResolverTurn
       ? ((get().sessionPhaseRuns[sessionId] ?? []).find((row) => row.id === activeAgentId) ??
-        (await getAgentById(tauriDatabase, activeAgentId).catch(() => null)))
+        (await getAgentById(tauriDatabase, activeAgentId)))
       : null;
     const writerLeasePath = isResolverTurn ? await resolveWorktreePath({ get, sessionId }) : null;
     if (isResolverTurn && (writerLeasePath === null || agentRowForLease === null)) {
