@@ -599,7 +599,6 @@ type AppActions = {
     },
   ): Promise<AgentId>;
   forceCloseResolver(sessionId: SessionId, agentId: AgentId): Promise<void>;
-  setResolverThreadReply(params: { agentId: AgentId; threadId: string; reply: string }): void;
   renameAgent(sessionId: SessionId, agentId: AgentId, name: string): Promise<void>;
   setAgentKind(agentId: AgentId, kind: AgentKind): void;
   setAgentEffortOverride(agentId: AgentId, effort: string): void;
@@ -855,7 +854,11 @@ type AppActions = {
   acceptSessionNudgeHandoff(sessionId: SessionId): Promise<AgentId | null>;
   setScriptsLensScope(params: { readonly scope: { readonly projectId: ProjectId } | null }): void;
   setReviewLensIntent(params: {
-    readonly intent: { readonly sessionId: SessionId; readonly agentId: AgentId } | null;
+    readonly intent: {
+      readonly sessionId: SessionId;
+      readonly threadId?: string;
+      readonly attemptId?: string;
+    } | null;
   }): void;
   getSessionViewPrefs(workspaceId: WorkspaceId): SessionViewPrefs;
   setSessionSort(workspaceId: WorkspaceId, sort: SessionSortKey): void;

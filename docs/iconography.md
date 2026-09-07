@@ -57,7 +57,7 @@ switcher and rail tabs.
 | Questions             | `questions`      | `CircleHelp`            | warning |
 | Agents                | `agents`         | `Bot`                   | primary |
 | Workflows             | `workflows`      | `Waypoints`             | accent  |
-| Review board          | `review`         | `MessageSquareDiff`     | primary |
+| Review                | `review`         | `MessageSquareDiff`     | primary |
 | Plans                 | `plans`          | `ClipboardList`         | draft   |
 | Scripts               | `scripts`        | `ListVideo`             | info    |
 | Terminal              | `terminal`       | `SquareTerminal`        | neutral |

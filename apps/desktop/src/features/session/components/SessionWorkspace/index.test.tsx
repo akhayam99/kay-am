@@ -152,20 +152,6 @@ vi.mock('../../../workspace/components/WorkspacesSidebar/parts/AgentsSection', (
     <div data-testid="agents-section" data-home={only} />
   ),
 }));
-vi.mock('../ResolverAgentsLane', () => ({
-  ResolverAgentsLane: ({
-    mode = 'active',
-    inspectedResolverId,
-  }: {
-    readonly mode?: 'active' | 'finished';
-    readonly inspectedResolverId: string | null;
-  }) =>
-    mode === 'active' ? (
-      <div data-testid="resolver-lane">{inspectedResolverId}</div>
-    ) : (
-      <div data-testid={`resolver-lane-${mode}`}>{inspectedResolverId}</div>
-    ),
-}));
 vi.mock('../StandaloneAgentsLane', () => ({
   StandaloneAgentsLane: ({
     session,
@@ -204,8 +190,8 @@ vi.mock('../CreateAgentPopover', () => ({
 vi.mock('../SessionOverviewPane', () => ({
   SessionOverviewPane: () => <div role="region" aria-label="Session overview" />,
 }));
-vi.mock('../../../review/components/ReviewBoardPane', () => ({
-  ReviewBoardPane: () => <div data-testid="review-board" />,
+vi.mock('../../../review/components/ReviewPane', () => ({
+  ReviewPane: () => <div data-testid="review-board" />,
 }));
 vi.mock('../SessionCrumbBar', () => ({
   SessionCrumbBar: () => <div data-testid="session-crumb-bar" />,
@@ -354,7 +340,7 @@ describe('SessionWorkspace agent overlay', () => {
     const { result } = renderHook(() => useSessionCrumbs({ session }));
     expect(result.current.map((crumb) => crumb.label)).toEqual([
       'Overview',
-      'Review board',
+      'Review',
       'Standalone resolver',
     ]);
   });

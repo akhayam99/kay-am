@@ -1,4 +1,5 @@
 import { cancelPublication } from './cancelPublication';
+import { cancelResolveAttempt } from './cancelResolveAttempt';
 import { drainResolveQueue } from './drainResolveQueue';
 import { preparePublication } from './preparePublication';
 import { publishConversations } from './publishConversations';
@@ -15,6 +16,7 @@ import type {
   ResolveActions,
   BatchUpdateParams,
   AttemptParams,
+  CancelAttemptParams,
   DrainParams,
   PhaseParams,
   PreparePublicationParams,
@@ -43,6 +45,8 @@ export const createResolveSlice = ({ set, get }: SliceParams): ResolveActions =>
       serialize({ run: () => persistResolveTurn({ set, get, ...params }) }),
     recordResolveAttempt: (params: AttemptParams) =>
       serialize({ run: () => recordResolveAttempt({ set, get, ...params }) }),
+    cancelResolveAttempt: (params: CancelAttemptParams) =>
+      serialize({ run: () => cancelResolveAttempt({ set, get, ...params }) }),
     recordResolvePhase: (params: PhaseParams) =>
       serialize({ run: () => recordResolvePhase({ set, get, ...params }) }),
     drainResolveQueue: (params: DrainParams) =>

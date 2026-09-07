@@ -132,6 +132,7 @@ const resetState = () => {
     agentKindOverride: {},
     resolverState: {},
     sessionPendingResolutions: {},
+    sessionResolveAttempts: {},
     sessionResolvedThreads: {},
     sessionGithub: {},
     phaseTemplates: { 'workspace-1': [{ id: 'workflow-1', name: 'refactor', steps: [] }] },
@@ -222,20 +223,23 @@ describe('SessionCrumbBar', () => {
     expect(within(selectedCrumb).getByLabelText('completed')).toBeDefined();
   });
 
-  it('shows the queued resolver count on the active review lens crumb', () => {
+  it('counts the queued fix attempts on the active review crumb', () => {
     h.crumbs = [
       { id: 'overview', label: 'Overview', onClick: vi.fn() },
       { id: 'lens-review', label: 'Review' },
     ];
     h.state.activeLens = { [SESSION_ID]: 'review' };
     h.state.selectedAgentId = {};
-    h.resolverLinks = [
-      { agent: scout, status: 'pending' },
-      { agent: implementer, status: 'pending' },
-    ];
+    h.state.sessionResolveAttempts = {
+      [SESSION_ID]: [
+        { id: 'a1', phase: 'queued' },
+        { id: 'a2', phase: 'queued' },
+        { id: 'a3', phase: 'running' },
+      ],
+    };
     render(<SessionCrumbBar />);
 
-    expect(screen.getByLabelText('2 queued')).toBeDefined();
+    expect(screen.getByText('2 queued')).toBeDefined();
   });
 
   it('turns the last crumb into a sibling switcher when peers exist in the same home', () => {

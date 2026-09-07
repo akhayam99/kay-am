@@ -79,9 +79,7 @@ export const useSessionSuggestions = ({ session, agents, withRebase = true }: Pa
     useShallow((state) => plans.map((plan) => state.planConsumptions[plan.id] ?? EMPTY_ARRAY)),
   );
   const github = useAppStore((state) => state.sessionGithub[sessionId] ?? null);
-  const pendingResolutions = useAppStore(
-    (state) => state.sessionPendingResolutions[sessionId] ?? EMPTY_ARRAY,
-  );
+  const resolveRows = useAppStore((state) => state.sessionResolveThreads[sessionId] ?? EMPTY_ARRAY);
   const mounts = useAppStore(
     (state) =>
       state.sessionProjectMounts[sessionId] ?? (EMPTY_ARRAY as ReadonlyArray<SessionProjectMount>),
@@ -162,11 +160,7 @@ export const useSessionSuggestions = ({ session, agents, withRebase = true }: Pa
       consumedPlanIds,
       openQuestionCount: openQuestions.filter((question) => question.status === 'open').length,
       hasPullRequest: github?.pr != null,
-      eligibleThreadCount: eligibleReviewThreadCount({
-        github,
-        pendingResolutions,
-        resolverIndex,
-      }),
+      eligibleThreadCount: eligibleReviewThreadCount({ github, rows: resolveRows }),
       mountEvents: toMountEvents({ events }),
       projects: withRebase
         ? mounts.map((mount) => {
@@ -194,10 +188,10 @@ export const useSessionSuggestions = ({ session, agents, withRebase = true }: Pa
     github,
     mounts,
     openQuestions,
-    pendingResolutions,
     planConsumptions,
     plans,
     projects,
+    resolveRows,
     resolverIndex,
     sessionId,
     withRebase,

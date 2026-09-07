@@ -35,7 +35,6 @@ vi.mock('../../../chat/components/ChatView', () => ({
 }));
 vi.mock('./AgentBrief', () => ({ AgentBrief: () => <div>Brief body</div> }));
 vi.mock('../AgentHeaderActions', () => ({ AgentHeaderActions: () => null }));
-vi.mock('../ResolverDetailPane', () => ({ ResolverDetailPane: () => <div>Resolver body</div> }));
 
 import { AgentDetailPane } from './index';
 
@@ -88,16 +87,16 @@ describe('AgentDetailPane', () => {
     expect(screen.getByText('Transcript body')).toBeDefined();
   });
 
-  it('gives a resolver its resolve surface instead of the generic brief', () => {
+  it('gives a resolver the generic transcript pane so View work has a destination', () => {
     const resolver = { ...agent, id: 'resolver-1' as AgentId, kind: 'resolver' } satisfies Agent;
 
     render(
       <AgentDetailPane session={session} agent={resolver} isChatActive onBack={() => undefined} />,
     );
 
-    expect(screen.getByText('Resolver body')).toBeDefined();
-    expect(screen.queryByText('Brief body')).toBeNull();
-    expect(screen.queryByRole('tab', { name: 'Brief' })).toBeNull();
+    expect(screen.getByText('Brief body')).toBeDefined();
+    fireEvent.click(screen.getByRole('tab', { name: 'Transcript' }));
+    expect(screen.getByText('Transcript body')).toBeDefined();
   });
 
   it('gives a workflow step the same brief component a standalone agent gets', () => {

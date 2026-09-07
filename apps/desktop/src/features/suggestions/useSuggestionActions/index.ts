@@ -1,14 +1,14 @@
 import { useMemo } from 'react';
 import { formatError } from '@goodboy/ui';
-import type { Agent, Session, SessionProjectMount } from '@goodboy/types';
+import type { Agent, ResolveThread, Session, SessionProjectMount } from '@goodboy/types';
 import { EMPTY_ARRAY, useAppStore } from '../../../store';
 import { distanceBehind } from '../../../shared/lib/gitStatus';
 import { useSessionRoleModels } from '../../../shared/hooks/useSessionRoleModels';
-import { buildCommentAgentArgs, type ResolveModelChoice } from '../../chat/spawn-from-comment';
+import type { ResolveModelChoice } from '../../chat/spawn-from-comment';
+import { contextWindowFor } from '../../session/contextWindowFor';
+import { startFixAttempt } from '../../review/startFixAttempt';
 import { kindRouting } from '../../session/agent-kind';
 import { useRebaseAgent } from '../../session/hooks/useRebaseAgent';
-import { useResolverIndex } from '../../session/hooks/useResolverIndex';
-import { useResolverSpawner } from '../../session/hooks/useResolverSpawner';
 import { useWorktreeStatuses } from '../../session/hooks/useWorktreeStatuses';
 import { useAdvanceWorkflowAgent } from '../../workflows/useAdvanceWorkflowAgent';
 import { eligibleReviewThreads } from '../eligibleThreads';
@@ -36,6 +36,7 @@ export type SuggestionActionResolver = (params: {
 }) => SuggestionActions;
 
 const NO_ACTIONS: SuggestionActions = { primary: null, onDismiss: null };
+const EMPTY_ROWS: ReadonlyArray<ResolveThread> = [];
 
 export const useSuggestionActions = ({
   session,
@@ -44,9 +45,6 @@ export const useSuggestionActions = ({
 }: Params): SuggestionActionResolver => {
   const sessionId = session.id;
   const github = useAppStore((state) => state.sessionGithub[sessionId] ?? null);
-  const pendingResolutions = useAppStore(
-    (state) => state.sessionPendingResolutions[sessionId] ?? EMPTY_ARRAY,
-  );
   const mounts = useAppStore(
     (state) =>
       state.sessionProjectMounts[sessionId] ?? (EMPTY_ARRAY as ReadonlyArray<SessionProjectMount>),
@@ -57,8 +55,10 @@ export const useSuggestionActions = ({
   const recordSessionEvent = useAppStore((state) => state.recordSessionEvent);
   const setSessionActiveProject = useAppStore((state) => state.setSessionActiveProject);
   const roleModels = useSessionRoleModels({ sessionId });
-  const resolverIndex = useResolverIndex(sessionId);
-  const { spawnResolver } = useResolverSpawner({ sessionId });
+  const spawnAgent = useAppStore((state) => state.spawnAgent);
+  const setAgentConfig = useAppStore((state) => state.setAgentConfig);
+  const rows = useAppStore((state) => state.sessionResolveThreads[sessionId] ?? EMPTY_ROWS);
+  const setActiveLens = useAppStore((state) => state.setActiveLens);
   const advanceAgent = useAdvanceWorkflowAgent({ sessionId });
 
   const reportError = (title: string) => (message: string) => {
@@ -91,10 +91,7 @@ export const useSuggestionActions = ({
     onError: reportError('Rebase failed'),
   });
 
-  const unresolvedThreads = useMemo(
-    () => eligibleReviewThreads({ github, pendingResolutions, resolverIndex }),
-    [github, pendingResolutions, resolverIndex],
-  );
+  const unresolvedThreads = useMemo(() => eligibleReviewThreads({ github, rows }), [github, rows]);
 
   const pullRequest = github?.pr ?? null;
   const startResolving = () => {
@@ -107,16 +104,20 @@ export const useSuggestionActions = ({
       model: routing.model,
       effort: routing.effort,
     };
-    void (async () => {
-      for (const thread of unresolvedThreads) {
-        await spawnResolver({
-          args: buildCommentAgentArgs(thread.head, pullRequest, choice, thread.replies),
-          choice,
-        });
-      }
-    })().catch((error: unknown) => {
-      reportError('resolver failed to start')(formatError(error));
-    });
+    void startFixAttempt({
+      sessionId,
+      threads: unresolvedThreads,
+      pr: pullRequest,
+      choice,
+      mode: 'shared',
+      contextWindow: contextWindowFor(routing.model),
+      spawnAgent,
+      setAgentConfig,
+    })
+      .then(() => setActiveLens(sessionId, 'review'))
+      .catch((error: unknown) => {
+        reportError('resolver failed to start')(formatError(error));
+      });
   };
 
   const startRebase = ({
@@ -193,7 +194,7 @@ export const useSuggestionActions = ({
     }
     if (suggestion.kind === 'resolve-threads') {
       return {
-        primary: { label: 'Resolve', isDisabled: false, onAct: startResolving },
+        primary: { label: 'Fix all', isDisabled: false, onAct: startResolving },
         onDismiss: null,
       };
     }

@@ -11,5 +11,6 @@ export const RESOLVER_KICKOFF_LABELS = {
   instructions: 'What to do',
   reporting: 'How to report each thread',
   replyContract: 'Reply contract',
+  priorWork: 'What already happened',
   operatorNotes: 'Operator notes',
 } as const;

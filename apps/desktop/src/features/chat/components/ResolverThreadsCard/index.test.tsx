@@ -9,8 +9,9 @@ const h = vi.hoisted(() => ({
   wontfix: vi.fn<(text: string) => ReadonlyArray<unknown>>(() => []),
   replies: vi.fn<(text: string) => ReadonlyArray<unknown>>(() => []),
   comments: [] as Array<{ threadId: string; resolved: boolean }>,
-  pending: [] as Array<{ threadId: string }>,
-  selectAgent: vi.fn(async () => undefined),
+  rows: [] as Array<{ threadId: string; state: string }>,
+  setReviewLensIntent: vi.fn(),
+  setActiveLens: vi.fn(),
   openDiffLens: vi.fn(),
 }));
 
@@ -26,15 +27,17 @@ vi.mock('../../../../store', () => ({
   useAppStore: <T,>(
     selector: (state: {
       sessionGithub: Record<string, { detail: { comments: typeof h.comments } | null }>;
-      sessionPendingResolutions: Record<string, typeof h.pending>;
-      selectAgent: typeof h.selectAgent;
+      sessionResolveThreads: Record<string, typeof h.rows>;
+      setReviewLensIntent: typeof h.setReviewLensIntent;
+      setActiveLens: typeof h.setActiveLens;
       openDiffLens: typeof h.openDiffLens;
     }) => T,
   ) =>
     selector({
       sessionGithub: { s: { detail: { comments: h.comments } } },
-      sessionPendingResolutions: { s: h.pending },
-      selectAgent: h.selectAgent,
+      sessionResolveThreads: { s: h.rows },
+      setReviewLensIntent: h.setReviewLensIntent,
+      setActiveLens: h.setActiveLens,
       openDiffLens: h.openDiffLens,
     }),
 }));
@@ -52,8 +55,9 @@ describe('ResolverThreadsCard', () => {
     h.replies.mockReset();
     h.replies.mockReturnValue([]);
     h.comments = [];
-    h.pending = [];
-    h.selectAgent.mockClear();
+    h.rows = [];
+    h.setReviewLensIntent.mockClear();
+    h.setActiveLens.mockClear();
     h.openDiffLens.mockClear();
   });
 
@@ -144,13 +148,9 @@ describe('ResolverThreadsCard', () => {
     expect(screen.queryByRole('button', { name: /Expand thread/ })).toBeNull();
   });
 
-  it('deep-links a verdict line into the resolver inspector for the shared agent', () => {
+  it('sends a verdict line to that conversation in Review', () => {
     h.resolved.mockReturnValue([{ threadId: 'PRRT_1', commitSha: 'abcdef1234567890' }]);
     h.wontfix.mockReturnValue([{ threadId: 'PRRT_2', reason: 'already covered upstream' }]);
-    const reveal = vi.fn();
-    const inspect = vi.fn();
-    window.addEventListener('goodboy:reveal-chat', reveal);
-    window.addEventListener('goodboy:open-resolver-inspector', inspect);
 
     render(
       <ResolverThreadsCard
@@ -160,27 +160,24 @@ describe('ResolverThreadsCard', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: /Expand resolver findings/ }));
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Open thread 2 in the resolver inspector' }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open thread 2 in Review' }));
 
-    expect(h.selectAgent).toHaveBeenCalledWith('s', 'agent-1');
-    expect(reveal).toHaveBeenCalledOnce();
-    expect((inspect.mock.calls[0]?.[0] as CustomEvent).detail).toEqual({
-      sessionId: 's',
-      agentId: 'agent-1',
+    expect(h.setReviewLensIntent).toHaveBeenCalledWith({
+      intent: { sessionId: 's', threadId: 'PRRT_1' },
     });
-
-    window.removeEventListener('goodboy:reveal-chat', reveal);
-    window.removeEventListener('goodboy:open-resolver-inspector', inspect);
+    expect(h.setActiveLens).toHaveBeenCalledWith('s', 'review');
   });
 
-  it('stays inert without a resolver agent to navigate to', () => {
+  it('stays navigable even when the transcript card knows no agent', () => {
     h.wontfix.mockReturnValue([{ threadId: 'PRRT_2', reason: 'already covered upstream' }]);
     render(<ResolverThreadsCard assistantText="x" sessionId={'s' as never} />);
 
     const row = screen.getByTestId('resolver-thread-verdict');
-    expect(within(row).queryByRole('button')).toBeNull();
+    fireEvent.click(within(row).getByRole('button', { name: 'Open thread 1 in Review' }));
+
+    expect(h.setReviewLensIntent).toHaveBeenCalledWith({
+      intent: { sessionId: 's', threadId: 'PRRT_2' },
+    });
   });
 
   it('reflects a github-resolved thread and a queued local fix in the verdict text', () => {
@@ -189,7 +186,7 @@ describe('ResolverThreadsCard', () => {
       { threadId: 'PRRT_2', commitSha: '1234567890abcdef' },
     ]);
     h.comments = [{ threadId: 'PRRT_1', resolved: true }];
-    h.pending = [{ threadId: 'PRRT_2' }];
+    h.rows = [{ threadId: 'PRRT_2', state: 'publishing' }];
 
     render(<ResolverThreadsCard assistantText="x" sessionId={'s' as never} />);
     fireEvent.click(screen.getByRole('button', { name: /Expand resolver findings/ }));

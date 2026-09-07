@@ -17,6 +17,22 @@ const { storeState, spies } = vi.hoisted(() => {
   const recordSessionEvent = vi.fn(async () => undefined);
   const setSessionActiveProject = vi.fn(async () => undefined);
   const emitNotification = vi.fn(async () => undefined);
+  const spawnAgent = vi.fn(
+    async (
+      sessionId: string,
+      args: { readonly sourceThreadIds?: ReadonlyArray<string>; readonly kindOverride?: string },
+    ) => {
+      void sessionId;
+      void args;
+      return 'agent-resolver';
+    },
+  );
+  const setAgentConfig = vi.fn(async (sessionId: string, agentId: string, fields: unknown) => {
+    void sessionId;
+    void agentId;
+    void fields;
+  });
+  const setActiveLens = vi.fn();
   return {
     spies: {
       materializeProject,
@@ -24,18 +40,23 @@ const { storeState, spies } = vi.hoisted(() => {
       setSessionActiveProject,
       emitNotification,
       advanceAgent: vi.fn(async () => undefined),
-      spawnResolver: vi.fn(async () => 'agent-resolver'),
+      spawnAgent,
+      setAgentConfig,
+      setActiveLens,
       rebaseRun: vi.fn(async () => undefined),
     },
     storeState: {
       sessionGithub: {} as Record<string, unknown>,
-      sessionPendingResolutions: {} as Record<string, ReadonlyArray<unknown>>,
+      sessionResolveThreads: {} as Record<string, ReadonlyArray<unknown>>,
       sessionProjectMounts: {} as Record<string, ReadonlyArray<unknown>>,
       projects: [] as ReadonlyArray<unknown>,
       materializeProject,
       recordSessionEvent,
       setSessionActiveProject,
       emitNotification,
+      spawnAgent,
+      setAgentConfig,
+      setActiveLens,
     },
   };
 });
@@ -58,13 +79,6 @@ vi.mock('../../session/hooks/useWorktreeStatuses', () => ({
 vi.mock('../../session/hooks/useRebaseAgent', () => ({
   useRebaseAgent: () => ({ canRebase: true, isRunning: false, error: null, run: spies.rebaseRun }),
 }));
-vi.mock('../../session/hooks/useResolverSpawner', () => ({
-  useResolverSpawner: () => ({
-    spawnedResolverIds: [],
-    resetSpawnedResolverIds: vi.fn(),
-    spawnResolver: spies.spawnResolver,
-  }),
-}));
 vi.mock('../../workflows/useAdvanceWorkflowAgent', () => ({
   useAdvanceWorkflowAgent: () => spies.advanceAgent,
 }));
@@ -72,9 +86,7 @@ vi.mock('../../github/comment-threads', () => ({
   groupThreads: (comments: ReadonlyArray<unknown>) =>
     comments.map((comment) => ({ head: comment, replies: [] })),
 }));
-vi.mock('../../chat/spawn-from-comment', () => ({
-  buildCommentAgentArgs: () => ({ name: 'resolver', initialPrompt: 'fix it' }),
-}));
+vi.mock('../../session/contextWindowFor', () => ({ contextWindowFor: () => null }));
 
 import { useSuggestionActions } from './index';
 
@@ -107,7 +119,7 @@ const suggestionBase = { sessionId: SESSION_ID, priority: 0, title: 'Do it' };
 
 beforeEach(() => {
   storeState.sessionGithub = {};
-  storeState.sessionPendingResolutions = {};
+  storeState.sessionResolveThreads = {};
   storeState.sessionProjectMounts = {};
   storeState.projects = [];
   onSelectQuestions.mockReset();
@@ -136,9 +148,21 @@ describe('useSuggestionActions', () => {
   it('spawns a resolver per eligible thread', async () => {
     storeState.sessionGithub = {
       [SESSION_ID]: {
-        pr: { number: 12 },
+        pr: { number: 12, headBranch: 'feature/retry' },
         detail: {
-          comments: [{ source: 'review', resolved: false, threadId: 'thread-1', url: 'u' }],
+          comments: [
+            {
+              id: '1',
+              source: 'review',
+              resolved: false,
+              threadId: 'thread-1',
+              url: 'u',
+              body: 'rename it',
+              author: 'dhh',
+              createdAt: '2026-01-01T00:00:00Z',
+              path: 'a.ts',
+            },
+          ],
         },
       },
     };
@@ -152,9 +176,74 @@ describe('useSuggestionActions', () => {
       },
     });
 
-    expect(actions.primary?.label).toBe('Resolve');
+    expect(actions.primary?.label).toBe('Fix all');
     actions.primary?.onAct();
-    await vi.waitFor(() => expect(spies.spawnResolver).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(spies.spawnAgent).toHaveBeenCalledTimes(1));
+    expect(spies.spawnAgent.mock.calls[0]?.[1].sourceThreadIds).toEqual(['thread-1']);
+    expect(spies.spawnAgent.mock.calls[0]?.[1].kindOverride).toBe('resolver');
+    await vi.waitFor(() => expect(spies.setActiveLens).toHaveBeenCalledWith(SESSION_ID, 'review'));
+  });
+
+  it('combines every eligible conversation into one attempt instead of one agent each', async () => {
+    storeState.sessionGithub = {
+      [SESSION_ID]: {
+        pr: { number: 12, headBranch: 'feature/retry', title: 't', url: 'u' },
+        detail: {
+          comments: [
+            {
+              source: 'review',
+              resolved: false,
+              threadId: 'thread-1',
+              url: 'u',
+              body: 'a',
+              path: 'a.ts',
+              author: 'dhh',
+              createdAt: '2026-01-01T00:00:00Z',
+              id: '1',
+            },
+            {
+              source: 'review',
+              resolved: false,
+              threadId: 'thread-2',
+              url: 'u',
+              body: 'b',
+              path: 'a.ts',
+              author: 'dhh',
+              createdAt: '2026-01-01T00:00:00Z',
+              id: '2',
+            },
+            {
+              source: 'review',
+              resolved: false,
+              threadId: 'thread-3',
+              url: 'u',
+              body: 'c',
+              path: 'b.ts',
+              author: 'dhh',
+              createdAt: '2026-01-01T00:00:00Z',
+              id: '3',
+            },
+          ],
+        },
+      },
+    };
+
+    const actions = actionsFor({
+      suggestion: {
+        ...suggestionBase,
+        id: 'resolve-threads:session-1',
+        kind: 'resolve-threads',
+        payload: { eligibleThreadCount: 3 },
+      },
+    });
+    actions.primary?.onAct();
+
+    await vi.waitFor(() => expect(spies.spawnAgent).toHaveBeenCalledTimes(1));
+    expect(spies.spawnAgent.mock.calls[0]?.[1].sourceThreadIds).toEqual([
+      'thread-1',
+      'thread-2',
+      'thread-3',
+    ]);
   });
 
   it('activates the project before running the rebase agent', async () => {

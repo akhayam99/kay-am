@@ -5,6 +5,7 @@ import { ICON_SIZE } from '../../../../../shared/components/conceptIcons';
 type Props = {
   readonly answerCount: number;
   readonly totalCount: number;
+  readonly label?: string;
   readonly onClick: () => void;
 };
 
@@ -21,7 +22,7 @@ const readyLabel = ({
   return `${answerCount} of ${totalCount} answered`;
 };
 
-export const AnswerSubmitButton = ({ answerCount, totalCount, onClick }: Props) => {
+export const AnswerSubmitButton = ({ answerCount, totalCount, label = 'Send', onClick }: Props) => {
   return (
     <div className="flex items-center justify-between gap-3 pl-6 pt-1">
       <span aria-live="polite" className="text-2xs font-medium tabular-nums text-muted-foreground">
@@ -38,7 +39,7 @@ export const AnswerSubmitButton = ({ answerCount, totalCount, onClick }: Props) 
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
         )}
       >
-        <span>Send</span>
+        <span>{label}</span>
         <ArrowRight
           size={ICON_SIZE.row}
           aria-hidden

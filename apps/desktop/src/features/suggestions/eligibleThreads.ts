@@ -1,34 +1,26 @@
-import type { PendingResolution } from '@goodboy/types';
+import type { ResolveThread } from '@goodboy/types';
 import type { SessionGithubState } from '../../store/types';
 import { groupThreads, type CommentThread } from '../github/comment-threads';
-import { resolverForComment, type ResolverIndex } from '../session/resolver-linkage';
 
 type Params = {
   readonly github: SessionGithubState | null;
-  readonly pendingResolutions: ReadonlyArray<PendingResolution>;
-  readonly resolverIndex: ResolverIndex;
+  readonly rows: ReadonlyArray<ResolveThread>;
 };
 
-export const eligibleReviewThreads = ({
-  github,
-  pendingResolutions,
-  resolverIndex,
-}: Params): ReadonlyArray<CommentThread> => {
-  const pendingThreadIds = new Set(pendingResolutions.map((resolution) => resolution.threadId));
-  return groupThreads(github?.detail?.comments ?? []).filter((thread) => {
+const isEligible = ({ row }: { readonly row: ResolveThread | undefined }): boolean =>
+  row === undefined || row.state === 'open' || row.state === 'failed';
+
+export const eligibleReviewThreads = ({ github, rows }: Params): ReadonlyArray<CommentThread> =>
+  groupThreads(github?.detail?.comments ?? []).filter((thread) => {
     if (thread.head.source !== 'review' || thread.head.resolved !== false) {
       return false;
     }
-    if (thread.head.threadId != null && pendingThreadIds.has(thread.head.threadId)) {
+    const threadId = thread.head.threadId;
+    if (threadId == null) {
       return false;
     }
-    const resolver = resolverForComment(resolverIndex, {
-      threadId: thread.head.threadId,
-      url: thread.head.url,
-    });
-    return resolver == null || resolver.status === 'failed';
+    return isEligible({ row: rows.find((candidate) => candidate.threadId === threadId) });
   });
-};
 
 export const eligibleReviewThreadCount = (params: Params): number =>
   eligibleReviewThreads(params).length;

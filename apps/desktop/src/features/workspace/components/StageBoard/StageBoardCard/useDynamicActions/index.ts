@@ -4,7 +4,7 @@ import { formatError, type Tone } from '@goodboy/ui';
 import type {
   Agent,
   OpenQuestion,
-  PendingResolution,
+  ResolveThread,
   Session,
   SessionEvent,
   SessionId,
@@ -43,7 +43,7 @@ const EMPTY_QUESTIONS: ReadonlyArray<OpenQuestion> = [];
 const EMPTY_WORKFLOWS: ReadonlyArray<Workflow> = [];
 const EMPTY_RUNS: ReadonlyArray<Agent> = [];
 const EMPTY_EVENTS: ReadonlyArray<SessionEvent> = [];
-const EMPTY_RESOLUTIONS: ReadonlyArray<PendingResolution> = [];
+const EMPTY_RESOLVE_ROWS: ReadonlyArray<ResolveThread> = [];
 const MAX_MOUNT_ACTIONS = 2;
 
 export const useDynamicActions = (
@@ -59,9 +59,7 @@ export const useDynamicActions = (
   const skipStuckStepAndAdvance = useAppStore((s) => s.skipStuckStepAndAdvance);
   const events = useAppStore((s) => s.sessionEvents?.[id] ?? EMPTY_EVENTS);
   const github = useAppStore((s) => s.sessionGithub[id] ?? null);
-  const pendingResolutions = useAppStore(
-    (s) => s.sessionPendingResolutions[id] ?? EMPTY_RESOLUTIONS,
-  );
+  const resolveRows = useAppStore((s) => s.sessionResolveThreads[id] ?? EMPTY_RESOLVE_ROWS);
   const materializeProject = useAppStore((s) => s.materializeProject);
   const emitNotification = useAppStore((s) => s.emitNotification);
   const resolverIndex = useResolverIndex(id);
@@ -70,8 +68,8 @@ export const useDynamicActions = (
 
   const mountProposals = useMemo(() => pendingMountProposals({ events }), [events]);
   const eligibleThreads = useMemo(
-    () => eligibleReviewThreadCount({ github, pendingResolutions, resolverIndex }),
-    [github, pendingResolutions, resolverIndex],
+    () => eligibleReviewThreadCount({ github, rows: resolveRows }),
+    [github, resolveRows],
   );
 
   const advances = useMemo(() => {
