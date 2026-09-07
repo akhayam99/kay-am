@@ -77,7 +77,7 @@ export const ProjectGitSummaryPill = ({ entries }: Props) => {
           ) : actionableCount > 0 ? (
             <span
               data-testid="project-git-summary-count"
-              className="flex min-w-3.5 items-center justify-center rounded-full bg-warning px-1 text-[9px] font-semibold leading-3.5 text-warning-foreground"
+              className="flex min-w-3.5 items-center justify-center rounded-full bg-warning px-1 text-3xs font-semibold leading-3.5 text-warning-foreground"
             >
               {actionableCount}
             </span>
@@ -104,7 +104,7 @@ export const ProjectGitSummaryPill = ({ entries }: Props) => {
                 {entry.isWarning ? (
                   <AlertTriangle size={11} aria-label="Warning" className="text-warning" />
                 ) : entry.actionableCount > 0 ? (
-                  <span className="flex min-w-3.5 items-center justify-center rounded-full bg-warning px-1 text-[9px] font-semibold leading-3.5 text-warning-foreground">
+                  <span className="flex min-w-3.5 items-center justify-center rounded-full bg-warning px-1 text-3xs font-semibold leading-3.5 text-warning-foreground">
                     {entry.actionableCount}
                   </span>
                 ) : null}

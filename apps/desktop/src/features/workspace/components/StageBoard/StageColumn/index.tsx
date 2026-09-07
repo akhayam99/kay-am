@@ -1,22 +1,13 @@
 import { useEffect, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
-import { cn, Eyebrow, ScrollFade, type Tone } from '@goodboy/ui';
+import { cn, Eyebrow, ScrollFade, tintClasses, type Tone } from '@goodboy/ui';
 import type { Session, SessionId, SessionStage } from '@goodboy/types';
 import { SESSION_STAGE_META, STAGE_TONE } from '../../../../session/session-stage';
 import type { MultiSelect } from '../../../../../shared/hooks/useMultiSelect';
 import { StageBoardCard } from '../StageBoardCard';
 import type { BoardNavigation } from '../useBoardNavigation';
-import { CONCEPT_ICONS, ICON_SIZE } from '../../../../../shared/components/conceptIcons';
+import { ICON_SIZE } from '../../../../../shared/components/conceptIcons';
 import { PANE_RHYTHM } from '@goodboy/ui';
-
-const ZERO_STATE: Record<SessionStage | 'archived', string> = {
-  attention: 'nothing needs you',
-  running: 'nothing running',
-  review: 'nothing in review',
-  building: 'nothing building',
-  done: 'nothing done yet',
-  archived: 'nothing archived',
-};
 
 export type ColumnSpec =
   { readonly kind: 'stage'; readonly stage: SessionStage } | { readonly kind: 'archived' };
@@ -68,7 +59,7 @@ export const StageColumn = ({
   onRestore,
 }: StageColumnProps) => {
   const view = viewFor(spec);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(view.collapsible);
   const empty = sessions.length === 0;
 
   const { clear: clearSelection, isSelected } = selection;
@@ -81,9 +72,15 @@ export const StageColumn = ({
   }, [collapsed, archivedColumn, clearSelection]);
 
   const header = (
-    <span className="flex items-center gap-1.5">
-      <Eyebrow label={view.label} tone={view.tone} badge muted={empty} />
-      <span className="text-2xs tabular-nums text-muted-foreground/60">{sessions.length}</span>
+    <span className="flex items-center gap-2">
+      <Eyebrow
+        label={view.label}
+        muted={empty}
+        className={cn(!empty && tintClasses(view.tone).text)}
+      />
+      {!empty && (
+        <span className="text-2xs tabular-nums text-muted-foreground/60">{sessions.length}</span>
+      )}
     </span>
   );
 
@@ -91,7 +88,7 @@ export const StageColumn = ({
     <div
       className={cn(
         'flex min-h-0 flex-col',
-        PANE_RHYTHM.board.colWidth,
+        collapsed ? 'w-auto' : PANE_RHYTHM.board.colWidth,
         PANE_RHYTHM.board.colStack,
       )}
     >
@@ -100,8 +97,7 @@ export const StageColumn = ({
           type="button"
           onClick={() => setCollapsed((v) => !v)}
           aria-expanded={!collapsed}
-          title={collapsed ? `expand ${view.label}` : `collapse ${view.label}`}
-          className="flex shrink-0 items-center gap-1 text-left"
+          className="flex shrink-0 items-center gap-2 text-left"
         >
           <ChevronDown
             size={ICON_SIZE.row}
@@ -117,33 +113,22 @@ export const StageColumn = ({
         <div className="shrink-0">{header}</div>
       )}
 
-      {!collapsed && (
+      {!collapsed && !empty && (
         <ScrollFade orientation="vertical" className="flex-1">
           <div className={cn('flex flex-col', PANE_RHYTHM.board.cardGap)}>
-            {empty ? (
-              <p className="flex items-center gap-2 px-1 py-2 text-xs text-muted-foreground/70">
-                <CONCEPT_ICONS.sessions
-                  size={ICON_SIZE.row}
-                  aria-hidden
-                  className="shrink-0 text-muted-foreground/40"
-                />
-                {ZERO_STATE[view.key]}
-              </p>
-            ) : (
-              sessions.map((session) => (
-                <StageBoardCard
-                  key={session.id}
-                  session={session}
-                  nav={nav}
-                  archived={view.archived}
-                  selected={isSelected(session.id as SessionId)}
-                  onModifierClick={selection.handleItemClick}
-                  onArchive={onArchive}
-                  onDelete={onDelete}
-                  onRestore={onRestore}
-                />
-              ))
-            )}
+            {sessions.map((session) => (
+              <StageBoardCard
+                key={session.id}
+                session={session}
+                nav={nav}
+                archived={view.archived}
+                selected={isSelected(session.id as SessionId)}
+                onModifierClick={selection.handleItemClick}
+                onArchive={onArchive}
+                onDelete={onDelete}
+                onRestore={onRestore}
+              />
+            ))}
           </div>
         </ScrollFade>
       )}

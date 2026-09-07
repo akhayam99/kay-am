@@ -50,7 +50,7 @@ export const ProjectGitPill = ({ project, status, shouldShowProjectName }: Props
           ) : actionableCount > 0 ? (
             <span
               data-testid="project-git-count"
-              className="flex min-w-3.5 items-center justify-center rounded-full bg-warning px-1 text-[9px] font-semibold leading-3.5 text-warning-foreground"
+              className="flex min-w-3.5 items-center justify-center rounded-full bg-warning px-1 text-3xs font-semibold leading-3.5 text-warning-foreground"
             >
               {actionableCount}
             </span>
