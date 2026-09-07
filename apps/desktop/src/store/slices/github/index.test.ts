@@ -292,7 +292,7 @@ vi.mock('../../../features/worktree/worktree', () => ({
   worktreeStatus: vi.fn(async () => null),
   listBranchCommits: vi.fn(async () => []),
   worktreeIsAncestor: vi.fn(async () => true),
-  worktreeRemoteHead: vi.fn(async () => null),
+  worktreeRemoteHead: vi.fn(async () => ''),
   worktreeWriterStatus: vi.fn(async ({ path }: { readonly path: string }) => ({
     path,
     holder: null,

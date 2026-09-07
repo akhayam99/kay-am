@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { Notification, NotificationAction } from '@goodboy/db';
+import { formatError } from '@goodboy/ui';
 import type { Session, Workspace } from '@goodboy/types';
 import { useAppStore } from '../../../../store';
 import { useToast, type ToastAction } from '../../../../app/components/Toast';
@@ -103,14 +104,23 @@ export const mapNotificationAction = (
     return {
       label: 'Retry',
       onClick: () => {
-        void store.retryPublication({ sessionId }).then((preview) => {
+        void (async () => {
+          const preview = await store.retryPublication({ sessionId });
           if (preview.publicationId === null) {
-            return undefined;
+            return;
           }
-          return store.publishConversations({
+          await store.publishConversations({
             sessionId,
             publicationId: preview.publicationId,
           });
+        })().catch((err: unknown) => {
+          void store.emitNotification(
+            'error',
+            'error',
+            'retry failed, comments left unresolved',
+            formatError(err),
+            { sessionId },
+          );
         });
       },
     };

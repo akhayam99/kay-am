@@ -30,18 +30,30 @@ const git = (cwd: string, args: ReadonlyArray<string>): string =>
 const h = vi.hoisted(() => ({
   run: vi.fn<GhRun>(),
   leases: new Map<string, string>(),
+  failOnPhase: null as string | null,
+  isRemoteHeadUnreadable: false,
+  hidesRemoteHeadAfterPush: false,
 }));
 
 vi.mock('../../../shared/lib/db', () => ({ tauriDatabase: {} }));
 
-vi.mock('@goodboy/db', async () => ({
-  ...(await import('./testing/createResolveQueryMocks')).createResolveQueryMocks(),
-  listPendingResolutionsForSession: vi.fn(async () => []),
-  queuePendingResolution: vi.fn(async () => undefined),
-  deletePendingResolution: vi.fn(async () => undefined),
-  markPendingResolutionReplyPosted: vi.fn(async () => undefined),
-  listWorktreesForSession: vi.fn(async () => []),
-}));
+vi.mock('@goodboy/db', async () => {
+  const mocks = (await import('./testing/createResolveQueryMocks')).createResolveQueryMocks();
+  return {
+    ...mocks,
+    setResolvePublicationPhase: vi.fn(async (params: { readonly phase: string }) => {
+      if (h.failOnPhase !== null && params.phase === h.failOnPhase) {
+        throw new Error('the database is locked');
+      }
+      return mocks.setResolvePublicationPhase(params as never);
+    }),
+    listPendingResolutionsForSession: vi.fn(async () => []),
+    queuePendingResolution: vi.fn(async () => undefined),
+    deletePendingResolution: vi.fn(async () => undefined),
+    markPendingResolutionReplyPosted: vi.fn(async () => undefined),
+    listWorktreesForSession: vi.fn(async () => []),
+  };
+});
 
 vi.mock('../../../features/chat/turn', () => ({ listLiveRunIds: vi.fn(async () => new Set()) }));
 vi.mock('../../../features/workflows/workflows', () => ({
@@ -53,6 +65,9 @@ vi.mock('../../../features/github/github', () => ({
   gitPush: vi.fn(async (cwd: string, branch: string | null) => {
     try {
       const stdout = git(cwd, ['push', 'origin', branch ?? 'HEAD']);
+      if (h.hidesRemoteHeadAfterPush) {
+        h.isRemoteHeadUnreadable = true;
+      }
       return { stdout, stderr: '', exitCode: 0 };
     } catch (error) {
       const failure = error as { stderr?: Buffer | string };
@@ -147,6 +162,9 @@ vi.mock('../../../features/worktree/worktree', () => {
         readonly worktreePath: string;
         readonly branch: string;
       }) => {
+        if (h.isRemoteHeadUnreadable) {
+          throw new Error('ls-remote could not reach origin');
+        }
         const raw = git(worktreePath, ['ls-remote', 'origin', `refs/heads/${branch}`]);
         return raw === '' ? null : (raw.split(/\s+/)[0] ?? null);
       },
@@ -319,6 +337,9 @@ beforeEach(async () => {
   db.resetResolveQueryMocks();
   vi.clearAllMocks();
   h.leases.clear();
+  h.failOnPhase = null;
+  h.isRemoteHeadUnreadable = false;
+  h.hidesRemoteHeadAfterPush = false;
   h.run.mockReset();
   h.run.mockImplementation(async (args) => {
     const joined = args.join(' ');
@@ -639,5 +660,130 @@ describe('publishConversations over a real git repository', () => {
     expect(refused).toEqual({ kind: 'busy' });
     expect(await running).toMatchObject({ kind: 'done', resolved: 1 });
     expect(second.get().sessionResolveThreads[OTHER_SESSION_ID]?.[0]?.state).toBe('answered');
+  });
+
+  it('posts nothing when the remote head cannot be read after the push', async () => {
+    const fix = commit({ text: 'export const retry = () => 2;\n', message: 'fix: early return' });
+    const { actions, get } = makeStore();
+    await seedFixRow({ actions, threadId: 'PRRT_1', shas: [fix], reply: 'Fixed' });
+
+    const preview = await actions.preparePublication({ sessionId: SESSION_ID });
+    h.hidesRemoteHeadAfterPush = true;
+    const result = await actions.publishConversations({
+      sessionId: SESSION_ID,
+      publicationId: preview.publicationId ?? '',
+    });
+
+    expect(result).toMatchObject({
+      kind: 'push_failed',
+      error: expect.stringContaining('unverified'),
+    });
+    expect(h.run).not.toHaveBeenCalled();
+    expect(git(worktreePath, ['rev-parse', 'origin/feature/retry'])).toBe(fix);
+    expect(get().sessionResolveThreads[SESSION_ID]?.[0]?.state).not.toBe('closed');
+    expect(h.leases.get(worktreePath)).toBeUndefined();
+  });
+
+  it('releases the worktree writer lease when a publication throws after acquiring it', async () => {
+    const fix = commit({ text: 'export const retry = () => 2;\n', message: 'fix: early return' });
+    const { actions } = makeStore();
+    await seedFixRow({ actions, threadId: 'PRRT_1', shas: [fix], reply: 'Fixed' });
+
+    const preview = await actions.preparePublication({ sessionId: SESSION_ID });
+    h.failOnPhase = 'posting';
+
+    await expect(
+      actions.publishConversations({
+        sessionId: SESSION_ID,
+        publicationId: preview.publicationId ?? '',
+      }),
+    ).rejects.toThrow('the database is locked');
+    expect(h.leases.get(worktreePath)).toBeUndefined();
+  });
+
+  it('identifies the publication target by the remote repository, not the local path', async () => {
+    const { actions, get, store } = makeStore();
+    await seedAnswerRow({ actions, threadId: 'PRRT_1', reply: 'Already handled elsewhere' });
+
+    const preview = await actions.preparePublication({ sessionId: SESSION_ID });
+
+    expect(preview.repo).toBe('acme/web');
+    expect(preview.repo).not.toContain(repoRoot);
+
+    store.setState({
+      sessionGithub: {
+        ...get().sessionGithub,
+        [SESSION_ID]: {
+          ...get().sessionGithub[SESSION_ID],
+          pr: { number: 248, url: '', headBranch: 'feature/retry' },
+        },
+      },
+    } as never);
+    const unknown = await actions.preparePublication({ sessionId: SESSION_ID });
+
+    expect(unknown.repo).toBeNull();
+    expect(unknown.publicationId).not.toBeNull();
+  });
+
+  it('refuses two worktrees of one pull request whose remote identity is unknown', async () => {
+    const first = makeStore();
+    const second = makeStore({ sessionId: OTHER_SESSION_ID });
+    const unknownPr = { number: 248, url: '', headBranch: 'feature/retry' };
+    for (const harness of [first, second]) {
+      harness.store.setState({
+        sessionGithub: {
+          [SESSION_ID]: { pr: unknownPr, detail: { comments: [] } },
+          [OTHER_SESSION_ID]: { pr: unknownPr, detail: { comments: [] } },
+        },
+        sessionProjectMounts: {
+          ...harness.get().sessionProjectMounts,
+          [OTHER_SESSION_ID]: [
+            {
+              projectId: PROJECT_ID,
+              mountName: 'repo',
+              worktreePath: join(repoRoot, 'elsewhere'),
+              repoRoot: join(repoRoot, 'elsewhere'),
+              branch: 'feature/retry',
+            },
+          ],
+        },
+      } as never);
+    }
+    await seedAnswerRow({ actions: first.actions, threadId: 'PRRT_1', reply: 'First' });
+    await seedAnswerRow({
+      actions: second.actions,
+      sessionId: OTHER_SESSION_ID,
+      threadId: 'PRRT_9',
+      reply: 'Second',
+    });
+    let releaseGithub = (): void => undefined;
+    const gate = new Promise<void>((resolve) => {
+      releaseGithub = resolve;
+    });
+    h.run.mockImplementation(async (args) => {
+      await gate;
+      if (args.join(' ').includes('addPullRequestReviewThreadReply')) {
+        return { stdout: replyOk, stderr: '', exitCode: 0 };
+      }
+      const threadId = args.find((arg) => arg.startsWith('threadId='))?.slice(9) ?? '';
+      return { stdout: resolveOk(threadId), stderr: '', exitCode: 0 };
+    });
+
+    const firstPreview = await first.actions.preparePublication({ sessionId: SESSION_ID });
+    const secondPreview = await second.actions.preparePublication({ sessionId: OTHER_SESSION_ID });
+    const running = first.actions.publishConversations({
+      sessionId: SESSION_ID,
+      publicationId: firstPreview.publicationId ?? '',
+    });
+    const refused = await second.actions.publishConversations({
+      sessionId: OTHER_SESSION_ID,
+      publicationId: secondPreview.publicationId ?? '',
+    });
+    releaseGithub();
+
+    expect(firstPreview.repo).toBeNull();
+    expect(secondPreview.repo).toBeNull();
+    expect(refused).toEqual({ kind: 'busy' });
+    expect(await running).toMatchObject({ kind: 'done', resolved: 1 });
   });
 });

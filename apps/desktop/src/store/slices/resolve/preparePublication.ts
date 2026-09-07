@@ -23,7 +23,7 @@ import { tauriDatabase } from '../../../shared/lib/db';
 import { isSessionAttributionEnabled } from '../../sessionAttribution';
 import { buildResolutionReplyBody } from '../github/buildResolutionReplyBody';
 import { getSessionRepo } from '../worktrees/getSessionRepo';
-import { isPublicationTargetBusy } from './publicationLock';
+import { UNKNOWN_PUBLICATION_REPO, isPublicationTargetBusy } from './publicationLock';
 import { publicationTarget } from './publicationTarget';
 import { loadPublicationsInto } from './publicationState';
 import { selectPublishableThreads } from './selectPublishableThreads';
@@ -272,7 +272,7 @@ export const preparePublication = async ({
   const publication: ResolvePublication = {
     id: crypto.randomUUID(),
     sessionId,
-    repo: target.repo,
+    repo: target.repo ?? UNKNOWN_PUBLICATION_REPO,
     prNumber: target.prNumber,
     branch: git.branch,
     localHead: git.localHead,

@@ -107,7 +107,10 @@ const pushError = async ({
     worktreePath,
     branch: publication.branch,
   }).catch(() => null);
-  if (remoteHead === null || remoteHead === publication.localHead) {
+  if (remoteHead === null) {
+    return `the remote head of ${publication.branch} could not be read, so the push of ${publication.localHead} stays unverified`;
+  }
+  if (remoteHead === publication.localHead) {
     return null;
   }
   return `the remote head of ${publication.branch} is ${remoteHead}, not the reviewed ${publication.localHead}`;
@@ -170,142 +173,144 @@ export const publishConversations = async ({
       if (lease !== null && !lease.isGranted) {
         return { kind: 'busy' };
       }
-      const release = async () => {
-        if (lease === null) {
-          return;
-        }
-        await releaseWorktreeWriter({ path: worktreePath, holder }).catch(() => undefined);
-      };
-      await setResolvePublicationPhase({
-        db: tauriDatabase,
-        id: publicationId,
-        phase: 'confirmed',
-      });
-      for (const thread of frozen) {
-        const row = rowsBefore.find((item) => item.threadId === thread.threadId);
-        if (row?.state === 'closed') {
-          continue;
-        }
-        await get().updateResolveThread({
-          sessionId,
-          threadId: thread.threadId,
-          prNumber: publication.prNumber,
-          patch: { state: 'publishing' },
-        });
-      }
-      const isAlreadyPushed = publication.pushedHead !== null;
-      let pushed = isAlreadyPushed;
-      if (publication.requiresPush && !isAlreadyPushed) {
+      try {
         await setResolvePublicationPhase({
           db: tauriDatabase,
           id: publicationId,
-          phase: 'pushing',
+          phase: 'confirmed',
         });
-        const push = await pushSessionBranch(get, sessionId);
-        const error = await pushError({
-          push,
-          publication,
-          worktreePath,
-        });
-        if (error !== null) {
+        for (const thread of frozen) {
+          const row = rowsBefore.find((item) => item.threadId === thread.threadId);
+          if (row?.state === 'closed') {
+            continue;
+          }
+          await get().updateResolveThread({
+            sessionId,
+            threadId: thread.threadId,
+            prNumber: publication.prNumber,
+            patch: { state: 'publishing' },
+          });
+        }
+        const isAlreadyPushed = publication.pushedHead !== null;
+        let pushed = isAlreadyPushed;
+        if (publication.requiresPush && !isAlreadyPushed) {
           await setResolvePublicationPhase({
             db: tauriDatabase,
             id: publicationId,
-            phase: 'failed',
-            error,
+            phase: 'pushing',
           });
-          for (const thread of frozen) {
+          const push = await pushSessionBranch(get, sessionId);
+          const error = await pushError({
+            push,
+            publication,
+            worktreePath,
+          });
+          if (error !== null) {
+            await setResolvePublicationPhase({
+              db: tauriDatabase,
+              id: publicationId,
+              phase: 'failed',
+              error,
+            });
+            for (const thread of frozen) {
+              await restoreResolvePublication({
+                get,
+                sessionId,
+                threadId: thread.threadId,
+                previous: rowsBefore.find((item) => item.threadId === thread.threadId),
+                hasCommit: thread.resolvePhase !== 'skipped',
+                error,
+              });
+            }
+            await loadPublicationsInto({ set, sessionId });
+            return { kind: 'push_failed', error };
+          }
+          pushed = true;
+          await setResolvePublicationPhase({
+            db: tauriDatabase,
+            id: publicationId,
+            phase: 'pushed',
+            pushedHead: publication.localHead,
+          });
+        }
+        await setResolvePublicationPhase({
+          db: tauriDatabase,
+          id: publicationId,
+          phase: 'posting',
+        });
+        let resolved = 0;
+        let commented = 0;
+        let failed = 0;
+        let lastError = '';
+        for (const thread of frozen) {
+          const current =
+            (await listResolvePublicationThreads({ db: tauriDatabase, publicationId })).find(
+              (item) => item.threadId === thread.threadId,
+            ) ?? thread;
+          if (current.resolvePhase === 'resolved') {
+            continue;
+          }
+          try {
+            const reply = await postThreadReply({
+              get,
+              sessionId,
+              threadId: thread.threadId,
+              replyBody: current.replyBody,
+              frozen: current,
+            });
+            if (current.resolvePhase === 'skipped') {
+              if (reply.posted) {
+                commented += 1;
+              }
+              continue;
+            }
+            await markThreadResolvedNoPush({
+              set,
+              get,
+              sessionId,
+              threadId: thread.threadId,
+              frozen: { ...current, replyPhase: reply.posted ? 'posted' : current.replyPhase },
+            });
+            resolved += 1;
+          } catch (err) {
+            failed += 1;
+            lastError = formatError(err);
+            const isUncertain = UNCERTAIN.test(lastError);
+            await upsertResolvePublicationThread({
+              db: tauriDatabase,
+              thread: {
+                ...current,
+                ...(isUncertain && { replyPhase: 'uncertain', resolvePhase: 'uncertain' }),
+                error: lastError,
+              },
+            });
             await restoreResolvePublication({
               get,
               sessionId,
               threadId: thread.threadId,
               previous: rowsBefore.find((item) => item.threadId === thread.threadId),
-              hasCommit: thread.resolvePhase !== 'skipped',
-              error,
+              hasCommit: current.resolvePhase !== 'skipped',
+              error: isUncertain ? `uncertain: ${lastError}` : lastError,
             });
           }
-          await release();
-          await loadPublicationsInto({ set, sessionId });
-          return { kind: 'push_failed', error };
         }
-        pushed = true;
         await setResolvePublicationPhase({
           db: tauriDatabase,
           id: publicationId,
-          phase: 'pushed',
-          pushedHead: publication.localHead,
+          phase: failed === 0 ? 'finished' : 'failed',
+          error: failed === 0 ? null : lastError,
         });
-      }
-      await setResolvePublicationPhase({ db: tauriDatabase, id: publicationId, phase: 'posting' });
-      let resolved = 0;
-      let commented = 0;
-      let failed = 0;
-      let lastError = '';
-      for (const thread of frozen) {
-        const current =
-          (await listResolvePublicationThreads({ db: tauriDatabase, publicationId })).find(
-            (item) => item.threadId === thread.threadId,
-          ) ?? thread;
-        if (current.resolvePhase === 'resolved') {
-          continue;
-        }
-        try {
-          const reply = await postThreadReply({
-            get,
-            sessionId,
-            threadId: thread.threadId,
-            replyBody: current.replyBody,
-            frozen: current,
-          });
-          if (current.resolvePhase === 'skipped') {
-            if (reply.posted) {
-              commented += 1;
-            }
-            continue;
-          }
-          await markThreadResolvedNoPush({
-            set,
-            get,
-            sessionId,
-            threadId: thread.threadId,
-            frozen: { ...current, replyPhase: reply.posted ? 'posted' : current.replyPhase },
-          });
-          resolved += 1;
-        } catch (err) {
-          failed += 1;
-          lastError = formatError(err);
-          const isUncertain = UNCERTAIN.test(lastError);
-          await upsertResolvePublicationThread({
-            db: tauriDatabase,
-            thread: {
-              ...current,
-              ...(isUncertain && { replyPhase: 'uncertain', resolvePhase: 'uncertain' }),
-              error: lastError,
-            },
-          });
-          await restoreResolvePublication({
-            get,
-            sessionId,
-            threadId: thread.threadId,
-            previous: rowsBefore.find((item) => item.threadId === thread.threadId),
-            hasCommit: current.resolvePhase !== 'skipped',
-            error: isUncertain ? `uncertain: ${lastError}` : lastError,
-          });
+        await loadPublicationsInto({ set, sessionId });
+        set((state) => ({
+          activePublicationPreview: { ...state.activePublicationPreview, [sessionId]: null },
+        }));
+        await get().refreshSessionPrDetail(sessionId, { force: true });
+        return { kind: 'done', pushed, resolved, commented, failed };
+      } finally {
+        if (lease !== null) {
+          await releaseWorktreeWriter({ path: worktreePath, holder }).catch(() => undefined);
         }
       }
-      await release();
-      await setResolvePublicationPhase({
-        db: tauriDatabase,
-        id: publicationId,
-        phase: failed === 0 ? 'finished' : 'failed',
-        error: failed === 0 ? null : lastError,
-      });
-      await loadPublicationsInto({ set, sessionId });
-      set((state) => ({
-        activePublicationPreview: { ...state.activePublicationPreview, [sessionId]: null },
-      }));
-      await get().refreshSessionPrDetail(sessionId, { force: true });
-      return { kind: 'done', pushed, resolved, commented, failed };
     },
   });
 };

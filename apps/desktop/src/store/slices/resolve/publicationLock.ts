@@ -6,12 +6,18 @@ type Held = { readonly promise: Promise<unknown>; readonly scopeId: string | nul
 const inFlight = new Map<string, Held>();
 
 type TargetParams = {
-  readonly repo: string;
+  readonly repo: string | null;
   readonly prNumber: number;
   readonly scopeId?: string;
 };
 
-const publicationLockKey = ({ repo, prNumber }: TargetParams): string => `${repo}#${prNumber}`;
+export const UNKNOWN_PUBLICATION_REPO = 'unknown-remote';
+
+const publicationRepoKey = ({ repo }: { readonly repo: string | null }): string =>
+  repo ?? UNKNOWN_PUBLICATION_REPO;
+
+const publicationLockKey = ({ repo, prNumber }: TargetParams): string =>
+  `${publicationRepoKey({ repo })}#${prNumber}`;
 
 const isHeldByOthers = ({ repo, prNumber, scopeId }: TargetParams): boolean => {
   const held = inFlight.get(publicationLockKey({ repo, prNumber }));
@@ -30,7 +36,11 @@ export const isPublicationTargetBusy = async ({
   if (isHeldByOthers({ repo, prNumber, scopeId })) {
     return true;
   }
-  const active = await listActiveResolvePublications({ db: tauriDatabase, repo, prNumber });
+  const active = await listActiveResolvePublications({
+    db: tauriDatabase,
+    repo: publicationRepoKey({ repo }),
+    prNumber,
+  });
   return active.some((publication) => publication.id !== exceptPublicationId);
 };
 
@@ -62,7 +72,11 @@ export const withPublicationLock = async <T>({
   });
   inFlight.set(key, { promise: reservation, scopeId: scopeId ?? null });
   try {
-    const active = await listActiveResolvePublications({ db: tauriDatabase, repo, prNumber });
+    const active = await listActiveResolvePublications({
+      db: tauriDatabase,
+      repo: publicationRepoKey({ repo }),
+      prNumber,
+    });
     if (active.some((publication) => publication.id !== exceptPublicationId)) {
       return onBusy();
     }

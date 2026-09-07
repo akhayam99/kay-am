@@ -110,7 +110,7 @@ export type ResolvePublicationExclusion = Readonly<{
 
 export type ResolvePublicationPreview = Readonly<{
   publicationId: string | null;
-  repo: string;
+  repo: string | null;
   prNumber: number;
   branch: string;
   localHead: string;
