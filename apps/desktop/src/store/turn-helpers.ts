@@ -246,11 +246,13 @@ const runSummarizer = async ({ set, get, sessionId, entry }: Params): Promise<vo
   const taskModel =
     entry.taskModelOverride ??
     routeTaskModel({
-      taskModel: resolveTaskModel(
-        'summarizer',
-        get().workspaceOverrides?.[session.workspaceId]?.taskModels,
-        session.providerPreference.defaultProvider,
-      ),
+      taskModel: resolveTaskModel({
+        task: 'summarizer',
+        preferences: get().workspaceOverrides?.[session.workspaceId]?.taskModels,
+        workspaceDefaultProviderId:
+          get().workspaceOverrides?.[session.workspaceId]?.defaultProviderId,
+        sessionDefaultProviderId: session.providerPreference.defaultProvider,
+      }),
       connectedProviders,
       enabledProviders,
       cooldowns: get().providerCooldowns,

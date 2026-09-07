@@ -288,7 +288,7 @@ export const WorkflowBuilderView = ({ session, onClose }: Props) => {
   const [confirmDeleteId, setConfirmDeleteId] = useState<WorkflowId | null>(null);
   const [plannerProviderOverride, setPlannerProviderOverride] = useState<ProviderId | ''>('');
   const [plannerModelOverride, setPlannerModelOverride] = useState('');
-  const [plannerEffortOverride, setPlannerEffortOverride] = useState<EffortLevel>(PLANNER_EFFORT);
+  const [plannerEffortOverride, setPlannerEffortOverride] = useState<EffortLevel | null>(null);
 
   const providerId =
     providers.find((p) => p.id === session.providerOverride)?.id ??
@@ -300,12 +300,24 @@ export const WorkflowBuilderView = ({ session, onClose }: Props) => {
   );
 
   const resolvedPlanTaskModel = useMemo(
-    () => resolveTaskModel('plan_generation', workspaceOverrides?.taskModels, providerId),
+    () =>
+      resolveTaskModel({
+        task: 'plan_generation',
+        preferences: workspaceOverrides?.taskModels,
+        workspaceDefaultProviderId: workspaceOverrides?.defaultProviderId,
+        sessionDefaultProviderId: providerId,
+      }),
     [workspaceOverrides, providerId],
   );
 
   const resolvedProsePolishTaskModel = useMemo(
-    () => resolveTaskModel('prose_polish', workspaceOverrides?.taskModels, providerId),
+    () =>
+      resolveTaskModel({
+        task: 'prose_polish',
+        preferences: workspaceOverrides?.taskModels,
+        workspaceDefaultProviderId: workspaceOverrides?.defaultProviderId,
+        sessionDefaultProviderId: providerId,
+      }),
     [workspaceOverrides, providerId],
   );
 
@@ -315,13 +327,26 @@ export const WorkflowBuilderView = ({ session, onClose }: Props) => {
   const plannerRecommendedModel = useMemo(
     () =>
       plannerProviderOverride !== ''
-        ? resolveTaskModel('plan_generation', null, plannerProviderOverride).model
+        ? resolveTaskModel({
+            task: 'plan_generation',
+            preferences: null,
+            workspaceDefaultProviderId: plannerProviderOverride,
+            sessionDefaultProviderId: providerId,
+          }).model
         : resolvedPlanTaskModel.model,
-    [plannerProviderOverride, resolvedPlanTaskModel],
+    [plannerProviderOverride, providerId, resolvedPlanTaskModel],
   );
 
+  const plannerEffort = plannerEffortOverride ?? resolvedPlanTaskModel.effort ?? PLANNER_EFFORT;
+
   const resolvedOrchestratorTaskModel = useMemo(
-    () => resolveTaskModel('workflow_orchestrator', workspaceOverrides?.taskModels, providerId),
+    () =>
+      resolveTaskModel({
+        task: 'workflow_orchestrator',
+        preferences: workspaceOverrides?.taskModels,
+        workspaceDefaultProviderId: workspaceOverrides?.defaultProviderId,
+        sessionDefaultProviderId: providerId,
+      }),
     [workspaceOverrides, providerId],
   );
 
@@ -339,7 +364,12 @@ export const WorkflowBuilderView = ({ session, onClose }: Props) => {
   const recommendedOrchestratorModel = useMemo(
     () =>
       orchestratorProviderOverride !== ''
-        ? resolveTaskModel('workflow_orchestrator', null, orchestratorProviderOverride).model
+        ? resolveTaskModel({
+            task: 'workflow_orchestrator',
+            preferences: null,
+            workspaceDefaultProviderId: orchestratorProviderOverride,
+            sessionDefaultProviderId: providerId,
+          }).model
         : resolvedOrchestratorTaskModel.model,
     [orchestratorProviderOverride, resolvedOrchestratorTaskModel],
   );
@@ -690,7 +720,7 @@ export const WorkflowBuilderView = ({ session, onClose }: Props) => {
       const taskModel = {
         providerId: plannerEffectiveProviderId,
         model: effectiveModel,
-        effort: plannerEffortOverride,
+        effort: plannerEffort,
       };
       const client = new PlannerClient({
         ...taskModel,
@@ -1219,7 +1249,7 @@ export const WorkflowBuilderView = ({ session, onClose }: Props) => {
                           model={plannerModelOverride}
                           effort={{
                             editable: true,
-                            value: plannerEffortOverride,
+                            value: plannerEffort,
                             onChange: setPlannerEffortOverride,
                           }}
                           recommendation={{

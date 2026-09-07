@@ -66,11 +66,12 @@ export const summarizeWorkflowAgentOutput = async ({
     .providers.filter((provider) => provider.connection === 'connected')
     .map((provider) => provider.id);
   const enabledProviders = session.providerPreference.enabledProviders ?? null;
-  const resolved = resolveTaskModel(
-    'summarizer',
-    get().workspaceOverrides?.[session.workspaceId]?.taskModels,
-    session.providerPreference.defaultProvider,
-  );
+  const resolved = resolveTaskModel({
+    task: 'summarizer',
+    preferences: get().workspaceOverrides?.[session.workspaceId]?.taskModels,
+    workspaceDefaultProviderId: get().workspaceOverrides?.[session.workspaceId]?.defaultProviderId,
+    sessionDefaultProviderId: session.providerPreference.defaultProvider,
+  });
   const taskModel = routeTaskModel({
     taskModel: resolved,
     connectedProviders,

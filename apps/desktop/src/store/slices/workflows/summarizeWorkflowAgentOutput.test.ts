@@ -6,6 +6,7 @@ import type {
   ProviderId,
   Session,
   SessionId,
+  TaskModelPreferences,
   WorkspaceId,
 } from '@goodboy/types';
 
@@ -55,9 +56,11 @@ const session: Session = {
 type HarnessParams = {
   readonly connected: ReadonlyArray<ProviderId>;
   readonly cooldowns?: Readonly<Partial<Record<ProviderId, number>>>;
+  readonly defaultProviderId?: ProviderId;
+  readonly taskModels?: TaskModelPreferences;
 };
 
-const buildHarness = ({ connected, cooldowns }: HarnessParams) => {
+const buildHarness = ({ connected, cooldowns, defaultProviderId, taskModels }: HarnessParams) => {
   const emitNotification = vi.fn(async (..._args: ReadonlyArray<unknown>) => undefined);
   const state: Record<string, unknown> & {
     providerCooldowns: Readonly<Partial<Record<ProviderId, number>>>;
@@ -75,7 +78,15 @@ const buildHarness = ({ connected, cooldowns }: HarnessParams) => {
       identity: null,
     })),
     providerCooldowns: cooldowns ?? {},
-    workspaceOverrides: {},
+    workspaceOverrides:
+      defaultProviderId == null && taskModels == null
+        ? {}
+        : {
+            [WORKSPACE_ID]: {
+              defaultProviderId: defaultProviderId ?? null,
+              taskModels: taskModels ?? null,
+            },
+          },
     phaseTemplates: {},
     sessionWorkflows: {},
     emitNotification,
@@ -124,6 +135,36 @@ describe('summarizeWorkflowAgentOutput', () => {
       'codex',
     ]);
     expect(emitNotification).not.toHaveBeenCalled();
+  });
+
+  it('uses the current workspace provider for an automatic workflow summary', async () => {
+    summarizeStepOutputSpy.mockResolvedValueOnce('summary');
+    const { call } = buildHarness({
+      connected: ['anthropic', 'codex'],
+      defaultProviderId: 'codex',
+    });
+
+    await call();
+
+    expect(summarizeStepOutputSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ providerId: 'codex', model: 'gpt-5.4-mini' }),
+    );
+  });
+
+  it('preserves an explicit codex variant for a workflow summary', async () => {
+    summarizeStepOutputSpy.mockResolvedValueOnce('summary');
+    const { call } = buildHarness({
+      connected: ['anthropic', 'codex'],
+      taskModels: {
+        summarizer: { providerId: 'codex', model: 'gpt-5.6-luna', effort: 'xhigh' },
+      },
+    });
+
+    await call();
+
+    expect(summarizeStepOutputSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ providerId: 'codex', model: 'gpt-5.6-luna', effort: 'xhigh' }),
+    );
   });
 
   it('records a cooldown for the provider that ran out', async () => {

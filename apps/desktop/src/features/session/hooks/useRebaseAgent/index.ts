@@ -94,9 +94,10 @@ export const useRebaseAgent = ({ sessionId, status, onError }: Params): Result =
       taskModelAgentSpawnConfig({
         task: 'rebase',
         preferences: workspaceOverrides?.taskModels,
-        defaultProviderId: session?.providerPreference.defaultProvider ?? 'anthropic',
+        workspaceDefaultProviderId: workspaceOverrides?.defaultProviderId,
+        sessionDefaultProviderId: session?.providerPreference.defaultProvider ?? 'anthropic',
       }),
-    [session?.providerPreference.defaultProvider, workspaceOverrides?.taskModels],
+    [session?.providerPreference.defaultProvider, workspaceOverrides],
   );
   const isAgentRunning =
     phaseRuns?.some(

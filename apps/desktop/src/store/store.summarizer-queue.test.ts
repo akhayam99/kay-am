@@ -384,6 +384,88 @@ describe('summarizer queue, coalescing and no-stack', () => {
     useAppStore.setState({ workspaceOverrides: {} });
   });
 
+  it('uses the current workspace provider instead of the captured session provider', async () => {
+    const { useAppStore } = await import('./store');
+    const { enqueueSummarizer, summarizerQueues: queues } = await import('./turn-helpers');
+    queues.clear();
+    useAppStore.setState({
+      sessions: [buildSession()],
+      sessionSlots: { [SESSION_ID]: [] },
+      summarizerStatus: {},
+      workspaceOverrides: {
+        [WORKSPACE_ID]: {
+          defaultProviderId: 'codex',
+          defaultWorkflowId: null,
+          defaultBranchPrefix: null,
+          parallelEnabled: null,
+          defaultVerbosity: null,
+          providerBindings: null,
+          taskModels: null,
+          roleModels: null,
+          parallelAgents: null,
+          providerPool: null,
+          attributionFooter: null,
+        },
+      },
+    });
+
+    enqueueSummarizer(
+      useAppStore.setState,
+      useAppStore.getState,
+      SESSION_ID,
+      'turn input',
+      'turn output',
+    );
+
+    await vi.waitFor(() => expect(queues.get(SESSION_ID)?.inFlight).toBe(false));
+    expect(summarizerConstructorCalls).toContainEqual(
+      expect.objectContaining({ providerId: 'codex', model: 'gpt-5.4-mini' }),
+    );
+    useAppStore.setState({ workspaceOverrides: {} });
+  });
+
+  it('preserves an explicit codex variant for session summaries', async () => {
+    const { useAppStore } = await import('./store');
+    const { enqueueSummarizer, summarizerQueues: queues } = await import('./turn-helpers');
+    queues.clear();
+    useAppStore.setState({
+      sessions: [buildSession()],
+      sessionSlots: { [SESSION_ID]: [] },
+      summarizerStatus: {},
+      workspaceOverrides: {
+        [WORKSPACE_ID]: {
+          defaultProviderId: 'codex',
+          defaultWorkflowId: null,
+          defaultBranchPrefix: null,
+          parallelEnabled: null,
+          defaultVerbosity: null,
+          providerBindings: null,
+          taskModels: {
+            summarizer: { providerId: 'codex', model: 'gpt-5.6-terra', effort: 'high' },
+          },
+          roleModels: null,
+          parallelAgents: null,
+          providerPool: null,
+          attributionFooter: null,
+        },
+      },
+    });
+
+    enqueueSummarizer(
+      useAppStore.setState,
+      useAppStore.getState,
+      SESSION_ID,
+      'turn input',
+      'turn output',
+    );
+
+    await vi.waitFor(() => expect(queues.get(SESSION_ID)?.inFlight).toBe(false));
+    expect(summarizerConstructorCalls).toContainEqual(
+      expect.objectContaining({ providerId: 'codex', model: 'gpt-5.6-terra', effort: 'high' }),
+    );
+    useAppStore.setState({ workspaceOverrides: {} });
+  });
+
   it('single trigger with nothing in-flight fires immediately and clears queue', async () => {
     let resolved = false;
     summarizeSpy.mockImplementation(async () => {

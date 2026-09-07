@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { resolveRoleRouting } from '@goodboy/core';
+import { resolveRoleRouting, resolveStoredModelSelection } from '@goodboy/core';
 import type { ProviderId, RoleModelPreference } from '@goodboy/types';
 import { RoleModelRow } from './index';
 
@@ -72,10 +72,11 @@ describe('RoleModelRow', () => {
     for (const [preference] of onChange.mock.calls) {
       expect(preference?.providerId).toBe('cursor');
     }
-    expect(onChange.mock.calls.at(-1)?.[0]).toMatchObject({
-      providerId: 'cursor',
-      model: 'opus-5',
-    });
+    const last = onChange.mock.calls.at(-1)?.[0];
+    expect(last?.providerId).toBe('cursor');
+    expect(
+      resolveStoredModelSelection({ provider: 'cursor', id: last?.model ?? '' }).selection.key,
+    ).toBe('opus-5');
   });
 
   it('pins a role running on its compiled default to the provider picked', () => {

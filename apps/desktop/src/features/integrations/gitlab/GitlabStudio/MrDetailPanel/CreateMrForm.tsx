@@ -47,9 +47,10 @@ export const CreateMrForm = ({ sessionId, branch, error, onClose }: Props) => {
       taskModelAgentSpawnConfig({
         task: 'pr_draft',
         preferences: workspaceOverrides?.taskModels,
-        defaultProviderId: session?.providerPreference?.defaultProvider ?? 'anthropic',
+        workspaceDefaultProviderId: workspaceOverrides?.defaultProviderId,
+        sessionDefaultProviderId: session?.providerPreference?.defaultProvider ?? 'anthropic',
       }),
-    [workspaceOverrides?.taskModels, session?.providerPreference?.defaultProvider],
+    [workspaceOverrides, session?.providerPreference?.defaultProvider],
   );
 
   const [mode, setMode] = useState<CreateMode>('manual');
