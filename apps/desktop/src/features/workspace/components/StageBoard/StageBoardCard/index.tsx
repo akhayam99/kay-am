@@ -31,6 +31,9 @@ import { useDynamicActions, type DynamicAction } from './useDynamicActions';
 const SESSION_CARD_REVEAL =
   'group-hover/session-card:opacity-100 group-focus-within/session-card:opacity-100';
 
+const SESSION_CARD_META_HIDE =
+  'group-hover/session-card:opacity-0 group-focus-within/session-card:opacity-0';
+
 const isUrgent = ({ tone }: { readonly tone: DynamicAction['tone'] }): boolean =>
   tone === 'warning' || tone === 'danger';
 
@@ -152,11 +155,11 @@ export const StageBoardCard = memo(function StageBoardCard({
         nav.selectCard(session);
       }}
       className={cn(
-        'group/session-card grid h-28 shrink-0 cursor-pointer grid-cols-[minmax(0,1fr)_auto] grid-rows-[1fr_auto] gap-2 p-3 text-left',
+        'group/session-card grid h-28 shrink-0 cursor-pointer grid-cols-[minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)_auto] gap-x-2 gap-y-1 p-3 text-left',
         sessionCardShell({ stage, selected }),
       )}
     >
-      <span className="row-span-2 flex min-w-0 flex-col justify-between">
+      <span className="flex min-w-0 flex-col justify-between">
         <span className="flex min-h-10 items-start gap-2">
           <PrRequestSlot
             linkedRequest={linkedRequest}
@@ -171,79 +174,6 @@ export const StageBoardCard = memo(function StageBoardCard({
         </span>
 
         {reason && <span className="truncate text-2xs text-muted-foreground">{reason}</span>}
-
-        <span className="flex h-5 items-center gap-2">
-          <span className="flex min-w-0 items-center gap-2 overflow-hidden">
-            {agentCount > 0 && (
-              <Tooltip content={agentCountLabel} side="top">
-                <span
-                  aria-label={agentCountLabel}
-                  className="inline-flex shrink-0 items-center gap-1 text-3xs tabular-nums text-muted-foreground/70"
-                >
-                  <CONCEPT_ICONS.agents size={ICON_SIZE.row} aria-hidden />
-                  <span>{agentCount}</span>
-                </span>
-              </Tooltip>
-            )}
-            {reviewDraftCount > 0 && (
-              <Chip
-                tone="draft"
-                size="xs"
-                bordered={false}
-                ariaLabel={`Review ${reviewDraftCount} draft ${reviewDraftCount === 1 ? 'comment' : 'comments'}`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  openSession({ sessionId: id, lens: 'review' });
-                }}
-                icon={<MessageSquareDiff size={10} aria-hidden />}
-                label={<span className="tabular-nums">{reviewDraftCount}</span>}
-                trailing={<span>draft {reviewDraftCount === 1 ? 'comment' : 'comments'}</span>}
-                className="shrink-0"
-              />
-            )}
-            {isAutoMode && (
-              <Chip
-                tone={CONCEPT_TONE.autorun}
-                size="xs"
-                bordered={false}
-                icon={<CONCEPT_ICONS.autorun size={10} aria-hidden />}
-                label="Autorun"
-                className="shrink-0"
-              />
-            )}
-            {showProjectChips
-              ? mounts.map((mount) => (
-                  <Chip
-                    key={mount.mountId ?? mount.projectId}
-                    tone="neutral"
-                    size="xs"
-                    bordered={false}
-                    label={mount.mountName}
-                    className="shrink-0"
-                  />
-                ))
-              : null}
-            {externalTasks.map((task) => (
-              <ExternalTaskChip
-                key={`${task.provider}:${task.externalId}`}
-                task={task}
-                variant="icon"
-              />
-            ))}
-          </span>
-          <span className="ml-auto flex shrink-0 items-center gap-2">
-            {sessionCost > 0 && (
-              <CostBadge
-                value={sessionCost}
-                title={`Session spend: ${formatUsd(sessionCost)} (excludes summarizer)`}
-                className="shrink-0 text-3xs tabular-nums text-muted-foreground/70"
-              />
-            )}
-            {age && (
-              <span className="shrink-0 text-3xs tabular-nums text-muted-foreground/70">{age}</span>
-            )}
-          </span>
-        </span>
       </span>
 
       <span className="col-start-2 row-start-1 flex items-center gap-1 self-start">
@@ -306,9 +236,87 @@ export const StageBoardCard = memo(function StageBoardCard({
         />
       </span>
 
+      <span className="col-span-2 col-start-1 row-start-2 flex h-5 min-w-0 items-center gap-2 self-center">
+        <span className="flex min-w-0 items-center gap-2 overflow-hidden">
+          {agentCount > 0 && (
+            <Tooltip content={agentCountLabel} side="top">
+              <span
+                aria-label={agentCountLabel}
+                className="inline-flex shrink-0 items-center gap-1 text-3xs tabular-nums text-muted-foreground/70"
+              >
+                <CONCEPT_ICONS.agents size={ICON_SIZE.row} aria-hidden />
+                <span>{agentCount}</span>
+              </span>
+            </Tooltip>
+          )}
+          {reviewDraftCount > 0 && (
+            <Chip
+              tone="draft"
+              size="xs"
+              bordered={false}
+              ariaLabel={`Review ${reviewDraftCount} draft ${reviewDraftCount === 1 ? 'comment' : 'comments'}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                openSession({ sessionId: id, lens: 'review' });
+              }}
+              icon={<MessageSquareDiff size={10} aria-hidden />}
+              label={<span className="tabular-nums">{reviewDraftCount}</span>}
+              trailing={<span>draft {reviewDraftCount === 1 ? 'comment' : 'comments'}</span>}
+              className="shrink-0"
+            />
+          )}
+          {isAutoMode && (
+            <Chip
+              tone={CONCEPT_TONE.autorun}
+              size="xs"
+              bordered={false}
+              icon={<CONCEPT_ICONS.autorun size={10} aria-hidden />}
+              label="Autorun"
+              className="shrink-0"
+            />
+          )}
+          {showProjectChips
+            ? mounts.map((mount) => (
+                <Chip
+                  key={mount.projectId}
+                  tone="neutral"
+                  size="xs"
+                  bordered={false}
+                  label={<span className="truncate">{mount.mountName}</span>}
+                  className="min-w-0"
+                />
+              ))
+            : null}
+          {externalTasks.map((task) => (
+            <ExternalTaskChip
+              key={`${task.provider}:${task.externalId}`}
+              task={task}
+              variant="icon"
+            />
+          ))}
+        </span>
+        <span
+          className={cn(
+            'ml-auto flex shrink-0 items-center gap-2 motion-safe:transition-opacity',
+            SESSION_CARD_META_HIDE,
+          )}
+        >
+          {sessionCost > 0 && (
+            <CostBadge
+              value={sessionCost}
+              title={`Session spend: ${formatUsd(sessionCost)} (excludes summarizer)`}
+              className="shrink-0 text-3xs tabular-nums text-muted-foreground/70"
+            />
+          )}
+          {age && (
+            <span className="shrink-0 text-3xs tabular-nums text-muted-foreground/70">{age}</span>
+          )}
+        </span>
+      </span>
+
       <CardActionSlot
         label="Session lifecycle actions"
-        className="col-start-2 row-start-2 self-end"
+        className="col-start-2 row-start-2 self-center justify-self-end"
       >
         {!archived && (
           <CardAction

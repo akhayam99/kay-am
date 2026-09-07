@@ -147,13 +147,17 @@ describe('StageBoardCard layout', () => {
     render(<StageBoardCard session={session} nav={nav} />);
     const card = screen.getAllByRole('button')[0];
     const title = screen.getByText(session.goal);
-    const metaRow = title.parentElement?.nextElementSibling?.nextElementSibling;
+    const metaRow = card?.children[2];
     expect(card?.className).toContain('h-28');
+    expect(card?.className).toContain('gap-y-1');
     expect(card?.className).not.toContain('h-[8.25rem]');
     expect(card?.className).not.toContain('shadow-sm');
     expect(title.className).toContain('line-clamp-2');
     expect(title.className).toContain('min-h-10');
     expect(title.className).toContain('leading-5');
+    expect(metaRow?.className).toContain('col-span-2');
+    expect(metaRow?.className).toContain('col-start-1');
+    expect(metaRow?.className).toContain('row-start-2');
     expect(metaRow?.className).toContain('h-5');
   });
 
@@ -162,6 +166,7 @@ describe('StageBoardCard layout', () => {
     expect(screen.getByText(session.goal).closest('[data-tooltip]')).toBeNull();
     expect(screen.queryByTestId('status-dot')).toBeNull();
     expect(screen.getByText('no PR yet').className).toContain('truncate');
+    expect(screen.getByText('no PR yet').parentElement?.children.length).toBe(2);
   });
 
   it('renders a backticked goal as inline code and keeps the tooltip plain', () => {
@@ -506,7 +511,31 @@ describe('StageBoardCard footer', () => {
     ]);
     expect(right?.firstElementChild).toBe(cost);
     expect(right?.children.length).toBe(1);
+    expect(right?.className).toContain('group-hover/session-card:opacity-0');
+    expect(right?.className).toContain('group-focus-within/session-card:opacity-0');
     expect(metaRow?.querySelector('.lucide-chevron-right')).toBeNull();
+  });
+
+  it('gives the project chip an ellipsis instead of a hard clip', () => {
+    state.projects = [{}, {}];
+    state.sessionProjectMounts = {
+      [SESSION_ID]: [{ projectId: 'project-1', mountName: 'gateway' }],
+    };
+    render(<StageBoardCard session={session} nav={nav} />);
+    const chipLabel = screen.getByText('gateway');
+    expect(chipLabel.className).toContain('truncate');
+    expect(chipLabel.closest('span.inline-flex')?.className).toContain('min-w-0');
+    expect(chipLabel.closest('span.inline-flex')?.className).not.toContain('shrink-0');
+  });
+
+  it('keeps the lifecycle slot bottom right over the trailing metadata', () => {
+    render(<StageBoardCard session={session} nav={nav} />);
+    const card = screen.getAllByRole('button')[0];
+    const group = screen.getByRole('group', { name: 'Session lifecycle actions' });
+    expect(group.className).toContain('col-start-2');
+    expect(group.className).toContain('row-start-2');
+    expect(group.className).toContain('justify-self-end');
+    expect(card?.lastElementChild).toBe(group);
   });
 
   it('keeps cost and age at the metadata grade', () => {
