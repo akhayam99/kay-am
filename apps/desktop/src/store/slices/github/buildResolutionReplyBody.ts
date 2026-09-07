@@ -43,5 +43,7 @@ export const buildResolutionReplyBody = ({
     return reply.length > 0 ? reply : null;
   })();
 
-  return body === null ? null : appendAttribution({ body, isEnabled: isAttributed });
+  return body === null
+    ? null
+    : appendAttribution({ body, isEnabled: isAttributed, syntax: 'markdown' });
 };

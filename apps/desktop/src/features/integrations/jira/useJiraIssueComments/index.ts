@@ -83,7 +83,7 @@ export const useJiraIssueComments = ({ issue, workspaceId, projectId }: Params):
         siteUrl,
         email,
         issueKey,
-        body: appendAttribution({ body, isEnabled: isAttributed }),
+        body: appendAttribution({ body, isEnabled: isAttributed, syntax: 'markdown' }),
       });
       setComments((current) => [...current, created]);
     },

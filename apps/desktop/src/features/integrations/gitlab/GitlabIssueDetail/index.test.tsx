@@ -7,7 +7,6 @@ import {
   gitlabUpdateIssueDescription,
   type GitlabIssue,
 } from '../client';
-import { ATTRIBUTION_FOOTER } from '../../../../shared/utils/attribution';
 import { GitlabIssueDetail } from './index';
 
 type StoreGitlabIntegration = { provider: string; config: { host: string } };
@@ -175,7 +174,7 @@ describe('GitlabIssueDetail', () => {
         host: 'https://gitlab.com',
         projectPath: 'acme/web',
         issueIid: 7,
-        body: `Reproduced on main\n\n${ATTRIBUTION_FOOTER}`,
+        body: `Reproduced on main\n\n*Written by Goodboy*`,
         projectId: undefined,
       }),
     );

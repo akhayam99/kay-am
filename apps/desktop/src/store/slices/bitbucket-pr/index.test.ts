@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OverrideSettings, SessionId, WorkspaceId } from '@goodboy/types';
 import type { AppStore } from '../../store';
 import { overridesWithAttribution } from '../../../__tests__/helpers/attributionOverrides';
-import { ATTRIBUTION_FOOTER } from '../../../shared/utils/attribution';
 import type { BitbucketPullRequest } from '../../../features/integrations/bitbucket/client';
 
 const pullRequestForBranchSpy = vi.fn();
@@ -253,7 +252,7 @@ describe('bitbucket-pr write verbs', () => {
     expect(writeSpies.comment).toHaveBeenCalledWith(
       expect.objectContaining({
         pullRequestId: 12,
-        body: `looks good\n\n${ATTRIBUTION_FOOTER}`,
+        body: `looks good\n\n*Written by Goodboy*`,
       }),
     );
     expect(writeSpies.comment.mock.calls[0]?.[0]).not.toHaveProperty('parentCommentId');
@@ -261,7 +260,7 @@ describe('bitbucket-pr write verbs', () => {
       expect.objectContaining({
         pullRequestId: 12,
         parentCommentId: 5,
-        body: `agreed\n\n${ATTRIBUTION_FOOTER}`,
+        body: `agreed\n\n*Written by Goodboy*`,
       }),
     );
   });

@@ -244,6 +244,7 @@ export const publishPrReview = (set: SetFn, get: GetFn) => {
         : appendAttribution({
             body: opts.body,
             isEnabled: isAttributionEnabled({ overrides: get().workspaceOverrides[workspace.id] }),
+            syntax: 'markdown',
           });
 
     const outcome =

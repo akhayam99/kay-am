@@ -119,7 +119,7 @@ export const useGitlabMrDiscussions = ({
         host,
         projectPath,
         mrIid,
-        appendAttribution({ body, isEnabled: isAttributed }),
+        appendAttribution({ body, isEnabled: isAttributed, syntax: 'markdown' }),
       );
       setReloadToken((token) => token + 1);
     },
@@ -137,7 +137,7 @@ export const useGitlabMrDiscussions = ({
         projectPath,
         mrIid,
         discussionId,
-        body: appendAttribution({ body, isEnabled: isAttributed }),
+        body: appendAttribution({ body, isEnabled: isAttributed, syntax: 'markdown' }),
       });
       setReloadToken((token) => token + 1);
     },

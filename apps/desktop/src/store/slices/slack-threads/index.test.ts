@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OverrideSettings, WorkspaceId } from '@goodboy/types';
 import type { AppStore } from '../../store';
 import { overridesWithAttribution } from '../../../__tests__/helpers/attributionOverrides';
-import { ATTRIBUTION_FOOTER } from '../../../shared/utils/attribution';
 
 const listChannelsSpy = vi.fn();
 const listUsersSpy = vi.fn();
@@ -159,7 +158,7 @@ describe('slack-threads slice', () => {
       workspaceId: WORKSPACE_ID,
       channelId: CHANNEL_ID,
       threadTs: THREAD_TS,
-      text: `on it\n\n${ATTRIBUTION_FOOTER}`,
+      text: `on it\n\n_Written by Goodboy_`,
     });
     expect(getThreadSpy).toHaveBeenCalledWith({
       workspaceId: WORKSPACE_ID,

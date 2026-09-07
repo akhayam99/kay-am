@@ -13,7 +13,6 @@ vi.mock('../github', () => ({
 }));
 
 import { overridesWithAttribution } from '../../../__tests__/helpers/attributionOverrides';
-import { ATTRIBUTION_FOOTER } from '../../../shared/utils/attribution';
 import { useAppStore } from '../../../store';
 import { useGithubIssueComments } from './index';
 
@@ -86,7 +85,7 @@ describe('useGithubIssueComments', () => {
     expect(h.ghCreateIssueComment).toHaveBeenCalledWith({
       cwd: '/repo',
       issueNumber: 42,
-      body: `Shipping this today.\n\n${ATTRIBUTION_FOOTER}`,
+      body: `Shipping this today.\n\n*Written by Goodboy*`,
       workspaceId: WORKSPACE_ID,
     });
     await waitFor(() => expect(result.current.comments).toEqual([COMMENT]));

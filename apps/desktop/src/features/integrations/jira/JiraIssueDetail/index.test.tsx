@@ -38,7 +38,6 @@ vi.mock('../client', async (importOriginal) => ({
 }));
 
 import { overridesWithAttribution } from '../../../../__tests__/helpers/attributionOverrides';
-import { ATTRIBUTION_FOOTER } from '../../../../shared/utils/attribution';
 import { useAppStore } from '../../../../store';
 import { JiraIssueDetail } from './index';
 
@@ -166,7 +165,7 @@ describe('JiraIssueDetail', () => {
       expect(createComment).toHaveBeenCalledWith(
         expect.objectContaining({
           issueKey: 'ENG-142',
-          body: `Moving this to review\n\n${ATTRIBUTION_FOOTER}`,
+          body: `Moving this to review\n\n*Written by Goodboy*`,
         }),
       ),
     );

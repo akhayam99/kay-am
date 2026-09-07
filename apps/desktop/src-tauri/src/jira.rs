@@ -464,6 +464,23 @@ fn adf_field_to_markdown(value: Option<&Value>) -> String {
     }
 }
 
+fn emphasised_line(line: &str) -> Option<&str> {
+    let inner = line.strip_prefix('*')?.strip_suffix('*')?;
+    if inner.is_empty() || inner.contains('*') {
+        return None;
+    }
+    Some(inner)
+}
+
+fn paragraph_content(line: &str) -> Value {
+    match emphasised_line(line) {
+        Some(inner) => serde_json::json!([
+            { "type": "text", "text": inner, "marks": [{ "type": "em" }] }
+        ]),
+        None => serde_json::json!([{ "type": "text", "text": line }]),
+    }
+}
+
 fn text_to_adf(text: &str) -> Value {
     let paragraphs: Vec<Value> = text
         .lines()
@@ -472,7 +489,7 @@ fn text_to_adf(text: &str) -> Value {
         .map(|line| {
             serde_json::json!({
                 "type": "paragraph",
-                "content": [{ "type": "text", "text": line }]
+                "content": paragraph_content(line)
             })
         })
         .collect();
@@ -1354,6 +1371,34 @@ mod tests {
     #[test]
     fn adf_round_trips_a_multi_paragraph_body() {
         let text = "first line\n\nsecond line";
+        assert_eq!(adf_to_markdown(&text_to_adf(text)), text);
+    }
+
+    #[test]
+    fn adf_writer_marks_a_fully_emphasised_line_as_em() {
+        let document = text_to_adf("looks good\n\n*Written by Goodboy*");
+        let content = document["content"].as_array().unwrap();
+        assert_eq!(content.len(), 2);
+        assert_eq!(content[0]["content"][0]["text"], "looks good");
+        assert!(content[0]["content"][0].get("marks").is_none());
+        assert_eq!(content[1]["content"][0]["text"], "Written by Goodboy");
+        assert_eq!(content[1]["content"][0]["marks"][0]["type"], "em");
+    }
+
+    #[test]
+    fn adf_writer_keeps_asterisks_that_do_not_wrap_a_whole_line() {
+        let document = text_to_adf("**Valid.** shipped\n\n*partial emphasis* here\n\n**bold**");
+        let content = document["content"].as_array().unwrap();
+        assert_eq!(content.len(), 3);
+        assert_eq!(content[0]["content"][0]["text"], "**Valid.** shipped");
+        assert_eq!(content[1]["content"][0]["text"], "*partial emphasis* here");
+        assert_eq!(content[2]["content"][0]["text"], "**bold**");
+        assert!(content[2]["content"][0].get("marks").is_none());
+    }
+
+    #[test]
+    fn adf_round_trips_the_italic_attribution_line() {
+        let text = "looks good\n\n*Written by Goodboy*";
         assert_eq!(adf_to_markdown(&text_to_adf(text)), text);
     }
 
