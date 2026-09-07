@@ -325,3 +325,11 @@ export {
   setResolveAttemptPhase,
 } from './queries/resolve-attempt';
 export { hasResolveImport, commitResolveImport } from './queries/resolve-import';
+export {
+  insertResolvePublication,
+  setResolvePublicationPhase,
+  listActiveResolvePublications,
+  listResolvePublicationsForSession,
+  upsertResolvePublicationThread,
+  listResolvePublicationThreads,
+} from './queries/resolve-publication';

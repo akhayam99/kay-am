@@ -300,4 +300,12 @@ export type {
   ResolveThreadState,
   ResolveAttempt,
   ResolveAttemptPhase,
+  ResolvePublication,
+  ResolvePublicationExclusion,
+  ResolvePublicationPhase,
+  ResolvePublicationPreview,
+  ResolvePublicationReplyPhase,
+  ResolvePublicationResolvePhase,
+  ResolvePublicationThread,
+  PublicationBlocker,
 } from './resolve';

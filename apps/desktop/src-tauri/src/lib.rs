@@ -230,6 +230,8 @@ pub fn run() {
             worktree::worktree_diff_file,
             worktree::worktree_changed_files,
             worktree::worktree_commits,
+            worktree::worktree_is_ancestor,
+            worktree::worktree_remote_head,
             worktree::worktree_diff_commit,
             worktree::worktree_amend_commit,
             worktree::worktree_squash_commits,
