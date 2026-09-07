@@ -158,6 +158,7 @@ import { createSlotsSlice } from './slices/slots';
 import { createOverridesSlice } from './slices/overrides';
 import { createCredentialsSlice } from './slices/credentials';
 import { createWorkflowsSlice } from './slices/workflows';
+import type { CopyWorkflowFromWorkspaceParams } from './slices/workflows/copyWorkflowFromWorkspace';
 import type { OrchestrateOptions } from './slices/workflows/orchestrateNextStep';
 import type { ActivateWorkflowAgentParams } from './slices/workflows/activateWorkflowAgent';
 import { createSettingsSlice } from './slices/settings';
@@ -552,6 +553,7 @@ type AppActions = {
   reattachScriptRuns(): Promise<void>;
   cancelScript(sessionId: SessionId, scriptId: string): Promise<void>;
   loadPhaseTemplates(workspaceId: WorkspaceId): Promise<void>;
+  copyWorkflowFromWorkspace(params: CopyWorkflowFromWorkspaceParams): Promise<Workflow>;
   savePhaseTemplate(template: WorkflowUpsertArgs): Promise<Workflow>;
   deleteWorkflow(id: WorkflowId, workspaceId: WorkspaceId): Promise<void>;
   renameWorkflow(workspaceId: WorkspaceId, workflowId: WorkflowId, name: string): Promise<void>;
