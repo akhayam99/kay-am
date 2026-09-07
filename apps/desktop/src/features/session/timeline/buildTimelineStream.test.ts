@@ -1946,3 +1946,234 @@ describe('buildTimelineStream, question artifact rows', () => {
     expect(questionRows).toHaveLength(2);
   });
 });
+
+describe('buildTimelineStream, project mount runs', () => {
+  const projectRunOf = (item: TimelineStreamItem | undefined) => {
+    if (item === undefined || item.kind !== 'row' || item.entry.kind !== 'event') {
+      return null;
+    }
+    return item.entry.projectRun ?? null;
+  };
+
+  const rowsOf = (items: ReadonlyArray<TimelineStreamItem>) =>
+    items.flatMap((item) => (item.kind === 'row' ? [item] : []));
+
+  it('collapses a run of detachments into one row that keeps every name', () => {
+    const { items } = stream({
+      agents: [],
+      events: ['api', 'app-web', 'infra'].map((projectName, index) =>
+        sessionEvent({
+          id: `ev-${projectName}`,
+          kind: 'project_detached',
+          at: localIso({ day: 18, hour: 10, minute: index }),
+          payload: { projectName },
+        }),
+      ),
+    });
+    const rows = rowsOf(items);
+
+    expect(rows).toHaveLength(1);
+    expect(projectRunOf(rows[0])).toEqual({
+      mounted: [],
+      detached: ['infra', 'app-web', 'api'],
+    });
+  });
+
+  it('carries both verbs on one row when a run mixes them', () => {
+    const { items } = stream({
+      agents: [],
+      events: [
+        sessionEvent({
+          id: 'ev-api',
+          kind: 'project_materialized',
+          at: localIso({ day: 18, hour: 10, minute: 1 }),
+          payload: { projectName: 'api' },
+        }),
+        sessionEvent({
+          id: 'ev-app-web',
+          kind: 'project_detached',
+          at: localIso({ day: 18, hour: 10, minute: 2 }),
+          payload: { projectName: 'app-web' },
+        }),
+        sessionEvent({
+          id: 'ev-infra',
+          kind: 'project_detached',
+          at: localIso({ day: 18, hour: 10, minute: 3 }),
+          payload: { projectName: 'infra' },
+        }),
+      ],
+    });
+    const rows = rowsOf(items);
+
+    expect(rows).toHaveLength(1);
+    expect(projectRunOf(rows[0])).toEqual({
+      mounted: ['api'],
+      detached: ['infra', 'app-web'],
+    });
+  });
+
+  it('reads a mixed run as a mount, so it opens the files lens like a mount does', () => {
+    const { items } = stream({
+      agents: [],
+      events: [
+        sessionEvent({
+          id: 'ev-api',
+          kind: 'project_materialized',
+          at: localIso({ day: 18, hour: 10, minute: 1 }),
+          payload: { projectName: 'api' },
+        }),
+        sessionEvent({
+          id: 'ev-app-web',
+          kind: 'project_detached',
+          at: localIso({ day: 18, hour: 10, minute: 2 }),
+          payload: { projectName: 'app-web' },
+        }),
+      ],
+    });
+    const row = rowsOf(items)[0];
+
+    expect(row?.entry.kind === 'event' ? row.entry.event.kind : null).toBe('project_materialized');
+  });
+
+  it('leaves a run of detachments a detachment, which navigates nowhere', () => {
+    const { items } = stream({
+      agents: [],
+      events: ['api', 'app-web'].map((projectName, index) =>
+        sessionEvent({
+          id: `ev-${projectName}`,
+          kind: 'project_detached',
+          at: localIso({ day: 18, hour: 10, minute: index }),
+          payload: { projectName },
+        }),
+      ),
+    });
+    const row = rowsOf(items)[0];
+
+    expect(row?.entry.kind === 'event' ? row.entry.event.kind : null).toBe('project_detached');
+  });
+
+  it('stamps the collapsed row with the newest event in the run', () => {
+    const newestAt = localIso({ day: 18, hour: 11, minute: 30 });
+    const { items } = stream({
+      agents: [],
+      events: [
+        sessionEvent({
+          id: 'ev-api',
+          kind: 'project_detached',
+          at: localIso({ day: 18, hour: 10 }),
+          payload: { projectName: 'api' },
+        }),
+        sessionEvent({
+          id: 'ev-app-web',
+          kind: 'project_detached',
+          at: newestAt,
+          payload: { projectName: 'app-web' },
+        }),
+      ],
+    });
+    const row = rowsOf(items)[0];
+
+    expect(row?.at).toBe(newestAt);
+    expect(row?.id).toBe('event:ev-app-web');
+  });
+
+  it('keeps two mounts apart when another kind of event sits between them', () => {
+    const { items } = stream({
+      agents: [],
+      events: [
+        sessionEvent({
+          id: 'ev-api',
+          kind: 'project_materialized',
+          at: localIso({ day: 18, hour: 10 }),
+          payload: { projectName: 'api' },
+        }),
+        sessionEvent({
+          id: 'ev-pr',
+          kind: 'pr_created',
+          at: localIso({ day: 18, hour: 11 }),
+          payload: { number: 42 },
+        }),
+        sessionEvent({
+          id: 'ev-app-web',
+          kind: 'project_materialized',
+          at: localIso({ day: 18, hour: 12 }),
+          payload: { projectName: 'app-web' },
+        }),
+      ],
+    });
+    const rows = rowsOf(items);
+
+    expect(rows.map((row) => row.id)).toEqual(['event:ev-app-web', 'event:ev-pr', 'event:ev-api']);
+    expect(rows.every((row) => projectRunOf(row) == null)).toBe(true);
+  });
+
+  it('keeps mount runs apart across a day boundary', () => {
+    const { items } = stream({
+      agents: [],
+      events: [
+        sessionEvent({
+          id: 'ev-api',
+          kind: 'project_detached',
+          at: localIso({ day: 17, hour: 23 }),
+          payload: { projectName: 'api' },
+        }),
+        sessionEvent({
+          id: 'ev-app-web',
+          kind: 'project_detached',
+          at: localIso({ day: 18, hour: 1 }),
+          payload: { projectName: 'app-web' },
+        }),
+      ],
+    });
+    const rows = rowsOf(items);
+
+    expect(rows).toHaveLength(2);
+    expect(rows.every((row) => projectRunOf(row) == null)).toBe(true);
+  });
+
+  it('leaves a single mount exactly as it was', () => {
+    const { items } = stream({
+      agents: [],
+      events: [
+        sessionEvent({
+          id: 'ev-api',
+          kind: 'project_materialized',
+          at: localIso({ day: 18, hour: 10 }),
+          payload: { projectName: 'api', branch: 'goodboy/untitled' },
+        }),
+      ],
+    });
+    const rows = rowsOf(items);
+    const row = rows[0];
+
+    expect(rows).toHaveLength(1);
+    expect(projectRunOf(row)).toBeNull();
+    expect(row?.entry.kind === 'event' ? row.entry.event.payload : null).toEqual({
+      projectName: 'api',
+      branch: 'goodboy/untitled',
+    });
+  });
+
+  it('leaves a nameless detachment on its own row, where the old copy still fits', () => {
+    const { items } = stream({
+      agents: [],
+      events: [
+        sessionEvent({
+          id: 'ev-api',
+          kind: 'project_detached',
+          at: localIso({ day: 18, hour: 10 }),
+          payload: { projectName: 'api' },
+        }),
+        sessionEvent({
+          id: 'ev-nameless',
+          kind: 'project_detached',
+          at: localIso({ day: 18, hour: 11 }),
+        }),
+      ],
+    });
+    const rows = rowsOf(items);
+
+    expect(rows.map((row) => row.id)).toEqual(['event:ev-nameless', 'event:ev-api']);
+    expect(rows.every((row) => projectRunOf(row) == null)).toBe(true);
+  });
+});

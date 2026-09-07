@@ -273,6 +273,58 @@ export const sessionEventLabel = ({ event }: TitleParams): ReadonlyArray<Timelin
   }
 };
 
+export const TIMELINE_PROJECT_NAME_LIMIT = 3;
+
+type ProjectListParams = {
+  readonly names: ReadonlyArray<string>;
+  readonly limit: number;
+};
+
+const projectListSegments = ({
+  names,
+  limit,
+}: ProjectListParams): ReadonlyArray<TimelineLabelSegment> => {
+  const shown = names.length > limit + 1 ? names.slice(0, limit) : names;
+  const hidden = names.length - shown.length;
+  const segments: TimelineLabelSegment[] = [];
+  for (const [index, name] of shown.entries()) {
+    if (index > 0) {
+      const isLast = index === shown.length - 1 && hidden === 0;
+      segments.push({ kind: 'text', text: isLast ? ' and ' : ', ' });
+    }
+    segments.push({ kind: 'value', text: name, variant: 'project' });
+  }
+  if (hidden > 0) {
+    segments.push({ kind: 'text', text: ` and ${hidden} more` });
+  }
+  return segments;
+};
+
+type ProjectRunParams = {
+  readonly mounted: ReadonlyArray<string>;
+  readonly detached: ReadonlyArray<string>;
+  readonly limit?: number;
+};
+
+export const sessionEventProjectRunLabel = ({
+  mounted,
+  detached,
+  limit = TIMELINE_PROJECT_NAME_LIMIT,
+}: ProjectRunParams): ReadonlyArray<TimelineLabelSegment> => {
+  const mountedSegments: ReadonlyArray<TimelineLabelSegment> =
+    mounted.length === 0
+      ? []
+      : [{ kind: 'text', text: 'Mounted ' }, ...projectListSegments({ names: mounted, limit })];
+  const detachedSegments: ReadonlyArray<TimelineLabelSegment> =
+    detached.length === 0
+      ? []
+      : [
+          { kind: 'text', text: mounted.length === 0 ? 'Detached ' : ', detached ' },
+          ...projectListSegments({ names: detached, limit }),
+        ];
+  return [...mountedSegments, ...detachedSegments];
+};
+
 export const segmentsToText = ({
   segments,
 }: {

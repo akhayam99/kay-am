@@ -82,6 +82,26 @@ const mountEntry = (): TimelineStreamEntry =>
     },
   }) as unknown as TimelineStreamEntry;
 
+type ProjectRunParams = {
+  readonly mounted: ReadonlyArray<string>;
+  readonly detached: ReadonlyArray<string>;
+};
+
+const projectRunEntry = ({ mounted, detached }: ProjectRunParams): TimelineStreamEntry =>
+  ({
+    kind: 'event',
+    id: 'event:ev-9',
+    at: '2026-08-17T09:04:00Z',
+    event: {
+      id: 'ev-9',
+      sessionId: 'session-1',
+      kind: mounted.length > 0 ? 'project_materialized' : 'project_detached',
+      payload: { projectName: 'api', kept: true },
+      createdAt: '2026-08-17T09:04:00Z',
+    },
+    projectRun: { mounted, detached },
+  }) as unknown as TimelineStreamEntry;
+
 const branchEntry = (): TimelineStreamEntry =>
   ({
     kind: 'branch',
@@ -229,6 +249,44 @@ describe('TimelineRowLabel', () => {
     const { container } = render(<TimelineRowLabel item={itemOf({ entry: mountEntry() })} />);
 
     expect(container.querySelector('[data-testid="diff-stat"]')).toBeNull();
+  });
+
+  it('keeps every project of a collapsed run a chip, on one row', () => {
+    render(
+      <TimelineRowLabel
+        item={itemOf({
+          entry: projectRunEntry({ mounted: ['api'], detached: ['app-web', 'infra'] }),
+        })}
+      />,
+    );
+
+    for (const value of ['api', 'app-web', 'infra']) {
+      expect(screen.getByText(value).className).toContain('font-mono');
+    }
+    expect(screen.getByText('Mounted').className).not.toContain('font-mono');
+    expect(screen.getByText(', detached')).toBeDefined();
+  });
+
+  it('names every project in the tooltip, even the ones the row counts', () => {
+    const detached = ['api', 'app-web', 'infra', 'db', 'edge'];
+    const { container } = render(
+      <TimelineRowLabel item={itemOf({ entry: projectRunEntry({ mounted: [], detached }) })} />,
+    );
+
+    expect(container.querySelector('[title]')?.getAttribute('title')).toBe(
+      'Detached api, app-web, infra, db and edge',
+    );
+    expect(screen.getByText('and 2 more')).toBeDefined();
+  });
+
+  it('drops the single detach note from a collapsed run, which no longer speaks for one', () => {
+    render(
+      <TimelineRowLabel
+        item={itemOf({ entry: projectRunEntry({ mounted: [], detached: ['api', 'app-web'] }) })}
+      />,
+    );
+
+    expect(screen.queryByText('worktree kept on disk')).toBeNull();
   });
 
   it('keeps the chip off a step row, where the run already names the role', () => {
