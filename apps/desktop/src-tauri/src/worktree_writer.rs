@@ -335,7 +335,7 @@ pub fn worktree_writer_abandon(
 ) -> WriterLeaseStatus {
     let (status, released) = abandon_in(&mut lock(&state.0), &path, &holder);
     if released {
-        emit_lease_event(&app, &path, &holder, "released");
+        emit_lease_event(&app, &path, &holder, "abandoned");
     }
     status
 }

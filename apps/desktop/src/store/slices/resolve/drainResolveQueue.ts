@@ -60,8 +60,10 @@ const syncDirtyTree = async ({
     return CLEAN;
   }
   const baseline = startBaselines.get(worktreePath);
+  const currentChanges = trackedChanges({ status });
   const isAttemptDirt =
-    status.inProgress !== null || (baseline !== undefined && trackedChanges({ status }) > baseline);
+    status.inProgress !== null ||
+    (baseline === undefined ? currentChanges > 0 : currentChanges > baseline);
   if (!isAttemptDirt) {
     startBaselines.delete(worktreePath);
     for (const row of blocked) {
