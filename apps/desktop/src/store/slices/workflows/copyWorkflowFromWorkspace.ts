@@ -1,4 +1,5 @@
 import type { StepId, Workflow, WorkflowId, WorkspaceId } from '@goodboy/types';
+import { isImportableWorkflow } from '../../../features/workflows/isImportableWorkflow';
 import { invokeWorkflowList, invokeWorkflowUpsert } from '../../../features/workflows/workflows';
 import type { SetFn } from './types';
 
@@ -20,11 +21,7 @@ export const copyWorkflowFromWorkspace = ({ set }: FactoryParams) => {
   }: CopyWorkflowFromWorkspaceParams): Promise<Workflow> => {
     const sourceWorkflows = await invokeWorkflowList(sourceWorkspaceId);
     const sourceWorkflow = sourceWorkflows.find(
-      (workflow) =>
-        workflow.id === sourceWorkflowId &&
-        workflow.deletedAt == null &&
-        workflow.isPreset !== false &&
-        workflow.origin !== 'orchestrated',
+      (workflow) => workflow.id === sourceWorkflowId && isImportableWorkflow(workflow),
     );
     if (sourceWorkflow === undefined) {
       throw new Error('workflow not found in source workspace');

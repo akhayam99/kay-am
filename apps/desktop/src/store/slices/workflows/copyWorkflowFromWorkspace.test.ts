@@ -146,4 +146,52 @@ describe('copyWorkflowFromWorkspace', () => {
     expect(result).toBe(importedWorkflow);
     expect(getState().phaseTemplates[TARGET_WORKSPACE_ID]).toEqual([importedWorkflow]);
   });
+
+  it('rejects a library preset workflow', async () => {
+    invokeWorkflowListSpy.mockResolvedValueOnce([{ ...sourceWorkflow, origin: 'library' }]);
+    const { copy } = buildHarness();
+
+    await expect(
+      copy({
+        sourceWorkspaceId: SOURCE_WORKSPACE_ID,
+        sourceWorkflowId: SOURCE_WORKFLOW_ID,
+        targetWorkspaceId: TARGET_WORKSPACE_ID,
+      }),
+    ).rejects.toThrow('workflow not found in source workspace');
+    expect(invokeWorkflowUpsertSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects an orchestrated workflow', async () => {
+    invokeWorkflowListSpy.mockResolvedValueOnce([{ ...sourceWorkflow, origin: 'orchestrated' }]);
+    const { copy } = buildHarness();
+
+    await expect(
+      copy({
+        sourceWorkspaceId: SOURCE_WORKSPACE_ID,
+        sourceWorkflowId: SOURCE_WORKFLOW_ID,
+        targetWorkspaceId: TARGET_WORKSPACE_ID,
+      }),
+    ).rejects.toThrow('workflow not found in source workspace');
+    expect(invokeWorkflowUpsertSpy).not.toHaveBeenCalled();
+  });
+
+  it('accepts a legacy workflow with no origin', async () => {
+    const legacyWorkflow = { ...sourceWorkflow, origin: undefined };
+    invokeWorkflowListSpy
+      .mockResolvedValueOnce([legacyWorkflow])
+      .mockResolvedValueOnce([importedWorkflow]);
+    invokeWorkflowUpsertSpy.mockResolvedValue(importedWorkflow);
+    vi.spyOn(globalThis.crypto, 'randomUUID')
+      .mockReturnValueOnce('00000000-0000-4000-8000-000000000003')
+      .mockReturnValueOnce('00000000-0000-4000-8000-000000000004');
+    const { copy } = buildHarness();
+
+    const result = await copy({
+      sourceWorkspaceId: SOURCE_WORKSPACE_ID,
+      sourceWorkflowId: SOURCE_WORKFLOW_ID,
+      targetWorkspaceId: TARGET_WORKSPACE_ID,
+    });
+
+    expect(result).toBe(importedWorkflow);
+  });
 });

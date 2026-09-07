@@ -20,6 +20,7 @@ import {
 } from '../../engine';
 import { useWorkflowDraft } from '../../engine/useWorkflowDraft';
 import { useWorkflowDrag } from '../../hooks/useWorkflowDrag';
+import { isImportableWorkflow } from '../../isImportableWorkflow';
 import { DragGhost } from '../WorkflowStudio/DragGhost';
 import { WorkflowComposer } from '../WorkflowStudio/WorkflowComposer';
 import { WorkflowImportSection } from '../WorkflowStudio/WorkflowImportSection';
@@ -267,14 +268,7 @@ export const WorkflowsPanel = ({ workspaceId }: Props) => {
       if (sourceLoadRequest.current !== requestId) {
         return;
       }
-      setSourceWorkflows(
-        loaded.filter(
-          (workflow) =>
-            workflow.deletedAt == null &&
-            workflow.isPreset !== false &&
-            workflow.origin !== 'orchestrated',
-        ),
-      );
+      setSourceWorkflows(loaded.filter(isImportableWorkflow));
     } catch (error) {
       if (sourceLoadRequest.current !== requestId) {
         return;

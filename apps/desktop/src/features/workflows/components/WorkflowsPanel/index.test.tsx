@@ -187,6 +187,31 @@ describe('WorkflowsPanel', () => {
     expect(await screen.findByText('No workflows to import')).toBeDefined();
   });
 
+  it('excludes a seeded library preset from the import list', async () => {
+    configureSourceWorkspace();
+    invokeMock.mockResolvedValueOnce([makeWorkflowRow({ origin: 'library' })]);
+    renderPanel();
+
+    fireEvent.change(screen.getByLabelText('Project'), {
+      target: { value: 'project-source' },
+    });
+
+    expect(await screen.findByText('No workflows to import')).toBeDefined();
+    expect(screen.queryByRole('option', { name: 'Source review' })).toBeNull();
+  });
+
+  it('includes a legacy workflow with no origin in the import list', async () => {
+    configureSourceWorkspace();
+    invokeMock.mockResolvedValueOnce([makeWorkflowRow({ origin: undefined })]);
+    renderPanel();
+
+    fireEvent.change(screen.getByLabelText('Project'), {
+      target: { value: 'project-source' },
+    });
+
+    expect(await screen.findByRole('option', { name: 'Source review' })).toBeDefined();
+  });
+
   it('selects a source workflow and opens the imported copy', async () => {
     configureSourceWorkspace();
     invokeMock.mockResolvedValueOnce([makeWorkflowRow()]);
