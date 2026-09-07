@@ -13,7 +13,6 @@ type Props = {
   readonly entries: ReadonlyArray<ResolverLink>;
   readonly activeIds: ReadonlySet<AgentId>;
   readonly canOpenDiff: boolean;
-  readonly isQueueStalled: boolean;
   readonly isTaskActive: boolean;
   readonly isTranscriptLoading: boolean;
   readonly isMuted: boolean;
@@ -34,7 +33,6 @@ export const ResolverRows = ({
   entries,
   activeIds,
   canOpenDiff,
-  isQueueStalled,
   isTaskActive,
   isTranscriptLoading,
   isMuted,
@@ -73,7 +71,6 @@ export const ResolverRows = ({
           reportedCommitSha={reportedCommitShaByAgentId.get(agent.id) ?? null}
           diffTarget={diffTargetByAgentId.get(agent.id) ?? UNKNOWN_DIFF_TARGET}
           canOpenDiff={canOpenDiff}
-          isQueueStalled={isQueueStalled}
           hasOtherActiveResolvers={hasOtherActiveResolver({ activeIds, agentId: agent.id })}
           isSelected={agent.id === selectedAgentId}
           isTaskActive={isTaskActive}

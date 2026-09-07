@@ -1,5 +1,6 @@
 import { listResolveAttempts, listResolveThreads, upsertResolveThread } from '@goodboy/db';
 import { tauriDatabase } from '../../../shared/lib/db';
+import { drainResolveQueue } from './drainResolveQueue';
 import { reconcileResolveAttempts } from './reconcileResolveAttempts';
 import { importLegacyResolve } from './importLegacyResolve';
 import { projectResolveRows } from './projectResolveRows';
@@ -48,4 +49,5 @@ export const loadResolveSession = async ({ set, get, sessionId }: Params): Promi
     rows: await listResolveThreads({ db: tauriDatabase, sessionId }),
     attempts,
   });
+  await drainResolveQueue({ set, get, sessionId });
 };

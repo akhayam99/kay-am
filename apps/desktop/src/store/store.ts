@@ -592,12 +592,10 @@ type AppActions = {
       sourceThreadIds?: ReadonlyArray<string>;
       sourceCommentUrl?: string;
       sourceKind?: AgentSourceKind;
-      deferKickoff?: boolean;
       focus?: SpawnFocus;
       parentAgentId?: AgentId;
     },
   ): Promise<AgentId>;
-  activateNextResolver(sessionId: SessionId): Promise<void>;
   forceCloseResolver(sessionId: SessionId, agentId: AgentId): Promise<void>;
   setResolverThreadReply(params: { agentId: AgentId; threadId: string; reply: string }): void;
   renameAgent(sessionId: SessionId, agentId: AgentId, name: string): Promise<void>;
@@ -996,7 +994,6 @@ export const initialState: AppState = {
   agentProviderOverride: {},
   agentEffortOverride: {},
   agentKindOverride: {},
-  pendingResolverKickoff: {},
   ...resolveInitialState,
   resolverState: {},
   resolverThreadOutcomes: {},

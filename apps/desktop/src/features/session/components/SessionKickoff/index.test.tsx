@@ -116,17 +116,32 @@ describe('SessionKickoff', () => {
     expect(spies.fetchIssueCandidates).not.toHaveBeenCalled();
   });
 
-  it('opens the inbox filtered to Linear from the no-tracker state', () => {
+  it('opens Tools settings focused on Linear from the no-tracker state', () => {
     const onOpenInbox = vi.fn();
-    window.addEventListener('goodboy:open-inbox', onOpenInbox);
+    window.addEventListener('goodboy:open-settings', onOpenInbox);
     render(<SessionKickoff session={session} onOpenWorkflowBuilder={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open the Linear studio' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Linear' }));
 
     expect(onOpenInbox).toHaveBeenCalledTimes(1);
     expect(onOpenInbox.mock.calls[0]?.[0]).toMatchObject({
-      detail: { provider: 'linear', kind: 'issue' },
+      detail: { scope: 'tools', tool: 'linear' },
     });
+    window.removeEventListener('goodboy:open-settings', onOpenInbox);
+  });
+
+  it('opens the inbox from a connected tracker shortcut', async () => {
+    store.workspaceIntegrations = { 'ws-1': [{ provider: 'linear' }] };
+    const onOpenInbox = vi.fn();
+    window.addEventListener('goodboy:open-inbox', onOpenInbox);
+    render(<SessionKickoff session={session} onOpenWorkflowBuilder={vi.fn()} />);
+    await screen.findByText('No open issues detected');
+    fireEvent.click(screen.getByRole('button', { name: 'Open Linear in the inbox' }));
+    expect(onOpenInbox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detail: { provider: 'linear', kind: 'issue', recordKey: undefined },
+      }),
+    );
     window.removeEventListener('goodboy:open-inbox', onOpenInbox);
   });
 

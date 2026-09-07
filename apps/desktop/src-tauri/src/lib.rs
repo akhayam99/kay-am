@@ -44,6 +44,7 @@ mod turn;
 mod util;
 mod workflows;
 mod worktree;
+mod worktree_writer;
 
 pub use secrets::read as read_secret;
 
@@ -110,6 +111,7 @@ pub fn run() {
     let summarize_registry = summarize::SummarizeRegistry::new();
     let script_registry = scripts::ScriptRegistry::new();
     let terminal_registry = terminal::TerminalRegistry::new();
+    let writer_leases = worktree_writer::WriterLeases::new();
     let provider_lifecycle_registry = provider_lifecycle::ProviderLifecycleRegistry::new();
     let linear_token_cache = linear::LinearTokenCache::new();
     let sentry_token_cache = sentry::SentryTokenCache::new();
@@ -151,6 +153,7 @@ pub fn run() {
         .manage(opencode_state)
         .manage(detection_gate)
         .manage(turn_registry)
+        .manage(writer_leases)
         .manage(summarize_registry)
         .manage(script_registry)
         .manage(terminal_registry)
@@ -260,6 +263,11 @@ pub fn run() {
             turn::turn_spawn,
             turn::turn_cancel,
             turn::turn_list_live,
+            worktree_writer::worktree_writer_acquire,
+            worktree_writer::worktree_writer_release,
+            worktree_writer::worktree_writer_cancel,
+            worktree_writer::worktree_writer_abandon,
+            worktree_writer::worktree_writer_status,
             query_bridge::query_bridge_serving,
             query_bridge::project::project_materialize_result,
             attachment::attachment_write,

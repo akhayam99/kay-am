@@ -26,7 +26,7 @@ type ReasonCopy = {
 const REASON_COPY: Record<Reason, ReasonCopy> = {
   'nothing-connected': {
     title: 'Inbox is empty',
-    description: 'Connect a provider to collect issues, reviews, threads and errors here.',
+    description: 'Connect a tool to collect issues, reviews, threads and errors here.',
   },
   'no-matches': {
     title: 'No matching items',
@@ -101,7 +101,7 @@ export const InboxEmptySummary = ({
 
           {providerCounts.length > 0 ? (
             <div className="flex flex-col gap-2">
-              <Eyebrow label="Providers" />
+              <Eyebrow label="Tools" />
               <div className="flex flex-wrap gap-2">
                 {providerCounts.map(({ provider, count }) => (
                   <Chip
@@ -124,7 +124,7 @@ export const InboxEmptySummary = ({
                 </Button>
               ) : (
                 <Button variant="secondary" size="sm" onClick={onOpenIntegrations}>
-                  Open integrations
+                  Connect tools
                 </Button>
               )}
             </div>

@@ -16,14 +16,12 @@ const { storeState, spies } = vi.hoisted(() => {
   const materializeProject = vi.fn(async () => undefined);
   const recordSessionEvent = vi.fn(async () => undefined);
   const setSessionActiveProject = vi.fn(async () => undefined);
-  const activateNextResolver = vi.fn(async () => undefined);
   const emitNotification = vi.fn(async () => undefined);
   return {
     spies: {
       materializeProject,
       recordSessionEvent,
       setSessionActiveProject,
-      activateNextResolver,
       emitNotification,
       advanceAgent: vi.fn(async () => undefined),
       spawnResolver: vi.fn(async () => 'agent-resolver'),
@@ -37,7 +35,6 @@ const { storeState, spies } = vi.hoisted(() => {
       materializeProject,
       recordSessionEvent,
       setSessionActiveProject,
-      activateNextResolver,
       emitNotification,
     },
   };

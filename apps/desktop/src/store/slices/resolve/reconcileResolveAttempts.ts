@@ -1,9 +1,11 @@
 import { listMessagesForAgent, setResolveAttemptPhase, upsertResolveThread } from '@goodboy/db';
 import type { ResolveAttempt, ResolveThread } from '@goodboy/types';
 import { listLiveRunIds } from '../../../features/chat/turn';
+import { worktreeWriterStatus } from '../../../features/worktree/worktree';
 import { tauriDatabase } from '../../../shared/lib/db';
 import { resolverTurnOutcomes } from '../../../features/session/resolverTurnOutcomes';
 import { outcomePatch } from './outcomePatch';
+import { resolveWorktreePath } from './resolveWorktreePath';
 import type { SessionParams, SliceParams } from './types';
 
 type Params = SliceParams &
@@ -18,10 +20,15 @@ export const reconcileResolveAttempts = async ({
   rows,
   attempts,
 }: Params): Promise<void> => {
-  if (!rows.some((row) => row.state === 'working')) {
+  const hasPendingWork =
+    rows.some((row) => row.state === 'working') ||
+    attempts.some((attempt) => attempt.phase === 'running');
+  if (!hasPendingWork) {
     return;
   }
   const liveRunIds = await listLiveRunIds();
+  const worktreePath = await resolveWorktreePath({ get, sessionId });
+  const lease = worktreePath === null ? null : await worktreeWriterStatus({ path: worktreePath });
   for (const attempt of attempts) {
     const working = rows.filter(
       (row) => row.state === 'working' && row.activeAttemptId === attempt.id,
@@ -29,12 +36,24 @@ export const reconcileResolveAttempts = async ({
     const turnState = get().agentTurnState?.[attempt.agentId];
     const agent = get().sessionPhaseRuns[sessionId]?.find((item) => item.id === attempt.agentId);
     const runId = turnState?.kind === 'running' ? turnState.runId : agent?.runId;
-    const isRunning = runId !== undefined && liveRunIds.has(runId);
-    if (
-      working.length === 0 ||
-      (attempt.phase === 'running' && isRunning) ||
-      attempt.phase === 'queued'
-    ) {
+    const isLeased =
+      lease !== null &&
+      lease.holder === attempt.agentId &&
+      lease.runId !== null &&
+      !lease.hasExited;
+    const isRunning = isLeased || (runId !== undefined && liveRunIds.has(runId));
+    if (attempt.phase === 'queued' || (attempt.phase === 'running' && isRunning)) {
+      continue;
+    }
+    if (working.length === 0) {
+      if (attempt.phase === 'running') {
+        await setResolveAttemptPhase({
+          db: tauriDatabase,
+          id: attempt.id,
+          phase: 'failed',
+          error: 'interrupted',
+        });
+      }
       continue;
     }
     const nextAttempt = attempts.find(

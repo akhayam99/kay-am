@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import type { IsoDateTime, Workspace, WorkspaceId } from '@goodboy/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
@@ -13,6 +14,13 @@ const { scrollIntoViewMock, state, toastMock } = vi.hoisted(() => ({
     wipeLocalDatabase: vi.fn(async () => undefined),
     loadDetectedEditors: vi.fn(async () => undefined),
     detectedEditors: [] as ReadonlyArray<{ binary: string; label: string }>,
+    workspaceIntegrations: {},
+    integrationCredentials: [],
+    integrationCredentialUsage: {},
+    forgetIntegrationCredential: vi.fn(),
+    connectLinear: vi.fn(),
+    disconnectIntegration: vi.fn(),
+    disconnectGithub: vi.fn(),
     storageStats: null,
     storageStatsLoading: false,
     loadStorageStats: vi.fn(async () => undefined),
@@ -20,6 +28,10 @@ const { scrollIntoViewMock, state, toastMock } = vi.hoisted(() => ({
     removeArchivedWorktrees: vi.fn(async () => ({ removed: 0, failed: 0 })),
   },
   toastMock: vi.fn(),
+}));
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn(async () => ({ mode: 'absent', available: false, scoped: false })),
 }));
 
 vi.mock('../../../../store', () => ({
@@ -70,6 +82,39 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('SettingsStudio', () => {
+  it('opens the actual tool form from a focused settings request', async () => {
+    const workspace: Workspace = {
+      id: 'workspace-1' as WorkspaceId,
+      name: 'Workspace',
+      slug: 'workspace',
+      sessionsRoot: null,
+      overrides: {
+        defaultProviderId: null,
+        defaultWorkflowId: null,
+        defaultBranchPrefix: null,
+        parallelEnabled: null,
+        defaultVerbosity: null,
+        providerBindings: null,
+        taskModels: null,
+        roleModels: null,
+        parallelAgents: null,
+        providerPool: null,
+        attributionFooter: null,
+      },
+      createdAt: '2026-09-01' as IsoDateTime,
+      updatedAt: '2026-09-01' as IsoDateTime,
+    };
+    render(
+      <SettingsStudio
+        currentWorkspace={workspace}
+        initialFocus={{ scope: 'tools', tool: 'linear' }}
+        onClose={vi.fn()}
+      />,
+    );
+    expect((await screen.findByLabelText('Personal API key')).id).toBe('linear-pat');
+    expect(screen.getByRole('button', { name: 'Tools' }).getAttribute('aria-current')).toBe('true');
+  });
+
   it('renders all settings scopes in a navigation rail', () => {
     render(
       <SettingsStudio currentWorkspace={null} initialFocus={{ scope: 'app' }} onClose={vi.fn()} />,

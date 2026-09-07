@@ -31,7 +31,6 @@ import {
 import {
   activeResolverIds,
   hasOtherActiveResolver,
-  isResolverQueueStalled,
 } from '../ResolverAgentsLane/resolverLaneEntries';
 import { useSessionRepo } from '../../../../store/slices/worktrees/useSessionRepo';
 import { ResolverRunRecap } from './ResolverRunRecap';
@@ -68,7 +67,12 @@ export const ResolverDetailPane = ({ session, agent, isChatActive, onBack, eyebr
   const worktreePath = useSessionRepo({ sessionId })?.worktreePath ?? null;
   const openDiffLens = useAppStore((s) => s.openDiffLens);
   const setResolverThreadReply = useAppStore((s) => s.setResolverThreadReply);
-  const hasKickoff = useAppStore((s) => s.pendingResolverKickoff[agentId] !== undefined);
+  const hasQueuedRequest = useAppStore((s) =>
+    (s.sessionResolveAttempts[sessionId] ?? []).some(
+      (attempt) =>
+        attempt.agentId === agentId && (attempt.phase === 'queued' || attempt.phase === 'running'),
+    ),
+  );
   const pendingResolutions =
     useAppStore((s) => s.sessionPendingResolutions[sessionId]) ?? EMPTY_PENDING;
   const outcomes = useAppStore((s) => s.resolverThreadOutcomes[agentId]) ?? EMPTY_OUTCOMES;
@@ -131,7 +135,6 @@ export const ResolverDetailPane = ({ session, agent, isChatActive, onBack, eyebr
     status,
     commitSha: changes.reported[0]?.sha ?? null,
     surface: 'inspector',
-    isQueueStalled: isResolverQueueStalled({ links: resolverIndex.links }),
     hasOtherActiveResolvers: hasOtherActiveResolver({
       activeIds: activeResolverIds({ links: resolverIndex.links }),
       agentId,
@@ -186,8 +189,8 @@ export const ResolverDetailPane = ({ session, agent, isChatActive, onBack, eyebr
   const blockedBy =
     status === 'pending' && runningResolverName !== null
       ? `${runningResolverName} is still running`
-      : status === 'pending' && !hasKickoff
-        ? 'no queued kickoff, it will not start on its own'
+      : status === 'pending' && !hasQueuedRequest
+        ? 'no queued request, it will not start on its own'
         : null;
 
   return (

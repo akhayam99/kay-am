@@ -9,6 +9,8 @@ import {
   type Workspace,
   type WorkspaceId,
 } from '@goodboy/types';
+import { openToolSettings } from '../../../features/integrations/openToolSettings';
+import type { IntegrationGlyphProvider } from '../../../features/integrations/components/IntegrationGlyph';
 import { AppOverlayRouter } from '../../components/AppOverlayRouter';
 import type { ImpactScope } from '../../../features/impact/lib';
 import { IMPACT_STUDIO_EVENT } from '../../../features/impact/openImpactStudio';
@@ -34,6 +36,7 @@ import { resolveSessionRepo } from '../../../store/slices/worktrees/resolveSessi
 import { resolveOpenDiffViewerEvent } from '../../../store/slices/session-view/openDiffViewerEvent';
 
 type Params = {
+  readonly connected: Readonly<Record<IntegrationGlyphProvider, boolean>>;
   readonly currentSession: Session | null;
   readonly currentWorkspace: Workspace | null;
   readonly workspaceProjectRoot: string | null;
@@ -106,6 +109,7 @@ const isImpactScope = (value: unknown): value is ImpactScope => {
 };
 
 export const useAppOverlays = ({
+  connected,
   currentSession,
   currentWorkspace,
   workspaceProjectRoot,
@@ -205,46 +209,74 @@ export const useAppOverlays = ({
   }, [closeAllStudios]);
 
   const openGithub = useCallback(() => {
+    if (!connected.github) {
+      openToolSettings({ tool: 'github' });
+      return;
+    }
     closeAllStudios();
     setInboxStudioFocus({ provider: 'github', kind: null, recordKey: null, sessionId: null });
     setInboxStudioOpen(true);
-  }, [closeAllStudios]);
+  }, [closeAllStudios, connected.github]);
 
   const openLinear = useCallback(() => {
+    if (!connected.linear) {
+      openToolSettings({ tool: 'linear' });
+      return;
+    }
     closeAllStudios();
     setInboxStudioFocus({ provider: 'linear', kind: null, recordKey: null, sessionId: null });
     setInboxStudioOpen(true);
-  }, [closeAllStudios]);
+  }, [closeAllStudios, connected.linear]);
 
   const openJira = useCallback(() => {
+    if (!connected.jira) {
+      openToolSettings({ tool: 'jira' });
+      return;
+    }
     closeAllStudios();
     setInboxStudioFocus({ provider: 'jira', kind: null, recordKey: null, sessionId: null });
     setInboxStudioOpen(true);
-  }, [closeAllStudios]);
+  }, [closeAllStudios, connected.jira]);
 
   const openSentry = useCallback(() => {
+    if (!connected.sentry) {
+      openToolSettings({ tool: 'sentry' });
+      return;
+    }
     closeAllStudios();
     setInboxStudioFocus({ provider: 'sentry', kind: null, recordKey: null, sessionId: null });
     setInboxStudioOpen(true);
-  }, [closeAllStudios]);
+  }, [closeAllStudios, connected.sentry]);
 
   const openGitlab = useCallback(() => {
+    if (!connected.gitlab) {
+      openToolSettings({ tool: 'gitlab' });
+      return;
+    }
     closeAllStudios();
     setInboxStudioFocus({ provider: 'gitlab', kind: null, recordKey: null, sessionId: null });
     setInboxStudioOpen(true);
-  }, [closeAllStudios]);
+  }, [closeAllStudios, connected.gitlab]);
 
   const openBitbucket = useCallback(() => {
+    if (!connected.bitbucket) {
+      openToolSettings({ tool: 'bitbucket' });
+      return;
+    }
     closeAllStudios();
     setInboxStudioFocus({ provider: 'bitbucket', kind: null, recordKey: null, sessionId: null });
     setInboxStudioOpen(true);
-  }, [closeAllStudios]);
+  }, [closeAllStudios, connected.bitbucket]);
 
   const openSlack = useCallback(() => {
+    if (!connected.slack) {
+      openToolSettings({ tool: 'slack' });
+      return;
+    }
     closeAllStudios();
     setInboxStudioFocus({ provider: 'slack', kind: null, recordKey: null, sessionId: null });
     setInboxStudioOpen(true);
-  }, [closeAllStudios]);
+  }, [closeAllStudios, connected.slack]);
 
   const openInbox = useCallback(() => {
     closeAllStudios();
@@ -282,17 +314,22 @@ export const useAppOverlays = ({
   useEffect(() => {
     const openSettingsEvent = ({ event, fallbackScope }: OpenSettingsEventParams) => {
       const requestedScope = eventValue({ event, key: 'scope' });
+      const tool = eventValue({ event, key: 'tool' });
       const section = eventValue({ event, key: 'section' });
       const provider =
         eventValue({ event, key: 'provider' }) ?? eventValue({ event, key: 'providerId' });
       const action = eventValue({ event, key: 'action' });
       const scope: SettingsScope =
-        requestedScope === 'app' || requestedScope === 'workspace' || requestedScope === 'providers'
+        requestedScope === 'app' ||
+        requestedScope === 'workspace' ||
+        requestedScope === 'providers' ||
+        requestedScope === 'tools'
           ? requestedScope
           : fallbackScope;
       closeAllStudios();
       setSettingsFocus({
         scope,
+        tool: isInboxProvider(tool) ? tool : undefined,
         section: typeof section === 'string' ? section : undefined,
         provider: isProviderId(provider) ? provider : undefined,
         action: isProviderLifecycleAction(action) ? action : undefined,

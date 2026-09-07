@@ -31,7 +31,6 @@ type Result = {
 
 export const useResolveHubSpawns = ({ sessionId, onOpenResolver }: Params): Result => {
   const activePr = useAppStore((state) => state.sessionGithub[sessionId]?.pr ?? null);
-  const activateNextResolver = useAppStore((state) => state.activateNextResolver);
   const resolverIndex = useResolverIndex(sessionId);
   const { spawnResolver } = useResolverSpawner({ sessionId });
   const resolverFor = useCallback(
@@ -55,7 +54,6 @@ export const useResolveHubSpawns = ({ sessionId, onOpenResolver }: Params): Resu
       void spawnResolver({
         args: buildCommentAgentArgs(thread.head, activePr, choice, thread.replies),
         choice,
-        deferKickoff: false,
       });
     },
     [activePr, onOpenResolver, resolverFor, spawnResolver],
@@ -81,13 +79,11 @@ export const useResolveHubSpawns = ({ sessionId, onOpenResolver }: Params): Resu
           await spawnResolver({
             args: buildCommentAgentArgs(thread.head, activePr, choice, thread.replies),
             choice,
-            deferKickoff: true,
           });
         }
-        await activateNextResolver(sessionId);
       })();
     },
-    [activePr, activateNextResolver, resolverFor, sessionId, spawnResolver],
+    [activePr, resolverFor, spawnResolver],
   );
   const onSpawnCombined = useCallback(
     (threads: ReadonlyArray<CommentThread>, choice: ResolveModelChoice) => {
@@ -105,12 +101,10 @@ export const useResolveHubSpawns = ({ sessionId, onOpenResolver }: Params): Resu
         await spawnResolver({
           args: buildCombinedCommentAgentArgs(fresh, activePr, choice),
           choice,
-          deferKickoff: true,
         });
-        await activateNextResolver(sessionId);
       })();
     },
-    [activePr, activateNextResolver, resolverFor, sessionId, spawnResolver],
+    [activePr, resolverFor, spawnResolver],
   );
 
   return { resolverFor, onSpawnOne, onSpawnBatch, onSpawnCombined };

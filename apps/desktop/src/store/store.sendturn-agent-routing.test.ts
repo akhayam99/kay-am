@@ -42,6 +42,8 @@ const {
   invokeAgentUpdateStatusSpy,
   invokeAgentListSpy,
   invokeAgentSetDoneSpy,
+  listWorktreesForSessionSpy,
+  getAgentByIdSpy,
 } = vi.hoisted(() => ({
   runTurnSpy: vi.fn(),
   cancelTurnSpy: vi.fn(),
@@ -86,6 +88,10 @@ const {
   invokeAgentUpdateStatusSpy: vi.fn(),
   invokeAgentListSpy: vi.fn(async () => [] as ReadonlyArray<Agent>),
   invokeAgentSetDoneSpy: vi.fn(async () => undefined),
+  listWorktreesForSessionSpy: vi.fn(
+    async () => [] as ReadonlyArray<{ readonly worktreePath: string }>,
+  ),
+  getAgentByIdSpy: vi.fn(async () => null as Agent | null),
 }));
 
 vi.mock('../features/chat/turn', () => ({
@@ -158,6 +164,8 @@ vi.mock('@goodboy/db', async () => {
     insertTurnEvent: vi.fn(async () => undefined),
     insertTurnEventsBatch: vi.fn(async () => undefined),
     listWorktreesForSessions: vi.fn(async () => new Map()),
+    listWorktreesForSession: listWorktreesForSessionSpy,
+    getAgentById: getAgentByIdSpy,
     listAgentsForSessions: vi.fn(async () => new Map()),
     listTurnEventsForAgent: vi.fn(async () => []),
     listTurnEventsForTask: vi.fn(async () => []),
@@ -236,6 +244,63 @@ vi.mock('../features/worktree/worktree', () => ({
   removeWorktree: vi.fn(),
   worktreeChangedFiles: vi.fn(async () => ({ files: [], numstat: '' })),
   sessionDirExists: vi.fn(async () => true),
+  scratchDirPrepare: vi.fn(async () => '/tmp/scratch'),
+  acquireWorktreeWriter: vi.fn(async ({ path, holder }: { path: string; holder: string }) => ({
+    path,
+    holder,
+    token: 'token-1',
+    runId: null,
+    isGranted: true,
+    hasExited: false,
+    waiting: [],
+  })),
+  releaseWorktreeWriter: vi.fn(async ({ path }: { path: string }) => ({
+    path,
+    holder: null,
+    token: null,
+    runId: null,
+    isGranted: false,
+    hasExited: false,
+    waiting: [],
+  })),
+  cancelWorktreeWriter: vi.fn(async ({ path }: { path: string }) => ({
+    path,
+    holder: null,
+    token: null,
+    runId: null,
+    isGranted: false,
+    hasExited: false,
+    waiting: [],
+  })),
+  abandonWorktreeWriter: vi.fn(async ({ path }: { path: string }) => ({
+    path,
+    holder: null,
+    token: null,
+    runId: null,
+    isGranted: false,
+    hasExited: false,
+    waiting: [],
+  })),
+  holdsWorktreeWriter: vi.fn(() => false),
+  worktreeWriterStatus: vi.fn(async ({ path }: { path: string }) => ({
+    path,
+    holder: null,
+    token: null,
+    runId: null,
+    isGranted: false,
+    hasExited: false,
+    waiting: [],
+  })),
+  worktreeStatus: vi.fn(async () => ({
+    branch: 'goodboy/rt',
+    head: null,
+    headSubject: null,
+    upstreamDistance: { kind: 'unknown', reason: 'no-upstream' },
+    mainDistance: { kind: 'unknown', reason: 'no-upstream' },
+    workingTree: { kind: 'known', staged: 0, unstaged: 0, untracked: 0, unmerged: 0, changed: 0 },
+    upstream: null,
+    inProgress: null,
+  })),
 }));
 
 vi.mock('../shared/lib/repo', () => ({
@@ -1059,7 +1124,7 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
       agentEffortOverride: {},
       agentProviderOverride: {},
       agentModelOverride: {},
-      pendingResolverKickoff: {},
+      agentKindOverride: {},
       transcripts: { [AGENT_A]: [] },
       providers: [
         {
@@ -1279,7 +1344,6 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
       agentModelOverride: {},
       resolverState: {},
       resolverThreadOutcomes: {},
-      pendingResolverKickoff: { [AGENT_B]: 'kick B' },
       providers: [
         {
           id: 'anthropic',
@@ -1326,13 +1390,23 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
     });
     runTurnSpy.mockImplementation(() => emptyStream());
 
+    await useAppStore.getState().recordResolveAttempt({
+      sessionId: SESSION_ID,
+      agent: buildAgent(AGENT_B, 1),
+      provider: 'anthropic',
+      model: 'claude-opus-5',
+      effort: null,
+      instructions: 'kick B',
+      phase: 'queued',
+    });
+
     await useAppStore
       .getState()
       .sendTurn({ sessionId: SESSION_ID, agentId: AGENT_A, content: 'go' });
 
     expect(useAppStore.getState().resolverState[AGENT_A]).toBe('committed');
     await vi.waitFor(() => expect(runTurnSpy).toHaveBeenCalledTimes(2));
-    expect(useAppStore.getState().pendingResolverKickoff[AGENT_B]).toBeUndefined();
+    expect(runTurnSpy.mock.calls[1]?.[0]?.prompt).toContain('kick B');
   });
 
   it('records every combined resolver thread outcome', async () => {
@@ -1361,7 +1435,6 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
       agentModelOverride: {},
       resolverState: {},
       resolverThreadOutcomes: {},
-      pendingResolverKickoff: {},
       providers: [
         {
           id: 'anthropic',
@@ -1423,7 +1496,7 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
     });
   });
 
-  it('a resolver that ends without a marker records awaiting and blocks the queue', async () => {
+  it('a resolver that ends without a marker still lets the queue advance', async () => {
     const useAppStore = await importStore();
     const workflowsMod = await import('../features/workflows/workflows');
     (workflowsMod.invokeAgentList as ReturnType<typeof vi.fn>).mockResolvedValue([
@@ -1458,7 +1531,6 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
       agentModelOverride: {},
       resolverState: {},
       resolverThreadOutcomes: {},
-      pendingResolverKickoff: { [AGENT_B]: 'kick B' },
       providers: [
         {
           id: 'anthropic',
@@ -1504,13 +1576,23 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
       yield { kind: 'done' as const, runId: args.runId, at: NOW };
     });
 
+    await useAppStore.getState().recordResolveAttempt({
+      sessionId: SESSION_ID,
+      agent: buildAgent(AGENT_B, 1),
+      provider: 'anthropic',
+      model: 'claude-opus-5',
+      effort: null,
+      instructions: 'kick B',
+      phase: 'queued',
+    });
+
     await useAppStore
       .getState()
       .sendTurn({ sessionId: SESSION_ID, agentId: AGENT_A, content: 'go' });
 
     expect(useAppStore.getState().resolverState[AGENT_A]).toBe('awaiting');
-    expect(runTurnSpy).toHaveBeenCalledOnce();
-    expect(useAppStore.getState().pendingResolverKickoff[AGENT_B]).toBe('kick B');
+    await vi.waitFor(() => expect(runTurnSpy).toHaveBeenCalledTimes(2));
+    expect(runTurnSpy.mock.calls[1]?.[0]?.prompt).toContain('kick B');
   });
 
   it('a resolver analysis records analyzed and advances the queue', async () => {
@@ -1548,7 +1630,6 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
       agentModelOverride: {},
       resolverState: {},
       resolverThreadOutcomes: {},
-      pendingResolverKickoff: { [AGENT_B]: 'kick B' },
       providers: [
         {
           id: 'anthropic',
@@ -1595,13 +1676,23 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
     });
     runTurnSpy.mockImplementation(() => emptyStream());
 
+    await useAppStore.getState().recordResolveAttempt({
+      sessionId: SESSION_ID,
+      agent: buildAgent(AGENT_B, 1),
+      provider: 'anthropic',
+      model: 'claude-opus-5',
+      effort: null,
+      instructions: 'kick B',
+      phase: 'queued',
+    });
+
     await useAppStore
       .getState()
       .sendTurn({ sessionId: SESSION_ID, agentId: AGENT_A, content: 'go' });
 
     expect(useAppStore.getState().resolverState[AGENT_A]).toBe('analyzed');
     await vi.waitFor(() => expect(runTurnSpy).toHaveBeenCalledTimes(2));
-    expect(useAppStore.getState().pendingResolverKickoff[AGENT_B]).toBeUndefined();
+    expect(runTurnSpy.mock.calls[1]?.[0]?.prompt).toContain('kick B');
   });
 
   it('an explicit per-turn model override beats the agent kind model pin', async () => {
@@ -1932,11 +2023,27 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
     expect(runTurnSpy.mock.calls[0]?.[0]?.model).toBe('claude-haiku-4-5');
   });
 
-  it('activateNextResolver runs only the head of the queue and dequeues it', async () => {
+  it('the drain runs the persisted queue head first, then the next one', async () => {
     const useAppStore = await importStore();
+    const workflowsMod = await import('../features/workflows/workflows');
+    (workflowsMod.invokeAgentList as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { ...buildAgent(AGENT_A, 0), sourceThreadIds: ['PRRT_1'], status: 'completed' },
+      buildAgent(AGENT_B, 1),
+    ]);
     useAppStore.setState({
       sessions: [buildSession()],
       sessionWorktrees: { [SESSION_ID]: ['/tmp/wt'] },
+      sessionProjectMounts: {
+        [SESSION_ID]: [
+          {
+            projectId: 'project-rt' as ProjectId,
+            mountName: 'repo',
+            worktreePath: '/tmp/wt',
+            repoRoot: '/tmp/repo',
+            branch: 'goodboy/rt',
+          },
+        ],
+      },
       sessionPhaseRuns: {
         [SESSION_ID]: [
           { ...buildAgent(AGENT_A, 0), sourceThreadIds: ['PRRT_1'] },
@@ -1949,7 +2056,6 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
       agentEffortOverride: {},
       agentProviderOverride: {},
       agentModelOverride: {},
-      pendingResolverKickoff: { [AGENT_A]: 'kick A', [AGENT_B]: 'kick B' },
       providers: [
         {
           id: 'anthropic',
@@ -1985,12 +2091,273 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
       ],
     });
 
-    await useAppStore.getState().activateNextResolver(SESSION_ID);
+    for (const [agentId, instructions] of [
+      [AGENT_A, 'kick A'],
+      [AGENT_B, 'kick B'],
+    ] as const) {
+      await useAppStore.getState().recordResolveAttempt({
+        sessionId: SESSION_ID,
+        agent: buildAgent(agentId, agentId === AGENT_A ? 0 : 1),
+        provider: 'anthropic',
+        model: 'claude-opus-5',
+        effort: null,
+        instructions,
+        phase: 'queued',
+      });
+    }
 
-    expect(useAppStore.getState().pendingResolverKickoff[AGENT_A]).toBeUndefined();
-    expect(useAppStore.getState().pendingResolverKickoff[AGENT_B]).toBe('kick B');
-    await vi.waitFor(() => expect(runTurnSpy).toHaveBeenCalledOnce());
+    await useAppStore.getState().drainResolveQueue({ sessionId: SESSION_ID });
+
+    await vi.waitFor(() => expect(runTurnSpy).toHaveBeenCalledTimes(2));
     expect(runTurnSpy.mock.calls[0]?.[0]?.prompt).toContain('kick A');
+    expect(runTurnSpy.mock.calls[1]?.[0]?.prompt).toContain('kick B');
+    const attempts = useAppStore.getState().sessionResolveAttempts[SESSION_ID] ?? [];
+    expect(attempts.filter((attempt) => attempt.phase === 'queued')).toHaveLength(0);
+  });
+
+  const seedResolverTurn = async () => {
+    const useAppStore = await importStore();
+    const workflowsMod = await import('../features/workflows/workflows');
+    (workflowsMod.invokeAgentList as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { ...buildAgent(AGENT_A, 0), sourceThreadIds: ['PRRT_1'], status: 'completed' },
+    ]);
+    useAppStore.setState({
+      sessions: [buildSession()],
+      sessionWorktrees: { [SESSION_ID]: ['/tmp/wt'] },
+      sessionProjectMounts: {
+        [SESSION_ID]: [
+          {
+            projectId: 'project-rt' as ProjectId,
+            mountName: 'repo',
+            worktreePath: '/tmp/wt',
+            repoRoot: '/tmp/repo',
+            branch: 'goodboy/rt',
+          },
+        ],
+      },
+      sessionPhaseRuns: {
+        [SESSION_ID]: [{ ...buildAgent(AGENT_A, 0), sourceThreadIds: ['PRRT_1'] }],
+      },
+      selectedAgentId: { [SESSION_ID]: AGENT_A },
+      transcripts: { [AGENT_A]: [] },
+      agentKindOverride: { [AGENT_A]: 'resolver' },
+      agentEffortOverride: {},
+      agentProviderOverride: {},
+      agentModelOverride: {},
+      resolverState: {},
+      resolverThreadOutcomes: {},
+      providers: [
+        {
+          id: 'anthropic',
+          binary: 'claude',
+          connection: 'connected',
+          name: 'Claude',
+          installation: 'installed',
+        } as never,
+      ],
+      authResults: { anthropic: { state: 'connected', identity: 'test' } } as never,
+      workspaces: [
+        {
+          id: WORKSPACE_ID,
+          name: 'ws',
+          slug: 'ws',
+          sessionsRoot: '/tmp',
+          overrides: {
+            defaultProviderId: null,
+            defaultWorkflowId: null,
+            defaultBranchPrefix: null,
+            parallelEnabled: null,
+            defaultVerbosity: null,
+            providerBindings: null,
+            taskModels: null,
+            roleModels: null,
+            parallelAgents: null,
+            providerPool: null,
+            attributionFooter: null,
+          },
+          createdAt: NOW,
+          updatedAt: NOW,
+        },
+      ],
+    });
+    return useAppStore;
+  };
+
+  it('gives the writer lease back when the turn throws outside the stream', async () => {
+    const useAppStore = await seedResolverTurn();
+    const worktreeMod = await import('../features/worktree/worktree');
+    const dbMod = await import('@goodboy/db');
+    const release = worktreeMod.releaseWorktreeWriter as ReturnType<typeof vi.fn>;
+    release.mockClear();
+    (dbMod.insertMessage as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error('transcript write failed'),
+    );
+    runTurnSpy.mockReset();
+    runTurnSpy.mockImplementation(() => emptyStream());
+
+    await expect(
+      useAppStore.getState().sendTurn({ sessionId: SESSION_ID, agentId: AGENT_A, content: 'go' }),
+    ).rejects.toThrow('transcript write failed');
+
+    expect(runTurnSpy).not.toHaveBeenCalled();
+    expect(release).toHaveBeenCalledWith({ path: '/tmp/wt', holder: AGENT_A });
+  });
+
+  it('queues the request and drops its wait when the worktree is already taken', async () => {
+    const useAppStore = await seedResolverTurn();
+    const worktreeMod = await import('../features/worktree/worktree');
+    const acquire = worktreeMod.acquireWorktreeWriter as ReturnType<typeof vi.fn>;
+    const evict = worktreeMod.cancelWorktreeWriter as ReturnType<typeof vi.fn>;
+    evict.mockClear();
+    acquire.mockResolvedValueOnce({
+      path: '/tmp/wt',
+      holder: AGENT_B,
+      token: null,
+      runId: null,
+      isGranted: false,
+      hasExited: false,
+      waiting: [AGENT_A],
+    });
+    runTurnSpy.mockReset();
+    runTurnSpy.mockImplementation(() => emptyStream());
+
+    const result = await useAppStore
+      .getState()
+      .sendTurn({ sessionId: SESSION_ID, agentId: AGENT_A, content: 'go' });
+
+    expect(result.isWriterLeaseDenied).toBe(true);
+    expect(runTurnSpy).not.toHaveBeenCalled();
+    expect(evict).toHaveBeenCalledWith({ path: '/tmp/wt', holder: AGENT_A });
+    const queued = (useAppStore.getState().sessionResolveAttempts[SESSION_ID] ?? []).filter(
+      (attempt) => attempt.phase === 'queued',
+    );
+    expect(queued).toHaveLength(1);
+    expect(queued[0]?.agentId).toBe(AGENT_A);
+  });
+
+  it('refuses a resolver turn when the session has no worktree to lease', async () => {
+    const useAppStore = await seedResolverTurn();
+    const worktreeMod = await import('../features/worktree/worktree');
+    const acquire = worktreeMod.acquireWorktreeWriter as ReturnType<typeof vi.fn>;
+    acquire.mockClear();
+    listWorktreesForSessionSpy.mockResolvedValue([]);
+    useAppStore.setState({ sessionProjectMounts: { [SESSION_ID]: [] } });
+    runTurnSpy.mockReset();
+    runTurnSpy.mockImplementation(() => emptyStream());
+
+    await expect(
+      useAppStore.getState().sendTurn({ sessionId: SESSION_ID, agentId: AGENT_A, content: 'go' }),
+    ).rejects.toThrow('resolver turn refused');
+
+    expect(runTurnSpy).not.toHaveBeenCalled();
+    expect(acquire).not.toHaveBeenCalled();
+  });
+
+  it('leases the worktree of a session the loaded workspace never mounted', async () => {
+    const useAppStore = await seedResolverTurn();
+    const worktreeMod = await import('../features/worktree/worktree');
+    const acquire = worktreeMod.acquireWorktreeWriter as ReturnType<typeof vi.fn>;
+    acquire.mockClear();
+    listWorktreesForSessionSpy.mockResolvedValueOnce([{ worktreePath: '/tmp/db-wt' }]);
+    useAppStore.setState({ sessionProjectMounts: { [SESSION_ID]: [] } });
+    runTurnSpy.mockReset();
+    runTurnSpy.mockImplementation(() => emptyStream());
+
+    await useAppStore
+      .getState()
+      .sendTurn({ sessionId: SESSION_ID, agentId: AGENT_A, content: 'go' });
+
+    expect(acquire).toHaveBeenCalledWith({ path: '/tmp/db-wt', holder: AGENT_A });
+  });
+
+  it('refuses a resolver turn whose agent is on neither the session nor the database', async () => {
+    const useAppStore = await seedResolverTurn();
+    const worktreeMod = await import('../features/worktree/worktree');
+    const acquire = worktreeMod.acquireWorktreeWriter as ReturnType<typeof vi.fn>;
+    acquire.mockClear();
+    getAgentByIdSpy.mockResolvedValue(null);
+    useAppStore.setState({ sessionPhaseRuns: { [SESSION_ID]: [] } });
+    runTurnSpy.mockReset();
+    runTurnSpy.mockImplementation(() => emptyStream());
+
+    await expect(
+      useAppStore.getState().sendTurn({ sessionId: SESSION_ID, agentId: AGENT_A, content: 'go' }),
+    ).rejects.toThrow('resolver turn refused');
+
+    expect(runTurnSpy).not.toHaveBeenCalled();
+    expect(acquire).not.toHaveBeenCalled();
+  });
+
+  it('lets a database failure looking up the resolver agent propagate instead of reporting it missing', async () => {
+    const useAppStore = await seedResolverTurn();
+    const worktreeMod = await import('../features/worktree/worktree');
+    const acquire = worktreeMod.acquireWorktreeWriter as ReturnType<typeof vi.fn>;
+    acquire.mockClear();
+    getAgentByIdSpy.mockRejectedValueOnce(new Error('db exploded'));
+    useAppStore.setState({ sessionPhaseRuns: { [SESSION_ID]: [] } });
+    runTurnSpy.mockReset();
+    runTurnSpy.mockImplementation(() => emptyStream());
+
+    await expect(
+      useAppStore.getState().sendTurn({ sessionId: SESSION_ID, agentId: AGENT_A, content: 'go' }),
+    ).rejects.toThrow('db exploded');
+
+    expect(runTurnSpy).not.toHaveBeenCalled();
+    expect(acquire).not.toHaveBeenCalled();
+  });
+
+  it('acquires the writer lease for a resolver whose kind is only persisted, with no override in memory', async () => {
+    const useAppStore = await seedResolverTurn();
+    const worktreeMod = await import('../features/worktree/worktree');
+    const acquire = worktreeMod.acquireWorktreeWriter as ReturnType<typeof vi.fn>;
+    acquire.mockClear();
+    useAppStore.setState({
+      agentKindOverride: {},
+      sessionPhaseRuns: {
+        [SESSION_ID]: [
+          { ...buildAgent(AGENT_A, 0), kind: 'resolver', sourceThreadIds: ['PRRT_1'] },
+        ],
+      },
+    });
+    runTurnSpy.mockReset();
+    runTurnSpy.mockImplementation(() => emptyStream());
+
+    await useAppStore
+      .getState()
+      .sendTurn({ sessionId: SESSION_ID, agentId: AGENT_A, content: 'go' });
+
+    expect(acquire).toHaveBeenCalledWith({ path: '/tmp/wt', holder: AGENT_A });
+  });
+
+  it('passes the acquisition token to the provider spawn', async () => {
+    const useAppStore = await seedResolverTurn();
+    runTurnSpy.mockReset();
+    runTurnSpy.mockImplementation(() => emptyStream());
+    await useAppStore
+      .getState()
+      .sendTurn({ sessionId: SESSION_ID, agentId: AGENT_A, content: 'go' });
+    expect(runTurnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        writerLease: { path: '/tmp/wt', holder: AGENT_A, token: 'token-1' },
+      }),
+    );
+  });
+
+  it('leaves the release to the queue when the caller already holds the lease', async () => {
+    const useAppStore = await seedResolverTurn();
+    const worktreeMod = await import('../features/worktree/worktree');
+    const release = worktreeMod.releaseWorktreeWriter as ReturnType<typeof vi.fn>;
+    const holds = worktreeMod.holdsWorktreeWriter as ReturnType<typeof vi.fn>;
+    release.mockClear();
+    holds.mockReturnValueOnce(true);
+    runTurnSpy.mockReset();
+    runTurnSpy.mockImplementation(() => emptyStream());
+
+    await useAppStore
+      .getState()
+      .sendTurn({ sessionId: SESSION_ID, agentId: AGENT_A, content: 'go' });
+
+    expect(release).not.toHaveBeenCalled();
   });
 });
 
@@ -2024,7 +2391,7 @@ describe('sendTurn, budget routing notice', () => {
       agentEffortOverride: {},
       agentProviderOverride: {},
       agentModelOverride: {},
-      pendingResolverKickoff: {},
+      agentKindOverride: {},
       transcripts: { [AGENT_A]: [] },
       providers: [
         {
@@ -2252,7 +2619,6 @@ describe('sendTurn, role fallback model', () => {
       agentProviderOverride: {},
       agentModelOverride: {},
       agentKindOverride: {},
-      pendingResolverKickoff: {},
       transcripts: { [AGENT_A]: [] },
       providers: [
         {

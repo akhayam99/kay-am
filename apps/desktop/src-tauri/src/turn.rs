@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read};
-use std::process::{Child, ChildStderr, ChildStdout, Stdio};
+use std::process::{Child, ChildStderr, ChildStdout, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -14,6 +14,8 @@ pub enum TurnError {
     Io(#[from] std::io::Error),
     #[error("turn registry mutex poisoned")]
     Poisoned,
+    #[error("worktree writer lease is not owned by this turn")]
+    WriterLeaseNotOwned,
     #[error("turn not found: {0}")]
     NotFound(String),
 }
@@ -25,6 +27,7 @@ impl TurnError {
         match self {
             TurnError::Io(_) => "io",
             TurnError::Poisoned => "poisoned",
+            TurnError::WriterLeaseNotOwned => "writer_lease_not_owned",
             TurnError::NotFound(_) => "not_found",
         }
     }
@@ -79,6 +82,16 @@ pub struct SpawnArgs {
     pub credential_id: Option<String>,
     #[serde(default)]
     pub cursor_max_mode: bool,
+    #[serde(default)]
+    pub writer_lease: Option<WriterLeaseBinding>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct WriterLeaseBinding {
+    pub path: String,
+    pub holder: String,
+    pub token: String,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -294,6 +307,7 @@ struct SpawnOneArgs<'a> {
     pub workspace_id: Option<&'a str>,
     pub session_id: Option<&'a str>,
     pub cursor_max_mode: bool,
+    pub writer_lease: Option<&'a WriterLeaseBinding>,
 }
 
 fn max_mode_config_dir_for(binary: &str, cursor_max_mode: bool) -> Option<std::path::PathBuf> {
@@ -306,9 +320,37 @@ fn max_mode_config_dir_for(binary: &str, cursor_max_mode: bool) -> Option<std::p
     crate::cursor_config::max_mode_config_dir()
 }
 
+fn spawn_leased_child(
+    command: &mut Command,
+    leases: &crate::worktree_writer::WriterLeaseRegistry,
+    binding: Option<&WriterLeaseBinding>,
+    run_id: &str,
+    on_exit: impl Fn() + Send + 'static,
+) -> Result<(Child, Option<crate::worktree_writer::RunLeaseGuard>), TurnError> {
+    let guard = binding
+        .map(|binding| {
+            crate::worktree_writer::RunLeaseGuard::bind(
+                leases,
+                &binding.path,
+                &binding.holder,
+                &binding.token,
+                run_id,
+                on_exit,
+            )
+            .ok_or(TurnError::WriterLeaseNotOwned)
+        })
+        .transpose()?;
+    let child = command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    Ok((child, guard))
+}
+
 fn spawn_one(
     app: &AppHandle,
     registry: &ChildRegistry,
+    leases: &crate::worktree_writer::WriterLeaseRegistry,
     args: SpawnOneArgs<'_>,
 ) -> Result<String, TurnError> {
     let mut command = crate::path_env::command(args.binary);
@@ -337,10 +379,26 @@ fn spawn_one(
         command.arg(a);
     }
 
-    let mut child = command
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
+    let event_app = app.clone();
+    let event_binding = args.writer_lease.cloned();
+    let (mut child, lease_guard) = spawn_leased_child(
+        &mut command,
+        leases,
+        args.writer_lease,
+        args.run_id,
+        move || {
+            if let Some(binding) = &event_binding {
+                let _ = event_app.emit(
+                    crate::worktree_writer::EVENT_NAME,
+                    crate::worktree_writer::WriterLeaseEvent {
+                        path: binding.path.clone(),
+                        holder: binding.holder.clone(),
+                        reason: "exited",
+                    },
+                );
+            }
+        },
+    )?;
 
     let stdout = child
         .stdout
@@ -381,6 +439,7 @@ fn spawn_one(
                 },
             },
         );
+        drop(lease_guard);
     });
 
     Ok(args.run_id.to_string())
@@ -390,6 +449,7 @@ fn spawn_one(
 pub async fn turn_spawn(
     app: AppHandle,
     state: State<'_, TurnRegistry>,
+    leases: State<'_, crate::worktree_writer::WriterLeases>,
     args: SpawnArgs,
 ) -> Result<String, TurnError> {
     let binary = args.binary.as_deref().unwrap_or("claude");
@@ -402,6 +462,7 @@ pub async fn turn_spawn(
     spawn_one(
         &app,
         &state.0,
+        &leases.0,
         SpawnOneArgs {
             run_id: &args.run_id,
             binary,
@@ -425,6 +486,7 @@ pub async fn turn_spawn(
             workspace_id: args.workspace_id.as_deref(),
             session_id: args.session_id.as_deref(),
             cursor_max_mode: args.cursor_max_mode,
+            writer_lease: args.writer_lease.as_ref(),
         },
     )
 }
@@ -519,6 +581,19 @@ mod tests {
     use super::*;
 
     #[test]
+    fn spawn_refuses_a_writer_without_an_owned_lease() {
+        let leases = crate::worktree_writer::WriterLeases::new();
+        let binding = WriterLeaseBinding {
+            path: "/repo/one".to_string(),
+            holder: "agent-1".to_string(),
+            token: "stale-token".to_string(),
+        };
+        let mut command = Command::new("/bin/echo");
+        let result = spawn_leased_child(&mut command, &leases.0, Some(&binding), "run-1", || {});
+        assert!(matches!(result, Err(TurnError::WriterLeaseNotOwned)));
+    }
+
+    #[test]
     fn turn_registry_default_is_empty() {
         let registry = TurnRegistry::new();
         let map = registry.0.lock().unwrap();
@@ -548,6 +623,7 @@ mod tests {
             workspace_id: None,
             session_id: None,
             cursor_max_mode: false,
+            writer_lease: None,
         };
         assert_eq!(args.run_id, "run-1");
         assert_eq!(args.binary, "echo");
@@ -578,6 +654,7 @@ mod tests {
             workspace_id: None,
             session_id: None,
             cursor_max_mode: false,
+            writer_lease: None,
         }
     }
 
@@ -906,6 +983,7 @@ mod tests {
             workspace_id: None,
             session_id: None,
             cursor_max_mode: false,
+            writer_lease: None,
         };
         let cli = build_provider_cli_args("codex", &args);
         let out = std::process::Command::new("codex")

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ScrollFade, StudioRailLayout } from '@goodboy/ui';
 import type { Workspace } from '@goodboy/types';
+import { ToolSettingsScope } from '../../../integrations/components/ToolSettingsScope';
 import { ProviderSettingsScope } from '../../../providers/components/ProviderStudio';
 import { CONCEPT_ICONS, CONCEPT_TONE } from '../../../../shared/components/conceptIcons';
 import { StudioShell } from '../../../../shared/components/StudioShell';
@@ -58,6 +59,12 @@ export const SettingsStudio = ({ currentWorkspace, initialFocus, onClose }: Prop
                 workspaceId={currentWorkspace.id}
                 initialFocus={initialFocus.provider}
                 initialAction={initialFocus.action}
+              />
+            ) : availableScope === 'tools' && currentWorkspace !== null ? (
+              <ToolSettingsScope
+                key={currentWorkspace.id}
+                workspaceId={currentWorkspace.id}
+                initialFocus={initialFocus.tool}
               />
             ) : null
           }

@@ -9,7 +9,6 @@ const h = vi.hoisted(() => ({
   sendTurn: vi.fn((..._args: unknown[]) => Promise.resolve()),
   spawnAgent: vi.fn((..._args: unknown[]) => Promise.resolve()),
   activateWorkflowAgent: vi.fn((..._args: unknown[]) => Promise.resolve()),
-  activateNextResolver: vi.fn((..._args: unknown[]) => Promise.resolve()),
   state: { value: null as unknown },
 }));
 
@@ -30,7 +29,6 @@ function makeStore(over: Record<string, unknown> = {}) {
     sendTurn: h.sendTurn,
     spawnAgent: h.spawnAgent,
     activateWorkflowAgent: h.activateWorkflowAgent,
-    activateNextResolver: h.activateNextResolver,
     ...over,
   };
 }
@@ -155,10 +153,8 @@ describe('resolveComment', () => {
       's1',
       expect.objectContaining({
         kindOverride: 'resolver',
-        deferKickoff: true,
         sourceCommentUrl: 'https://x/1',
       }),
     );
-    expect(h.activateNextResolver).toHaveBeenCalledWith('s1');
   });
 });

@@ -17,8 +17,19 @@ export const listResolveAttempts = async ({
   sessionId,
 }: ListParams): Promise<ReadonlyArray<ResolveAttempt>> => {
   const rows = await db.select<Row>(
-    `SELECT id, session_id AS sessionId, agent_id AS agentId, pr_number AS prNumber, thread_ids_json AS threadIds, provider, model, effort, instructions, phase, started_at AS startedAt, ended_at AS endedAt, error, created_at AS createdAt FROM resolve_attempts WHERE session_id = ? ORDER BY created_at, id`,
+    `SELECT id, session_id AS sessionId, agent_id AS agentId, pr_number AS prNumber, thread_ids_json AS threadIds, provider, model, effort, instructions, phase, started_at AS startedAt, ended_at AS endedAt, error, created_at AS createdAt FROM resolve_attempts WHERE session_id = ? ORDER BY created_at, rowid`,
     [sessionId],
+  );
+  return rows.map((row) => ({ ...row, threadIds: resolveStringArray({ json: row.threadIds }) }));
+};
+
+export const listActiveResolveAttempts = async ({
+  db,
+}: {
+  readonly db: Database;
+}): Promise<ReadonlyArray<ResolveAttempt>> => {
+  const rows = await db.select<Row>(
+    `SELECT id, session_id AS sessionId, agent_id AS agentId, pr_number AS prNumber, thread_ids_json AS threadIds, provider, model, effort, instructions, phase, started_at AS startedAt, ended_at AS endedAt, error, created_at AS createdAt FROM resolve_attempts WHERE phase IN ('queued', 'running') ORDER BY created_at, rowid`,
   );
   return rows.map((row) => ({ ...row, threadIds: resolveStringArray({ json: row.threadIds }) }));
 };

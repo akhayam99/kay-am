@@ -1,7 +1,7 @@
 import { PANE_RHYTHM, SelectableRow } from '@goodboy/ui';
 import { Boxes, Settings, Wrench } from 'lucide-react';
 import type { SettingsScope } from './types';
-import { ICON_SIZE } from '../../../../shared/components/conceptIcons';
+import { CONCEPT_ICONS, ICON_SIZE } from '../../../../shared/components/conceptIcons';
 
 type Props = {
   readonly scope: SettingsScope;
@@ -13,6 +13,7 @@ const ITEMS = [
   { scope: 'app', label: 'App', icon: Settings },
   { scope: 'workspace', label: 'Workspace', icon: Wrench },
   { scope: 'providers', label: 'Providers & models', icon: Boxes },
+  { scope: 'tools', label: 'Tools', icon: CONCEPT_ICONS.integrations },
 ] satisfies ReadonlyArray<{ scope: SettingsScope; label: string; icon: typeof Settings }>;
 
 export const SettingsRail = ({ scope, workspaceName, onSelect }: Props) => (

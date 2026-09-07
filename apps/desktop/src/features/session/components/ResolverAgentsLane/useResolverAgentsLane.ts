@@ -24,11 +24,7 @@ import { attributeResolverCommits } from '../../resolver-commits';
 import { resolverCommitSha } from '../../resolverCommitSha';
 import { resolverReportedShas } from '../../resolver-reported-shas';
 import { listBranchCommits } from '../../../worktree/worktree';
-import {
-  activeResolverIds,
-  isResolverQueueStalled,
-  resolverLaneEntries,
-} from './resolverLaneEntries';
+import { activeResolverIds, resolverLaneEntries } from './resolverLaneEntries';
 import type { ResolverDiffTarget } from './resolverDiffActionLabel';
 import { useSessionRepo } from '../../../../store/slices/worktrees/useSessionRepo';
 
@@ -59,7 +55,6 @@ export const useResolverAgentsLane = ({ session }: Params) => {
   const selectAgent = useAppStore((state) => state.selectAgent);
   const openDiffLens = useAppStore((state) => state.openDiffLens);
   const setActiveLens = useAppStore((state) => state.setActiveLens);
-  const activateNextResolver = useAppStore((state) => state.activateNextResolver);
   const laneAgentIds = useMemo(
     () => resolverIndex.links.map(({ agent }) => agent.id),
     [resolverIndex.links],
@@ -237,8 +232,6 @@ export const useResolverAgentsLane = ({ session }: Params) => {
     return map;
   }, [diffComments]);
 
-  const queuedCount = resolverIndex.links.filter(({ agent }) => agent.status === 'pending').length;
-  const isStalled = isResolverQueueStalled({ links: resolverIndex.links });
   const activeIds = activeResolverIds({ links: resolverIndex.links });
 
   const statusByAgentId = useMemo(() => {
@@ -285,10 +278,6 @@ export const useResolverAgentsLane = ({ session }: Params) => {
     [prNumber, sessionId, threadIdByCommentUrl],
   );
 
-  const onForceNext = useCallback(() => {
-    void activateNextResolver(sessionId);
-  }, [activateNextResolver, sessionId]);
-
   const onOpenResolveBoard = useCallback(() => {
     setActiveLens(sessionId, 'review');
   }, [sessionId, setActiveLens]);
@@ -302,16 +291,13 @@ export const useResolverAgentsLane = ({ session }: Params) => {
     diffCommentByAgentId,
     diffCommitShaByAgentId,
     diffTargetByAgentId,
-    isStalled,
     isTaskActive,
     isTranscriptLoading: loading.transcript,
     metrics,
-    onForceNext,
     onJump,
     onOpenChat,
     onOpenDiff,
     onOpenResolveBoard,
-    queuedCount,
     reportedCommitShaByAgentId,
     selectedAgentId,
     sessionId,

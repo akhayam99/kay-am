@@ -46,7 +46,6 @@ type SpawnArgs = {
   sourceThreadIds?: ReadonlyArray<string>;
   sourceCommentUrl?: string;
   sourceKind?: AgentSourceKind;
-  deferKickoff?: boolean;
   focus?: SpawnFocus;
   parentAgentId?: AgentId;
 };
@@ -197,10 +196,9 @@ const runSpawn = async ({ set, get, sessionId, session, args }: Params): Promise
     planToConsume = explicitPlan ?? (workflowAutoConsume ? latestPlan : null);
   }
 
-  const fanOutPlan =
-    isImplementer && !args.deferKickoff
-      ? selectFanOutPlan(get, sessionId, { workflowRunId: args.workflowRunId, explicitPlan })
-      : null;
+  const fanOutPlan = isImplementer
+    ? selectFanOutPlan(get, sessionId, { workflowRunId: args.workflowRunId, explicitPlan })
+    : null;
   const clusters =
     fanOutPlan?.clusters &&
     fanOutPlan.clusters.length >= 2 &&
@@ -233,15 +231,11 @@ const runSpawn = async ({ set, get, sessionId, session, args }: Params): Promise
       instructions: kickoff,
       phase: 'queued',
     });
-  }
-  if (kickoff.length > 0) {
-    if (args.deferKickoff) {
-      set((s) => ({
-        pendingResolverKickoff: { ...s.pendingResolverKickoff, [inserted.id]: kickoff },
-      }));
-    } else {
-      void get().sendTurn({ sessionId, agentId: inserted.id, content: kickoff });
+    if (kickoff.length > 0) {
+      void get().drainResolveQueue({ sessionId });
     }
+  } else if (kickoff.length > 0) {
+    void get().sendTurn({ sessionId, agentId: inserted.id, content: kickoff });
   }
 
   if (planToConsume) {

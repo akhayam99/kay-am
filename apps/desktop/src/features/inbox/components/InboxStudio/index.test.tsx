@@ -373,7 +373,7 @@ describe('InboxStudio', () => {
     fireEvent.click(screen.getByTestId('detail-open-integrations'));
 
     expect(dispatchSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'goodboy:open-settings' }),
+      expect.objectContaining({ type: 'goodboy:open-settings', detail: { scope: 'tools' } }),
     );
     dispatchSpy.mockRestore();
   });

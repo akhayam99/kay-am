@@ -8,7 +8,6 @@ import { kindRouting } from '../../agent-kind';
 type SpawnParams = {
   readonly args: CommentAgentArgs;
   readonly choice: ResolveModelChoice;
-  readonly deferKickoff: boolean;
 };
 
 type Params = {
@@ -27,7 +26,7 @@ export const useResolverSpawner = ({ sessionId }: Params): Result => {
   const roleModels = useSessionRoleModels({ sessionId });
   const [spawnedResolverIds, setSpawnedResolverIds] = useState<ReadonlyArray<AgentId>>([]);
 
-  const spawnResolver = async ({ args, choice, deferKickoff }: SpawnParams): Promise<AgentId> => {
+  const spawnResolver = async ({ args, choice }: SpawnParams): Promise<AgentId> => {
     const roleDefault = kindRouting({ kind: 'resolver', roleModels });
     const provider = choice.provider ?? roleDefault.provider;
     const model = choice.model ?? roleDefault.model;
@@ -43,7 +42,6 @@ export const useResolverSpawner = ({ sessionId }: Params): Result => {
       ...(args.sourceThreadIds !== undefined && { sourceThreadIds: args.sourceThreadIds }),
       sourceCommentUrl: args.sourceCommentUrl,
       sourceKind: args.sourceKind,
-      ...(deferKickoff && { deferKickoff: true }),
       focus: 'none',
     });
     await setAgentConfig(sessionId, agentId, {

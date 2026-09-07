@@ -42,7 +42,6 @@ export const ResolverAgentsLane = ({
         entries={lane.completedEntries}
         activeIds={lane.activeIds}
         canOpenDiff={lane.canOpenDiff}
-        isQueueStalled={lane.isStalled}
         isTaskActive={lane.isTaskActive}
         isTranscriptLoading={lane.isTranscriptLoading}
         isMuted
@@ -67,17 +66,11 @@ export const ResolverAgentsLane = ({
 
   return (
     <div className="flex flex-col gap-3">
-      <ResolverLaneToolbar
-        sessionId={lane.sessionId}
-        queuedCount={lane.queuedCount}
-        isStalled={lane.isStalled}
-        onForceNext={lane.onForceNext}
-      />
+      <ResolverLaneToolbar sessionId={lane.sessionId} />
       <ResolverRows
         entries={lane.activeEntries}
         activeIds={lane.activeIds}
         canOpenDiff={lane.canOpenDiff}
-        isQueueStalled={lane.isStalled}
         isTaskActive={lane.isTaskActive}
         isTranscriptLoading={lane.isTranscriptLoading}
         isMuted={false}

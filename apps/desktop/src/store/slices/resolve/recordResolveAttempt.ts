@@ -77,7 +77,10 @@ export const recordResolveAttempt = async ({
         stateReason:
           threadOutcome({ row }) === null
             ? null
-            : (row.stateReason?.replace(/^(?:(?:missing_result|stopped|failed):)+/, '') ?? null),
+            : (row.stateReason?.replace(
+                /^(?:(?:missing_result|stopped|failed|dirty_tree):)+/,
+                '',
+              ) ?? null),
         question: null,
         activeAttemptId: attempt.id,
         updatedAt: now,

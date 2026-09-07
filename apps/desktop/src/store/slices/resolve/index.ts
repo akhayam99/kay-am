@@ -1,18 +1,23 @@
+import { drainResolveQueue } from './drainResolveQueue';
+import { drainResolveWorktree } from './drainResolveWorktree';
 import { loadResolveSession } from './loadResolveSession';
 import { persistResolveTurn } from './persistResolveTurn';
 import { recordResolveAttempt } from './recordResolveAttempt';
 import { recordResolvePhase } from './recordResolvePhase';
+import { reconcileResolveDrains } from './reconcileResolveDrains';
 import { updateResolveThreads } from './updateResolveThreads';
 import { updateResolveThread } from './updateResolveThread';
 import type {
   ResolveActions,
   BatchUpdateParams,
   AttemptParams,
+  DrainParams,
   PhaseParams,
   SessionParams,
   SliceParams,
   TurnParams,
   UpdateParams,
+  WorktreeDrainParams,
 } from './types';
 
 export const createResolveSlice = ({ set, get }: SliceParams): ResolveActions => {
@@ -34,6 +39,11 @@ export const createResolveSlice = ({ set, get }: SliceParams): ResolveActions =>
       serialize({ run: () => recordResolveAttempt({ set, get, ...params }) }),
     recordResolvePhase: (params: PhaseParams) =>
       serialize({ run: () => recordResolvePhase({ set, get, ...params }) }),
+    drainResolveQueue: (params: DrainParams) =>
+      serialize({ run: () => drainResolveQueue({ set, get, ...params }) }),
+    drainResolveWorktree: (params: WorktreeDrainParams) =>
+      serialize({ run: () => drainResolveWorktree({ set, get, ...params }) }),
+    reconcileResolveDrains: () => serialize({ run: () => reconcileResolveDrains({ set, get }) }),
     updateResolveThread: (params: UpdateParams) =>
       serialize({ run: () => updateResolveThread({ set, get, ...params }) }),
   };

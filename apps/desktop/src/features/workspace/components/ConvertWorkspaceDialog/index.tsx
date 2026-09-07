@@ -1,3 +1,4 @@
+import { openToolSettings } from '../../../integrations/openToolSettings';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Dialog, formatError, Input, SegmentedTabs, Select, StatusDot } from '@goodboy/ui';
 import type { Workspace } from '@goodboy/types';
@@ -164,7 +165,7 @@ export const ConvertWorkspaceDialog = ({ open, workspace, onClose }: Props) => {
   const onConnect = useCallback(() => {
     keepDraftRef.current = true;
     onClose();
-    window.dispatchEvent(new CustomEvent('goodboy:open-inbox', { detail: { provider: host } }));
+    openToolSettings({ tool: host });
   }, [host, onClose]);
 
   const onConvert = useCallback(async () => {
