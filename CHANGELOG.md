@@ -7,6 +7,61 @@ version in the same PR that bumps the version numbers (see
 `docs/release-command.md`), before the tag is pushed: the release build fails
 if it can't find a matching `## Goodboy vX.Y.Z` heading.
 
+## Goodboy v0.2.19
+
+Workflow Studio can import a custom workflow from another workspace,
+tasks left on auto now resolve against the workspace default provider
+instead of the provider the session was created under, the overview
+timeline draws its rail as a spine with depth elbows, and handing pull
+request creation to an agent moves you to the overview while every
+other create entry stays closed.
+
+### [#1688] Import a workflow from another workspace
+
+Workflows live per workspace, so the only way to reuse one was to
+rebuild it by hand. The workflows rail now has an inline import
+section: pick a project from another workspace, pick one of that
+workspace's custom workflows, import. The copy lands in the current
+workspace with fresh ids and every step field preserved, including
+role, prompt, expected output, provider, model, effort and verbosity,
+and is selected once the list refreshes. Library presets are left out
+of the source list, since they already exist everywhere.
+
+### [#1689] Auto tasks follow the workspace default provider
+
+A task left on auto used to resolve against the provider the session
+was captured under, so a workspace configured on Codex kept summarizing
+an older Anthropic session on Haiku, while Providers Studio previewed
+something else. One resolver now serves every runtime caller and reads
+the workspace default first, with the session provider only as a
+fallback: session and workflow summaries, handoff, orchestrator, goal
+reprocessing, naming, PR and MR drafts, rebase and the planner picker.
+Workflow Studio generation goes through the `plan_generation` task
+rather than the first connected provider on a hardcoded cheap model,
+configured effort reaches the agent it was set for, and an exact model
+id such as `gpt-5.6-terra` no longer collapses to the first variant of
+its family.
+
+### [#1690] The timeline rail is a spine with depth elbows
+
+The overview timeline drew its rail with departing and merging bezier
+curves that were hard to follow once runs nested. It now uses the same
+grammar as the workflows step graph: one neutral spine running through
+NOW, day rules and every row, one column per depth, and a single elbow
+where a parent branches into a child. An open run keeps a dashed line
+up to NOW, a closed one stops at its top marker, and a column is only
+given up when two groups actually overlap in time.
+
+### [#1691] Creating a PR follows the drafting agent
+
+Handing pull request creation to an agent used to leave the panel
+parked in a pending-looking state with nothing to watch, and every
+other create entry stayed live, so a second agent could open a
+duplicate PR on the same branch. The spawn now moves you to the session
+overview with the agent started toast, and the project mount row, the
+PR lens empty state, the action bar and the create panel itself all
+stay closed while that agent is pending or running.
+
 ## Goodboy v0.2.18
 
 Settings gains a Tools scope for connecting Linear, Jira, GitLab,
