@@ -1,16 +1,20 @@
 import { CollapsibleString } from './CollapsibleString';
 import { RawJson } from './RawJson';
+import { ToolImage } from './ToolImage';
+import { isImagePath } from './isImagePath';
 
 type Props = {
   readonly data: unknown;
   readonly depth?: number;
   readonly label?: string;
+  readonly hasImages?: boolean;
 };
 
 const MAX_DEPTH = 4;
+const MAX_IMAGE_DEPTH = 12;
 const LONG_STRING_THRESHOLD = 400;
 
-export const StructuredData = ({ data, depth = 0, label }: Props) => {
+export const StructuredData = ({ data, depth = 0, label, hasImages = false }: Props) => {
   if (data === null || data === undefined) {
     return <span className="italic text-muted-foreground/60">null</span>;
   }
@@ -20,13 +24,16 @@ export const StructuredData = ({ data, depth = 0, label }: Props) => {
   }
 
   if (typeof data === 'string') {
+    if (isImagePath({ value: data })) {
+      return <ToolImage key={data} path={data} />;
+    }
     if (data.length > LONG_STRING_THRESHOLD) {
       return <CollapsibleString value={data} label={label} />;
     }
     return <span className="whitespace-pre-wrap break-words text-foreground/80">{data}</span>;
   }
 
-  if (depth >= MAX_DEPTH) {
+  if (depth >= MAX_IMAGE_DEPTH || (depth >= MAX_DEPTH && !hasImages)) {
     return <RawJson data={data} />;
   }
 
@@ -45,7 +52,7 @@ export const StructuredData = ({ data, depth = 0, label }: Props) => {
               key={i}
               className="inline-block rounded-md bg-muted/50 px-1.5 py-0.5 text-foreground/80"
             >
-              {String(v)}
+              <StructuredData data={v} depth={depth + 1} hasImages={hasImages} />
             </span>
           ))}
         </span>
@@ -56,7 +63,7 @@ export const StructuredData = ({ data, depth = 0, label }: Props) => {
         {data.map((v, i) => (
           <div key={i} className="flex items-start gap-1">
             <span className="shrink-0 text-muted-foreground/50">{i}:</span>
-            <StructuredData data={v} depth={depth + 1} />
+            <StructuredData data={v} depth={depth + 1} hasImages={hasImages} />
           </div>
         ))}
       </div>
@@ -73,7 +80,7 @@ export const StructuredData = ({ data, depth = 0, label }: Props) => {
         {entries.map(([key, val]) => (
           <div key={key} className="contents">
             <span className="shrink-0 text-muted-foreground">{key}</span>
-            <StructuredData data={val} depth={depth + 1} label={key} />
+            <StructuredData data={val} depth={depth + 1} label={key} hasImages={hasImages} />
           </div>
         ))}
       </div>

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { formatError } from '@goodboy/ui';
 import type { GithubIssueComment, WorkspaceId } from '@goodboy/types';
 import { ghCreateIssueComment, ghIssueComments } from '../github';
+import { useAppStore } from '../../../store';
+import { appendAttribution, isAttributionEnabled } from '../../../shared/utils/attribution';
 
 type Params = {
   readonly workspaceId: WorkspaceId | null;
@@ -21,6 +23,11 @@ export const useGithubIssueComments = ({ workspaceId, rootPath, issueNumber }: P
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  const isAttributed = useAppStore((state) =>
+    isAttributionEnabled({
+      overrides: workspaceId == null ? null : state.workspaceOverrides[workspaceId],
+    }),
+  );
 
   useEffect(() => {
     setComments([]);
@@ -62,10 +69,15 @@ export const useGithubIssueComments = ({ workspaceId, rootPath, issueNumber }: P
       if (workspaceId == null || rootPath == null) {
         return;
       }
-      await ghCreateIssueComment({ cwd: rootPath, issueNumber, body, workspaceId });
+      await ghCreateIssueComment({
+        cwd: rootPath,
+        issueNumber,
+        body: appendAttribution({ body, isEnabled: isAttributed, syntax: 'markdown' }),
+        workspaceId,
+      });
       setReloadToken((token) => token + 1);
     },
-    [workspaceId, rootPath, issueNumber],
+    [workspaceId, rootPath, issueNumber, isAttributed],
   );
 
   return {

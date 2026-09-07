@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 const { state, toastMock } = vi.hoisted(() => ({
   state: {
@@ -69,7 +69,16 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+import { overridesWithAttribution } from '../../../../__tests__/helpers/attributionOverrides';
 import { WorkspaceScopePanel } from './WorkspaceScopePanel';
+
+const attributionSwitch = (): HTMLElement => {
+  const row = screen.getByText('Attribution line').parentElement?.parentElement;
+  if (row == null) {
+    throw new Error('attribution row not rendered');
+  }
+  return within(row).getByRole('switch');
+};
 
 describe('WorkspaceScopePanel', () => {
   it('renders the one-page fields without a nav rail', () => {
@@ -98,6 +107,51 @@ describe('WorkspaceScopePanel', () => {
     render(<WorkspaceScopePanel workspaceId={'ws-1' as never} requestClose={vi.fn()} />);
     const section = screen.getByText('Session defaults').closest('section');
     expect(section?.textContent).toContain('Parallel agents');
+  });
+
+  it('shows the attribution line as on until the workspace switches it off', () => {
+    render(<WorkspaceScopePanel workspaceId={'ws-1' as never} requestClose={vi.fn()} />);
+    const section = screen.getByText('Session defaults').closest('section');
+    expect(section?.textContent).toContain('Attribution line');
+    expect(attributionSwitch().getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('persists the attribution switch on both edges', () => {
+    render(<WorkspaceScopePanel workspaceId={'ws-1' as never} requestClose={vi.fn()} />);
+
+    fireEvent.click(attributionSwitch());
+
+    expect(state.setWorkspaceOverrides).toHaveBeenCalledWith(
+      'ws-1',
+      expect.objectContaining({ attributionFooter: false }),
+    );
+
+    cleanup();
+    state.workspaceOverrides = {
+      'ws-1': overridesWithAttribution({ attributionFooter: false }),
+    };
+    render(<WorkspaceScopePanel workspaceId={'ws-1' as never} requestClose={vi.fn()} />);
+
+    expect(attributionSwitch().getAttribute('aria-checked')).toBe('false');
+    fireEvent.click(attributionSwitch());
+
+    expect(state.setWorkspaceOverrides).toHaveBeenLastCalledWith(
+      'ws-1',
+      expect.objectContaining({ attributionFooter: true }),
+    );
+  });
+
+  it('leaves attribution footer null when saving an unrelated override', () => {
+    render(<WorkspaceScopePanel workspaceId={'ws-1' as never} requestClose={vi.fn()} />);
+
+    const input = screen.getByLabelText(/branch prefix/i);
+    fireEvent.change(input, { target: { value: 'feature' } });
+    fireEvent.blur(input);
+
+    expect(state.setWorkspaceOverrides).toHaveBeenCalledWith(
+      'ws-1',
+      expect.objectContaining({ attributionFooter: null }),
+    );
   });
 
   it('renames the workspace on blur while keeping the folder name as the hint', () => {

@@ -250,6 +250,8 @@ function makeStore(initial: Record<string, unknown>) {
     agentEffortOverride: {},
     phaseTemplates: {},
     workspaceOverrides: {},
+    providers: [],
+    providerCooldowns: {},
     selectedAgentId: PARENT,
     sendTurn,
     emitNotification,

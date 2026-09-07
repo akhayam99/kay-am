@@ -42,6 +42,7 @@ import { worktreeDiff } from '../../../../features/worktree/worktree';
 import { isBranchlessSession } from '../../../../shared/utils/isBranchlessSession';
 import { ChatEmptyState } from './ChatEmptyState';
 import { TranscriptRows } from './TranscriptRows';
+import { ChatImageLoaderProvider } from './ChatImageLoaderProvider';
 import { useScrollPin } from './useScrollPin';
 import { TranscriptSkeleton } from './parts/TranscriptSkeleton';
 import { resolveSessionRepo } from '../../../../store/slices/worktrees/resolveSessionRepo';
@@ -422,19 +423,21 @@ export const ChatView = ({ session, isActive = true, header }: Props) => {
               aria-live="polite"
               aria-relevant="additions"
             >
-              <TranscriptRows
-                rows={rows}
-                oqByTurnOrdinal={oqByTurnOrdinal}
-                sessionId={session.id}
-                selectedAgentId={selectedAgentId}
-                workingDir={worktreePath}
-                onRefreshAuth={handleRefreshAuth}
-                onOpenDiff={handleOpenDiff}
-                isThinking={isThinking}
-                thinkingContext={thinkingContext}
-                onRetryError={(item) => void handleRetryError({ item })}
-                retryingErrorRunId={retryingErrorRunId}
-              />
+              <ChatImageLoaderProvider key={session.id} sessionId={session.id}>
+                <TranscriptRows
+                  rows={rows}
+                  oqByTurnOrdinal={oqByTurnOrdinal}
+                  sessionId={session.id}
+                  selectedAgentId={selectedAgentId}
+                  workingDir={worktreePath}
+                  onRefreshAuth={handleRefreshAuth}
+                  onOpenDiff={handleOpenDiff}
+                  isThinking={isThinking}
+                  thinkingContext={thinkingContext}
+                  onRetryError={(item) => void handleRetryError({ item })}
+                  retryingErrorRunId={retryingErrorRunId}
+                />
+              </ChatImageLoaderProvider>
             </ul>
           )}
         </ScrollFade>

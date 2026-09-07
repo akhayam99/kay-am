@@ -4,12 +4,85 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { Markdown } from '../components/Markdown';
 import { RemoteImageLoaderProvider } from '../components/RemoteImage/RemoteImageLoaderProvider';
+import { LocalImageLoaderProvider } from '../components/LocalImage/LocalImageLoaderProvider';
 
 afterEach(cleanup);
 
 const PNG_DATA_URI = 'data:image/png;base64,iVBORw0KGgo=';
 
 describe('Markdown images', () => {
+  it('degrades a local image to alt text with no local provider', () => {
+    const { container } = render(<Markdown text="![local chart](out/chart.png)" />);
+    expect(container.textContent).toBe('local chart');
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.queryByRole('img')).toBeNull();
+  });
+
+  it.each([
+    'mailto:chart.png',
+    'file:/out/chart.png',
+    'javascript:chart.png',
+    'custom:chart.png',
+    '//example.com/chart.png',
+  ])('degrades a non-path URL to alt text: %s', (url) => {
+    const load = vi.fn();
+    const { container } = render(
+      <LocalImageLoaderProvider load={load}>
+        <Markdown text={`![local chart](${url})`} />
+      </LocalImageLoaderProvider>,
+    );
+    expect(container.textContent).toBe('local chart');
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.queryByRole('img')).toBeNull();
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it('resolves a local image only after clicking load', async () => {
+    const load = vi.fn().mockResolvedValue(PNG_DATA_URI);
+    render(
+      <LocalImageLoaderProvider load={load}>
+        <Markdown text="![chart](out/chart.png)" />
+      </LocalImageLoaderProvider>,
+    );
+    expect(load).not.toHaveBeenCalled();
+    expect(screen.getByText('Local image. Click to load.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Load image' }));
+    expect((await screen.findByRole('img', { name: 'chart' })).getAttribute('src')).toBe(
+      PNG_DATA_URI,
+    );
+    expect(load).toHaveBeenCalledWith({ url: 'out/chart.png' });
+  });
+
+  it('keeps the alt text when a local image cannot be loaded', async () => {
+    const load = vi.fn().mockRejectedValue('image is unavailable');
+    render(
+      <LocalImageLoaderProvider load={load}>
+        <Markdown text="![missing chart](out/chart.png)" />
+      </LocalImageLoaderProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Load image' }));
+    await screen.findByRole('button', { name: 'Try again' });
+    expect(screen.getByText('missing chart')).toBeTruthy();
+    expect(screen.queryByRole('img')).toBeNull();
+  });
+
+  it('keeps data images direct and https images on the remote loader with a local loader present', async () => {
+    const localLoad = vi.fn();
+    const remoteLoad = vi.fn().mockResolvedValue(PNG_DATA_URI);
+    render(
+      <LocalImageLoaderProvider load={localLoad}>
+        <RemoteImageLoaderProvider load={remoteLoad}>
+          <Markdown text={`![chart](${PNG_DATA_URI})\n\n![remote](https://example.com/a.png)`} />
+        </RemoteImageLoaderProvider>
+      </LocalImageLoaderProvider>,
+    );
+    expect(screen.getByRole('img', { name: 'chart' }).getAttribute('src')).toBe(PNG_DATA_URI);
+    fireEvent.click(screen.getByRole('button', { name: 'Load image' }));
+    await screen.findByRole('img', { name: 'remote' });
+    expect(remoteLoad).toHaveBeenCalledWith({ url: 'https://example.com/a.png' });
+    expect(localLoad).not.toHaveBeenCalled();
+  });
+
   it('emits no remote src for an http image and names its host instead', () => {
     const { container } = render(
       <Markdown text="![the failing board](https://evil.example.com/track/abc.png)" />,

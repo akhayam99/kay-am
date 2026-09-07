@@ -34,7 +34,7 @@ export const getWorkspaceOverrides = async (
   workspaceId: WorkspaceId,
 ): Promise<OverrideSettings | null> => {
   const rows = await db.select<OverrideRow>(
-    `SELECT default_provider_id, default_workflow_id, default_branch_prefix, parallel_enabled, default_verbosity, provider_bindings, task_models, role_models, parallel_agents, provider_pool
+    `SELECT default_provider_id, default_workflow_id, default_branch_prefix, parallel_enabled, default_verbosity, provider_bindings, task_models, role_models, parallel_agents, provider_pool, attribution_footer
      FROM workspaces WHERE id = ?`,
     [workspaceId],
   );
@@ -47,7 +47,7 @@ export const getProjectOverrides = async (
   projectId: ProjectId,
 ): Promise<OverrideSettings | null> => {
   const rows = await db.select<OverrideRow>(
-    `SELECT default_provider_id, default_workflow_id, default_branch_prefix, parallel_enabled, default_verbosity, provider_bindings, task_models, role_models, parallel_agents, provider_pool
+    `SELECT default_provider_id, default_workflow_id, default_branch_prefix, parallel_enabled, default_verbosity, provider_bindings, task_models, role_models, parallel_agents, provider_pool, attribution_footer
      FROM projects WHERE id = ?`,
     [projectId],
   );
@@ -72,6 +72,7 @@ export const setWorkspaceOverrides = async (
          role_models = ?,
          parallel_agents = ?,
          provider_pool = ?,
+         attribution_footer = ?,
          updated_at = ?
      WHERE id = ?`,
     [
@@ -85,6 +86,7 @@ export const setWorkspaceOverrides = async (
       serializeRoleModels(overrides.roleModels),
       overrides.parallelAgents === null ? null : overrides.parallelAgents ? 1 : 0,
       serializeProviderPool({ providerPool: overrides.providerPool }),
+      overrides.attributionFooter === null ? null : overrides.attributionFooter ? 1 : 0,
       Date.now(),
       workspaceId,
     ],
@@ -108,6 +110,7 @@ export const setProjectOverrides = async (
          role_models = ?,
          parallel_agents = ?,
          provider_pool = ?,
+         attribution_footer = ?,
          updated_at = ?
      WHERE id = ?`,
     [
@@ -121,6 +124,7 @@ export const setProjectOverrides = async (
       serializeRoleModels(overrides.roleModels),
       overrides.parallelAgents === null ? null : overrides.parallelAgents ? 1 : 0,
       serializeProviderPool({ providerPool: overrides.providerPool }),
+      overrides.attributionFooter === null ? null : overrides.attributionFooter ? 1 : 0,
       Date.now(),
       projectId,
     ],

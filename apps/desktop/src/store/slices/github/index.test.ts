@@ -412,6 +412,7 @@ function buildWorkspace(overrides: Partial<Workspace> = {}): Workspace {
       roleModels: null,
       parallelAgents: null,
       providerPool: null,
+      attributionFooter: null,
     },
     createdAt: NOW,
     updatedAt: NOW,
@@ -438,6 +439,7 @@ function buildProject(overrides: Partial<Project> = {}): Project {
       roleModels: null,
       parallelAgents: null,
       providerPool: null,
+      attributionFooter: null,
     },
     createdAt: NOW,
     updatedAt: NOW,
@@ -1348,7 +1350,7 @@ describe('store contract', () => {
       expect(addReplySpy).toHaveBeenCalledWith(
         expect.anything(),
         persisted.threadId,
-        persisted.reply,
+        `${persisted.reply}\n\n*Written by Goodboy*`,
         expect.anything(),
       );
     });
@@ -1494,7 +1496,7 @@ describe('store contract', () => {
       expect(addReplySpy).toHaveBeenCalledWith(
         expect.anything(),
         'PRRT_1',
-        '**Not applying.**\n\n**Resolution.** Closed without a change: the requested behavior is intentional',
+        `**Not applying.**\n\n**Resolution.** Closed without a change: the requested behavior is intentional\n\n*Written by Goodboy*`,
         expect.anything(),
       );
       expect(resolveThreadSpy).toHaveBeenCalledOnce();

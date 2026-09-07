@@ -42,6 +42,7 @@ const EMPTY_OVERRIDES: OverrideSettings = {
   roleModels: null,
   parallelAgents: null,
   providerPool: null,
+  attributionFooter: null,
 };
 
 const insertCurrentWorkspace = async ({

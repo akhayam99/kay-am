@@ -15,6 +15,7 @@ import {
   gitlabMrDiffRefs,
 } from '../../../features/integrations/gitlab/client';
 import { tauriDatabase } from '../../../shared/lib/db';
+import { appendAttribution, isAttributionEnabled } from '../../../shared/utils/attribution';
 import { computeStaleDrafts } from './computeStaleDrafts';
 import { resolveReviewTarget, type ReviewTarget } from './resolveReviewTarget';
 import { getSessionRepo } from '../worktrees/getSessionRepo';
@@ -237,6 +238,15 @@ export const publishPrReview = (set: SetFn, get: GetFn) => {
     const files = parseUnifiedDiff(diff);
     const { fresh, stale } = computeStaleDrafts({ drafts, files });
 
+    const summaryBody =
+      opts.body.trim().length === 0
+        ? opts.body
+        : appendAttribution({
+            body: opts.body,
+            isEnabled: isAttributionEnabled({ overrides: get().workspaceOverrides[workspace.id] }),
+            syntax: 'markdown',
+          });
+
     const outcome =
       target.provider === 'github'
         ? await publishGithub({
@@ -244,7 +254,7 @@ export const publishPrReview = (set: SetFn, get: GetFn) => {
             repo,
             target,
             verdict: opts.verdict,
-            body: opts.body,
+            body: summaryBody,
             fresh,
           })
         : await publishGitlab({
@@ -253,7 +263,7 @@ export const publishPrReview = (set: SetFn, get: GetFn) => {
             workspace,
             target,
             verdict: opts.verdict,
-            body: opts.body,
+            body: summaryBody,
             fresh,
           });
 

@@ -1,3 +1,5 @@
+import { appendAttribution } from '../../../shared/utils/attribution';
+
 type Closure = { commitSha?: string; reason?: string; reply?: string };
 
 const VERDICT_FIXED = '**Valid.**';
@@ -11,10 +13,17 @@ const commitLine = (sha: string, prUrl: string | null): string => {
     : `**Resolution.** Fixed in \`${short}\`.`;
 };
 
-export const buildResolutionReplyBody = (
-  closure: Closure | undefined,
-  prUrl: string | null,
-): string | null => {
+type Params = {
+  readonly closure: Closure | undefined;
+  readonly prUrl: string | null;
+  readonly isAttributed: boolean;
+};
+
+export const buildResolutionReplyBody = ({
+  closure,
+  prUrl,
+  isAttributed,
+}: Params): string | null => {
   if (!closure) {
     return null;
   }
@@ -22,13 +31,19 @@ export const buildResolutionReplyBody = (
   const sha = closure.commitSha?.trim() ?? '';
   const reason = closure.reason?.trim() ?? '';
 
-  if (sha.length > 0) {
-    const verdict = reply.length > 0 ? `${VERDICT_FIXED} ${reply}` : VERDICT_FIXED;
-    return [verdict, commitLine(sha, prUrl)].join('\n\n');
-  }
-  if (reason.length > 0) {
-    const verdict = reply.length > 0 ? `${VERDICT_CLOSED} ${reply}` : VERDICT_CLOSED;
-    return [verdict, `**Resolution.** Closed without a change: ${reason}`].join('\n\n');
-  }
-  return reply.length > 0 ? reply : null;
+  const body = (() => {
+    if (sha.length > 0) {
+      const verdict = reply.length > 0 ? `${VERDICT_FIXED} ${reply}` : VERDICT_FIXED;
+      return [verdict, commitLine(sha, prUrl)].join('\n\n');
+    }
+    if (reason.length > 0) {
+      const verdict = reply.length > 0 ? `${VERDICT_CLOSED} ${reply}` : VERDICT_CLOSED;
+      return [verdict, `**Resolution.** Closed without a change: ${reason}`].join('\n\n');
+    }
+    return reply.length > 0 ? reply : null;
+  })();
+
+  return body === null
+    ? null
+    : appendAttribution({ body, isEnabled: isAttributed, syntax: 'markdown' });
 };

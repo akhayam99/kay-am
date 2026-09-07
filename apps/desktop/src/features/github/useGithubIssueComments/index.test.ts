@@ -12,6 +12,8 @@ vi.mock('../github', () => ({
   ghCreateIssueComment: h.ghCreateIssueComment,
 }));
 
+import { overridesWithAttribution } from '../../../__tests__/helpers/attributionOverrides';
+import { useAppStore } from '../../../store';
 import { useGithubIssueComments } from './index';
 
 const WORKSPACE_ID = 'workspace-1' as WorkspaceId;
@@ -29,6 +31,7 @@ afterEach(() => {
   cleanup();
   h.ghIssueComments.mockReset();
   h.ghCreateIssueComment.mockReset();
+  useAppStore.setState({ workspaceOverrides: {} });
 });
 
 describe('useGithubIssueComments', () => {
@@ -82,9 +85,32 @@ describe('useGithubIssueComments', () => {
     expect(h.ghCreateIssueComment).toHaveBeenCalledWith({
       cwd: '/repo',
       issueNumber: 42,
-      body: 'Shipping this today.',
+      body: `Shipping this today.\n\n*Written by Goodboy*`,
       workspaceId: WORKSPACE_ID,
     });
     await waitFor(() => expect(result.current.comments).toEqual([COMMENT]));
+  });
+
+  it('drops the attribution line when the workspace switched it off', async () => {
+    useAppStore.setState({
+      workspaceOverrides: {
+        [WORKSPACE_ID]: overridesWithAttribution({ attributionFooter: false }),
+      },
+    });
+    h.ghIssueComments.mockResolvedValue([]);
+    h.ghCreateIssueComment.mockResolvedValueOnce(COMMENT);
+    const { result } = renderHook(() =>
+      useGithubIssueComments({ workspaceId: WORKSPACE_ID, rootPath: '/repo', issueNumber: 42 }),
+    );
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await result.current.post?.('Shipping this today.');
+
+    expect(h.ghCreateIssueComment).toHaveBeenCalledWith({
+      cwd: '/repo',
+      issueNumber: 42,
+      body: 'Shipping this today.',
+      workspaceId: WORKSPACE_ID,
+    });
   });
 });

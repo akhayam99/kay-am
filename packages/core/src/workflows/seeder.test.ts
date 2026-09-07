@@ -49,6 +49,7 @@ async function setup() {
         roleModels: null,
         parallelAgents: null,
         providerPool: null,
+        attributionFooter: null,
       },
       createdAt: now(),
       updatedAt: now(),

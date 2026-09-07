@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { WorkspaceId } from '@goodboy/types';
+import type { OverrideSettings } from '@goodboy/types';
 import type { GitlabIssue, GitlabIssueNote } from '../client';
+import { overridesWithAttribution } from '../../../../__tests__/helpers/attributionOverrides';
 
 type StoreGitlabIntegration = { provider: string; config: { host: string } };
 
@@ -10,6 +12,7 @@ const h = vi.hoisted(() => ({
   createNote: vi.fn(async () => 1),
   store: {
     workspaceIntegrations: {} as Record<string, ReadonlyArray<StoreGitlabIntegration>>,
+    workspaceOverrides: {} as Record<string, OverrideSettings>,
   },
 }));
 
@@ -59,6 +62,7 @@ beforeEach(() => {
   h.store.workspaceIntegrations = {
     [WORKSPACE_ID]: [{ provider: 'gitlab', config: { host: 'https://gitlab.com' } }],
   };
+  h.store.workspaceOverrides = {};
 });
 
 afterEach(cleanup);
@@ -110,8 +114,30 @@ describe('useGitlabIssueNotes', () => {
       host: 'https://gitlab.com',
       projectPath: 'acme/web',
       issueIid: 7,
-      body: 'looks good',
+      body: `looks good\n\n*Written by Goodboy*`,
+      projectId: undefined,
     });
     await waitFor(() => expect(h.list).toHaveBeenCalledTimes(2));
+  });
+
+  it('drops the attribution line when the workspace switched it off', async () => {
+    h.store.workspaceOverrides = {
+      [WORKSPACE_ID]: overridesWithAttribution({ attributionFooter: false }),
+    };
+    const { result } = renderHook(() =>
+      useGitlabIssueNotes({ issue: ISSUE, workspaceId: WORKSPACE_ID }),
+    );
+    await waitFor(() => expect(h.list).toHaveBeenCalledOnce());
+
+    await result.current.post?.('looks good');
+
+    expect(h.createNote).toHaveBeenCalledWith({
+      workspaceId: WORKSPACE_ID,
+      host: 'https://gitlab.com',
+      projectPath: 'acme/web',
+      issueIid: 7,
+      body: 'looks good',
+      projectId: undefined,
+    });
   });
 });

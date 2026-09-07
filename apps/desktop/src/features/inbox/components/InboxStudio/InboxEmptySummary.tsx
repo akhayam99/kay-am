@@ -10,17 +10,48 @@ import { ICON_SIZE } from '../../../../shared/components/conceptIcons';
 
 type Props = {
   readonly records: ReadonlyArray<InboxRecord>;
+  readonly hasVisibleRecords: boolean;
   readonly hasFiltersActive: boolean;
   readonly onClearFilters: () => void;
   readonly onOpenIntegrations: () => void;
 };
 
+type Reason = 'nothing-connected' | 'no-matches' | 'no-selection';
+
+type ReasonCopy = {
+  readonly title: string;
+  readonly description: string;
+};
+
+const REASON_COPY: Record<Reason, ReasonCopy> = {
+  'nothing-connected': {
+    title: 'Inbox is empty',
+    description: 'Connect a provider to collect issues, reviews, threads and errors here.',
+  },
+  'no-matches': {
+    title: 'No matching items',
+    description: 'Adjust the filters to bring items back into the list.',
+  },
+  'no-selection': {
+    title: 'Nothing selected',
+    description: 'Pick an item from the list to open it here.',
+  },
+};
+
 export const InboxEmptySummary = ({
   records,
+  hasVisibleRecords,
   hasFiltersActive,
   onClearFilters,
   onOpenIntegrations,
 }: Props) => {
+  const reason: Reason = ((): Reason => {
+    if (hasVisibleRecords) {
+      return 'no-selection';
+    }
+    return records.length === 0 && !hasFiltersActive ? 'nothing-connected' : 'no-matches';
+  })();
+  const copy = REASON_COPY[reason];
   const counts = kindFilterCounts({ records });
   const providerCounts = INBOX_PROVIDERS.map((provider) => ({
     provider,
@@ -33,14 +64,8 @@ export const InboxEmptySummary = ({
         <div className={cn('flex flex-col gap-6', PANE_RHYTHM.body)}>
           <div className="flex flex-col gap-2">
             <Eyebrow label="Inbox summary" />
-            <h2 className="text-lg font-semibold text-foreground">
-              {hasFiltersActive ? 'No matching items' : 'Inbox is empty'}
-            </h2>
-            <p className="max-w-2xl text-sm text-muted-foreground">
-              {hasFiltersActive
-                ? 'Adjust the filters to bring items back into the list.'
-                : 'Connect a provider to collect issues, reviews, threads and errors here.'}
-            </p>
+            <h2 className="text-lg font-semibold text-foreground">{copy.title}</h2>
+            <p className="max-w-2xl text-sm text-muted-foreground">{copy.description}</p>
           </div>
 
           <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
@@ -91,17 +116,19 @@ export const InboxEmptySummary = ({
             </div>
           ) : null}
 
-          <div className="flex items-center gap-2">
-            {hasFiltersActive ? (
-              <Button variant="secondary" size="sm" onClick={onClearFilters}>
-                Clear filters
-              </Button>
-            ) : (
-              <Button variant="secondary" size="sm" onClick={onOpenIntegrations}>
-                Open integrations
-              </Button>
-            )}
-          </div>
+          {reason === 'no-selection' ? null : (
+            <div className="flex items-center gap-2">
+              {reason === 'no-matches' ? (
+                <Button variant="secondary" size="sm" onClick={onClearFilters}>
+                  Clear filters
+                </Button>
+              ) : (
+                <Button variant="secondary" size="sm" onClick={onOpenIntegrations}>
+                  Open integrations
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </ScrollFade>
     </div>

@@ -1,6 +1,7 @@
 import { addReviewThreadReply } from '@goodboy/core';
 import type { SessionId } from '@goodboy/types';
 import { tauriGhRunner } from '../../../features/github/github';
+import { isSessionAttributionEnabled } from '../../sessionAttribution';
 import { threadOutcome } from '../resolve/threadOutcome';
 import { buildResolutionReplyBody } from './buildResolutionReplyBody';
 import { resolverReplyForThread } from './resolverReplyForThread';
@@ -53,10 +54,11 @@ export const postThreadReply = async ({
     ],
   });
   const pr = get().sessionGithub[sessionId]?.pr ?? null;
-  const replyBody = buildResolutionReplyBody(
-    reply === null ? closure : { ...closure, reply },
-    pr?.url ?? null,
-  );
+  const replyBody = buildResolutionReplyBody({
+    closure: reply === null ? closure : { ...closure, reply },
+    prUrl: pr?.url ?? null,
+    isAttributed: isSessionAttributionEnabled({ get, sessionId }),
+  });
   if (replyBody === null) {
     return false;
   }

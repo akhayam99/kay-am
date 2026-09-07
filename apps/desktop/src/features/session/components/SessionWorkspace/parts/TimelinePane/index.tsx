@@ -232,6 +232,9 @@ export const TimelinePane = ({ session, runs, actions, kickoff }: Props) => {
     if (entry.kind !== 'event' || entry.event.kind !== 'project_materialized') {
       return null;
     }
+    if (entry.projectRun != null) {
+      return null;
+    }
     const projectId = entry.event.payload?.projectId ?? null;
     if (projectId == null) {
       return null;

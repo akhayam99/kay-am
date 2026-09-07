@@ -175,6 +175,7 @@ describe('the advertised verbs', () => {
         roleModels: null,
         parallelAgents: null,
         providerPool: null,
+        attributionFooter: null,
       },
       createdAt: now,
       updatedAt: now,

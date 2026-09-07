@@ -49,6 +49,7 @@ type Props = {
   readonly host?: string | null;
   readonly onRefresh?: () => void;
   readonly onClose: () => void;
+  readonly headerActions?: ReactNode;
   readonly dock?: ReactNode;
 };
 
@@ -64,6 +65,7 @@ export const MrDetailPanel = ({
   host,
   onRefresh,
   onClose,
+  headerActions,
   dock,
 }: Props) => {
   const session = useAppStore((s) =>
@@ -261,6 +263,7 @@ export const MrDetailPanel = ({
                       )}
                     </Button>
                   ) : null}
+                  {headerActions}
                 </>
               }
               externalRef={{ url: mr.webUrl, label: 'MR' }}

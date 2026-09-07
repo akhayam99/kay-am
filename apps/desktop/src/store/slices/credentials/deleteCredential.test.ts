@@ -49,6 +49,7 @@ const boundOverride: OverrideSettings = {
   roleModels: null,
   parallelAgents: null,
   providerPool: null,
+  attributionFooter: null,
 };
 
 const makeHarness = ({ boundBy }: { readonly boundBy: ReadonlyArray<WorkspaceId> }) => {

@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { IsoDateTime, PendingResolution, SessionId, WorkspaceId } from '@goodboy/types';
+import type {
+  IsoDateTime,
+  OverrideSettings,
+  PendingResolution,
+  SessionId,
+  WorkspaceId,
+} from '@goodboy/types';
 import type { GetFn, SetFn } from './types';
 
 type GhRun = (
@@ -58,6 +64,7 @@ type State = {
   updateResolveThread: ReturnType<typeof vi.fn>;
   sessions: ReadonlyArray<{ id: SessionId; workspaceId: WorkspaceId }>;
   workspaces: ReadonlyArray<{ id: WorkspaceId }>;
+  workspaceOverrides: Record<string, OverrideSettings>;
   sessionGithub: Record<string, { pr: { number: number } | null }>;
   sessionResolvedThreads: Record<string, ReadonlyArray<string>>;
   resolverThreadOutcomes: Record<string, Record<string, unknown>>;
@@ -76,6 +83,7 @@ const makeStore = () => {
     updateResolveThread: vi.fn(async () => true),
     sessions: [{ id: SESSION_ID, workspaceId: WORKSPACE_ID }],
     workspaces: [{ id: WORKSPACE_ID }],
+    workspaceOverrides: {},
     sessionGithub: { [SESSION_ID]: { pr: { number: 42 } } },
     sessionResolvedThreads: {},
     resolverThreadOutcomes: {},

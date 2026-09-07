@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { WorkspaceId } from '@goodboy/types';
+import type { OverrideSettings, WorkspaceId } from '@goodboy/types';
 import {
   gitlabCreateIssueNote,
   gitlabListIssueNotes,
@@ -14,6 +14,7 @@ type StoreGitlabIntegration = { provider: string; config: { host: string } };
 const h = vi.hoisted(() => ({
   store: {
     workspaceIntegrations: {} as Record<string, ReadonlyArray<StoreGitlabIntegration>>,
+    workspaceOverrides: {} as Record<string, OverrideSettings>,
   },
 }));
 
@@ -173,7 +174,8 @@ describe('GitlabIssueDetail', () => {
         host: 'https://gitlab.com',
         projectPath: 'acme/web',
         issueIid: 7,
-        body: 'Reproduced on main',
+        body: `Reproduced on main\n\n*Written by Goodboy*`,
+        projectId: undefined,
       }),
     );
     await waitFor(() => expect(listIssueNotes).toHaveBeenCalledTimes(2));

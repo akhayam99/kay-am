@@ -3,6 +3,8 @@ import { formatError } from '@goodboy/ui';
 import type { ProjectId, WorkspaceId } from '@goodboy/types';
 import { jiraCreateComment, jiraListComments, type JiraComment, type JiraIssue } from '../client';
 import { useJiraConfig } from '../useJiraConfig';
+import { useAppStore } from '../../../../store';
+import { appendAttribution, isAttributionEnabled } from '../../../../shared/utils/attribution';
 
 type Params = {
   readonly issue: JiraIssue | null;
@@ -23,6 +25,9 @@ export const useJiraIssueComments = ({ issue, workspaceId, projectId }: Params):
   const siteUrl = config?.siteUrl ?? null;
   const email = config?.email ?? null;
   const issueKey = issue?.key ?? null;
+  const isAttributed = useAppStore((state) =>
+    isAttributionEnabled({ overrides: state.workspaceOverrides[workspaceId] }),
+  );
   const [comments, setComments] = useState<ReadonlyArray<JiraComment>>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,11 +83,11 @@ export const useJiraIssueComments = ({ issue, workspaceId, projectId }: Params):
         siteUrl,
         email,
         issueKey,
-        body,
+        body: appendAttribution({ body, isEnabled: isAttributed, syntax: 'markdown' }),
       });
       setComments((current) => [...current, created]);
     },
-    [workspaceId, projectId, siteUrl, email, issueKey],
+    [workspaceId, projectId, siteUrl, email, issueKey, isAttributed],
   );
 
   const isReady = siteUrl != null && email != null && issueKey != null;

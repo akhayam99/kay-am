@@ -7,6 +7,55 @@ version in the same PR that bumps the version numbers (see
 `docs/release-command.md`), before the tag is pushed: the release build fails
 if it can't find a matching `## Goodboy vX.Y.Z` heading.
 
+## Goodboy v0.2.17
+
+Images an agent writes into the worktree now render in place, every
+comment Goodboy posts carries a signature you can turn off, summarizers
+switch providers instead of stalling on a usage limit, and GPT-6 Astra
+joins the codex model catalog.
+
+### [#1676] Images an agent writes now render in place
+
+An image an agent writes into the worktree used to show up as a bare
+file path. It now renders, both in a message written as markdown and
+in the tool call that produced it, so you see the picture instead of
+reading its location.
+
+### [#1675] Every comment Goodboy posts now says so
+
+Every comment Goodboy posts to GitHub, GitLab, Bitbucket, Jira, Linear
+or Slack now ends with a line saying it was written by Goodboy. A
+workspace setting turns the attribution off; it ships on by default.
+A review summary carries the signature once rather than on every
+inline comment.
+
+### [#1674] Summarizers switch providers instead of retrying a dead one
+
+A summarizer that hit its provider's usage limit used to keep asking
+the same provider and fail on every turn. It now switches to an
+aligned model on another connected provider, puts the exhausted one
+on cooldown, and says so once instead of retrying forever.
+
+### [#1671] GPT-6 Astra joins the codex model catalog
+
+OpenAI's GPT-6 Astra is now available for agents from the codex model
+catalog, priced and placed in the automatic routing order alongside
+the rest.
+
+### [#1677] The inbox no longer forces a selection
+
+The inbox used to force-select the first item on open, so its empty
+summary state was unreachable. Selection is now yours, and the item
+header carries a close control that takes you back to nothing
+selected.
+
+### [#1673] Resolver outcomes persist across restarts
+
+What a resolver decided, committed or drafted on a pull request
+review comment now lives in the database instead of being rebuilt by
+re-reading the transcript, so it survives a restart. No visible
+change on its own; it is the ground for further resolve work.
+
 ## Goodboy v0.2.16
 
 The website's landing page rewrites around what Goodboy does for you,

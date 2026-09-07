@@ -25,6 +25,7 @@ const OVERRIDES: OverrideSettings = {
   roleModels: null,
   parallelAgents: null,
   providerPool: null,
+  attributionFooter: null,
 };
 const PROJECT: Project = {
   id: PROJECT_ID,

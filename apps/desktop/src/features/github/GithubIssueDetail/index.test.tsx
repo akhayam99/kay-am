@@ -94,7 +94,7 @@ describe('GithubIssueDetail', () => {
       expect(h.ghCreateIssueComment).toHaveBeenCalledWith({
         cwd: '/repo',
         issueNumber: 42,
-        body: 'On it.',
+        body: `On it.\n\n*Written by Goodboy*`,
         workspaceId: 'workspace-1',
       }),
     );

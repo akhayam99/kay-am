@@ -61,6 +61,7 @@ async function makeSeededDb(): Promise<DbInterface> {
         roleModels: null,
         parallelAgents: null,
         providerPool: null,
+        attributionFooter: null,
       },
       createdAt: FIXED_NOW,
       updatedAt: FIXED_NOW,

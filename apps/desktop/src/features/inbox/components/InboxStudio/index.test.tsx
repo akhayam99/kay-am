@@ -55,24 +55,25 @@ vi.mock('./InboxDetail', () => ({
     record,
     hasFiltersActive,
     onClearFilters,
+    onDeselect,
     onOpenIntegrations,
   }: {
     record: InboxRecord | null;
     hasFiltersActive: boolean;
     onClearFilters: () => void;
+    onDeselect: () => void;
     onOpenIntegrations: () => void;
   }) => (
     <div data-testid="detail">
       {record?.identifier ?? 'none'}
+      {record == null ? null : (
+        <button type="button" data-testid="detail-deselect" onClick={onDeselect} />
+      )}
       {record == null && hasFiltersActive ? (
-        <button type="button" data-testid="detail-clear-filters" onClick={onClearFilters}>
-          clear
-        </button>
+        <button type="button" data-testid="detail-clear-filters" onClick={onClearFilters} />
       ) : null}
       {record == null && !hasFiltersActive ? (
-        <button type="button" data-testid="detail-open-integrations" onClick={onOpenIntegrations}>
-          integrations
-        </button>
+        <button type="button" data-testid="detail-open-integrations" onClick={onOpenIntegrations} />
       ) : null}
     </div>
   ),
@@ -304,12 +305,37 @@ describe('InboxStudio', () => {
     expect(screen.queryByText('Ship the inbox')).toBeNull();
   });
 
-  it('auto selects the first visible record and follows a click', () => {
+  it('opens with nothing selected and follows a click', () => {
     renderStudio();
+
+    expect(screen.getByTestId('detail').textContent).toBe('none');
+
+    fireEvent.click(screen.getByText('Ship the inbox'));
+
+    expect(screen.getByTestId('detail').textContent).toBe('ENG-1');
+  });
+
+  it('returns to the empty state when the record is closed', () => {
+    renderStudio();
+
+    fireEvent.click(screen.getByText('Ship the inbox'));
+    expect(screen.getByTestId('detail').textContent).toBe('ENG-1');
+
+    fireEvent.click(screen.getByTestId('detail-deselect'));
+
+    expect(screen.getByTestId('detail').textContent).toBe('none');
+    expect(screen.getByText('Ship the inbox')).toBeDefined();
+  });
+
+  it('selects with the arrow keys from the empty state', () => {
+    renderStudio();
+
+    const listbox = screen.getByRole('listbox', { name: 'Inbox items' });
+    fireEvent.keyDown(listbox, { key: 'ArrowDown' });
 
     expect(screen.getByTestId('detail').textContent).toBe('GBY-1');
 
-    fireEvent.click(screen.getByText('Ship the inbox'));
+    fireEvent.keyDown(listbox, { key: 'ArrowDown' });
 
     expect(screen.getByTestId('detail').textContent).toBe('ENG-1');
   });
@@ -317,12 +343,23 @@ describe('InboxStudio', () => {
   it('keeps the selected record in the detail when the filters hide it', () => {
     renderStudio();
 
+    fireEvent.click(screen.getByText('TypeError boom'));
+
     fireEvent.change(screen.getByLabelText('Search the inbox'), {
       target: { value: 'nothing matches this' },
     });
 
     expect(screen.getByText('No matching items')).toBeDefined();
     expect(screen.getByTestId('detail').textContent).toBe('GBY-1');
+  });
+
+  it('never forces a selection when the kind filter changes', () => {
+    renderStudio();
+
+    fireEvent.click(screen.getByRole('tab', { name: /Errors/ }));
+
+    expect(screen.getByText('TypeError boom')).toBeDefined();
+    expect(screen.getByTestId('detail').textContent).toBe('none');
   });
 
   it('shows a nothing-connected empty state when the inbox has no records', () => {
@@ -390,13 +427,22 @@ describe('InboxStudio', () => {
     expect(screen.getByTestId('detail').textContent).toBe('GBY-2');
   });
 
-  it('reselects the first scoped record when the seeded selection falls outside the session scope', () => {
+  it('shows the empty state when the seeded selection falls outside the session scope', () => {
     h.records = [linkedSentryError, sentryError, linearIssue, githubIssue];
 
     renderStudio({ initialSessionId: LINKED_SESSION_ID, initialRecordKey: sentryError.key });
 
     expect(screen.getByText('Session: Fix the crash')).toBeDefined();
-    expect(screen.getByTestId('detail').textContent).toBe('GBY-2');
+    expect(screen.getByTestId('detail').textContent).toBe('none');
+    expect(screen.getByText('RangeError boom')).toBeDefined();
+  });
+
+  it('keeps the session scope free of a forced selection', () => {
+    h.records = [linkedSentryError, sentryError, linearIssue, githubIssue];
+
+    renderStudio({ initialSessionId: LINKED_SESSION_ID });
+
+    expect(screen.getByTestId('detail').textContent).toBe('none');
     expect(screen.getByText('RangeError boom')).toBeDefined();
   });
 

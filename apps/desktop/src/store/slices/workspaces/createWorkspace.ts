@@ -22,6 +22,7 @@ const EMPTY_OVERRIDES: OverrideSettings = {
   roleModels: null,
   parallelAgents: null,
   providerPool: null,
+  attributionFooter: null,
 };
 
 export const createWorkspace = (set: SetFn, get: GetFn) => {

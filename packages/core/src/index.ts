@@ -164,6 +164,7 @@ export {
   type TurnFailureKind,
   type TurnFallbackPlan,
 } from './providers/planTurnFallback';
+export { planTaskModelFallback } from './providers/task-model-fallback';
 export { cliModelId } from './providers/cliModelId';
 export { cliExitEvents } from './providers/shared/cli-exit-events';
 export { extractAuxOutput, type AuxOutput, type AuxUsage } from './providers/aux-output';

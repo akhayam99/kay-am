@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Agent, AgentId, IsoDateTime, Session, SessionId, WorkspaceId } from '@goodboy/types';
+import type {
+  Agent,
+  AgentId,
+  IsoDateTime,
+  ProviderId,
+  Session,
+  SessionId,
+  WorkspaceId,
+} from '@goodboy/types';
 
 const { invokeAgentUpdateStatusSpy, summarizeStepOutputSpy } = vi.hoisted(() => ({
   invokeAgentUpdateStatusSpy: vi.fn(),
@@ -66,8 +74,15 @@ type State = {
   sessionPhaseRuns: Record<string, ReadonlyArray<Agent>>;
   transcripts: Record<string, ReadonlyArray<{ kind: string; delta?: string }>>;
   workspaceOverrides: Record<string, unknown>;
+  providers: ReadonlyArray<{ id: ProviderId; connection: 'connected' }>;
+  providerCooldowns: Readonly<Partial<Record<ProviderId, number>>>;
   emitNotification: ReturnType<typeof vi.fn>;
 };
+
+const CONNECTED_PROVIDERS = [
+  { id: 'anthropic' as ProviderId, connection: 'connected' as const },
+  { id: 'codex' as ProviderId, connection: 'connected' as const },
+];
 
 const buildHarness = (stateOverrides: Partial<State> = {}) => {
   const state: State = {
@@ -85,6 +100,8 @@ const buildHarness = (stateOverrides: Partial<State> = {}) => {
       ],
     },
     workspaceOverrides: {},
+    providers: CONNECTED_PROVIDERS,
+    providerCooldowns: {},
     emitNotification: vi.fn(async () => undefined),
     ...stateOverrides,
   };
@@ -135,6 +152,8 @@ describe('retryStepSummary', () => {
       sessionPhaseRuns: { [SESSION_ID]: [agent] },
       transcripts: { [AGENT_ID]: [{ kind: 'assistant_text', delta: 'output' }] },
       workspaceOverrides: {},
+      providers: CONNECTED_PROVIDERS,
+      providerCooldowns: {},
       emitNotification: vi.fn(async () => undefined),
     };
     const get = (() => state) as unknown as Parameters<typeof retryStepSummary>[1];
@@ -191,6 +210,33 @@ describe('retryStepSummary', () => {
     expect(summarizeStepOutputSpy).toHaveBeenCalledWith(
       expect.objectContaining({ output: 'implemented the feature with tests' }),
     );
+  });
+
+  it('retries on another provider when the default one is cooling down', async () => {
+    summarizeStepOutputSpy.mockResolvedValue('routed summary');
+    const retry = buildHarness({ providerCooldowns: { anthropic: Date.now() + 600_000 } });
+
+    await retry({ sessionId: SESSION_ID, agentId: AGENT_ID });
+
+    expect(summarizeStepOutputSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ providerId: 'codex' }),
+    );
+  });
+
+  it('does not re-fire when every provider is cooling down', async () => {
+    summarizeStepOutputSpy.mockResolvedValue('never reached');
+    const emitNotification = vi.fn(async () => undefined);
+    const retry = buildHarness({
+      providers: [{ id: 'anthropic' as ProviderId, connection: 'connected' as const }],
+      providerCooldowns: { anthropic: Date.now() + 600_000 },
+      emitNotification,
+    });
+
+    await retry({ sessionId: SESSION_ID, agentId: AGENT_ID });
+
+    expect(summarizeStepOutputSpy).not.toHaveBeenCalled();
+    expect(invokeAgentUpdateStatusSpy).not.toHaveBeenCalled();
+    expect(emitNotification).toHaveBeenCalledTimes(1);
   });
 
   it('returns early when session is not found', async () => {

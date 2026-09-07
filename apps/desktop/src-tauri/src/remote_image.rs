@@ -110,7 +110,7 @@ fn is_image_content_type(value: &str) -> bool {
     essence.starts_with("image/") && !essence.contains("svg")
 }
 
-fn sniff_image_mime(bytes: &[u8]) -> Option<&'static str> {
+pub(crate) fn sniff_image_mime(bytes: &[u8]) -> Option<&'static str> {
     if bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]) {
         return Some("image/png");
     }
