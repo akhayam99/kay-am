@@ -22,6 +22,7 @@ import { useGithubConnection } from '../../../../integrations/github/useGithubCo
 import { useRemoteHostKind } from '../../../../worktree/useRemoteHostKind';
 import { gitlabMrStateKind } from '../../../../integrations/gitlab/gitlabMrStateKind';
 import { closingIssueReferences } from '../../../../github/closingIssueReferences';
+import { usePrDraftAgentRunning } from '../../../../github/usePrDraftAgentRunning';
 import { closingReferenceLines } from '../../../../github/closingReferenceLines';
 import { removeClosingReference } from '../../../../github/removeClosingReference';
 import { RefreshIconButton } from '@goodboy/ui';
@@ -329,6 +330,7 @@ const GithubPrCard = ({
   );
   const projects = useAppStore((state) => state.projects);
   const githubConnection = useGithubConnection({ workspaceId: session.workspaceId });
+  const isDraftAgentRunning = usePrDraftAgentRunning({ sessionId });
   const isGithubConnected = resolveIntegrationConnection({
     provider: 'github',
     integrations: workspaceIntegrations,
@@ -463,12 +465,20 @@ const GithubPrCard = ({
 
   if (!pr) {
     const hasLinkedWork = linkedIssues.length > 0 || codeHostTasks.length > 0;
-    const openAction = (
+    const openAction = isDraftAgentRunning ? (
+      <Button size="sm" variant="ghost" onClick={() => onSelectLens('agents')}>
+        <CONCEPT_ICONS.agents size={ICON_SIZE.row} aria-hidden className="shrink-0" />
+        Follow the drafting agent
+      </Button>
+    ) : (
       <Button size="sm" onClick={onOpenStudio}>
         Draft a pull request
         <ArrowRight size={ICON_SIZE.row} aria-hidden className="shrink-0 opacity-70" />
       </Button>
     );
+    const emptyDescription = isDraftAgentRunning
+      ? 'An agent is already opening a pull request for this session. Follow it instead of starting a second one.'
+      : null;
     if (!hasLinkedWork) {
       return shell({
         children: (
@@ -476,7 +486,10 @@ const GithubPrCard = ({
             tone={CONCEPT_TONE.pr}
             icon={CONCEPT_ICONS.pr}
             title="Open a pull or merge request"
-            description="No issues or external tasks are linked to this session yet. Turn its work into a pull or merge request, or hand it to an agent that writes one from your commits."
+            description={
+              emptyDescription ??
+              'No issues or external tasks are linked to this session yet. Turn its work into a pull or merge request, or hand it to an agent that writes one from your commits.'
+            }
             action={openAction}
           />
         ),
@@ -496,7 +509,10 @@ const GithubPrCard = ({
             tone={CONCEPT_TONE.pr}
             icon={CONCEPT_ICONS.pr}
             title="No pull or merge request yet"
-            description="Turn this session's work into a pull or merge request when it is ready."
+            description={
+              emptyDescription ??
+              "Turn this session's work into a pull or merge request when it is ready."
+            }
             action={openAction}
           />
         </>

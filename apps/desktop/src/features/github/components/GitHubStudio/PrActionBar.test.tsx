@@ -9,6 +9,7 @@ type Params = {
   readonly canMerge?: boolean;
   readonly canReview?: boolean;
   readonly busy?: ActionBusy;
+  readonly canCreateNew?: boolean;
   readonly onMerge?: () => Promise<void>;
   readonly onSubmitVerdict?: (submission: PrVerdictSubmission) => void;
 };
@@ -35,6 +36,7 @@ const renderActionBar = ({
   canMerge = true,
   canReview = true,
   busy = null,
+  canCreateNew = true,
   onMerge = vi.fn(async () => undefined),
   onSubmitVerdict = vi.fn(),
 }: Params = {}) =>
@@ -50,6 +52,7 @@ const renderActionBar = ({
       onConvertDraft={vi.fn()}
       onClose={vi.fn()}
       onReopen={vi.fn()}
+      canCreateNew={canCreateNew}
       onCreateNew={vi.fn()}
       onMerge={onMerge}
     />,
@@ -137,5 +140,18 @@ describe('PrActionBar', () => {
 
     expect(screen.getByText('Auto-merge on')).toBeDefined();
     expect(screen.queryByText('In merge queue')).toBeNull();
+  });
+});
+
+describe('PrActionBar create new', () => {
+  it('blocks a second pull request while a drafting agent runs', () => {
+    renderActionBar({
+      pr: { ...PR, state: 'closed' },
+      canCreateNew: false,
+    });
+
+    expect(screen.getByRole('button', { name: 'Create new PR' }).hasAttribute('disabled')).toBe(
+      true,
+    );
   });
 });

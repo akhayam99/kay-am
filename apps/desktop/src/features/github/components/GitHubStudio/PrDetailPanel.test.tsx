@@ -39,6 +39,10 @@ type Store = {
     Readonly<Record<string, ReadonlyArray<PullRequestState>>>
   >;
   readonly sessionSelectedPrNumber: Record<string, number | null>;
+  readonly sessionPhaseRuns: Record<
+    string,
+    ReadonlyArray<{ readonly name: string; readonly status: string }>
+  >;
   readonly sessionBranches: Record<string, string>;
   readonly refreshSessionPrDetail: ReturnType<typeof vi.fn>;
   readonly refreshSessionPr: ReturnType<typeof vi.fn>;
@@ -145,6 +149,7 @@ const h = vi.hoisted(() => {
       },
       sessionProjectPrs: { [sessionId]: { 'project-1': [pr] } },
       sessionSelectedPrNumber: {},
+      sessionPhaseRuns: {},
       sessionBranches: { [sessionId]: pr.headBranch },
       refreshSessionPrDetail: vi.fn(async () => undefined),
       refreshSessionPr: vi.fn(async () => undefined),

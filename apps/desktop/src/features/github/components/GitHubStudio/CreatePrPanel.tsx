@@ -15,6 +15,8 @@ import {
 } from '@goodboy/ui';
 import { AlertTriangle, ArrowRight, GitBranch, PenLine } from 'lucide-react';
 import { ghBaseBranches } from '../../github';
+import { PR_DRAFT_AGENT_NAME } from '../../prDraftAgent';
+import { usePrDraftAgentRunning } from '../../usePrDraftAgentRunning';
 import { closingIssueReferences } from '../../closingIssueReferences';
 import { appendOperatorNotes } from '../../../session/utils/appendOperatorNotes';
 import { AgentSpawnConfig } from '../../../session/components/AgentSpawnConfig';
@@ -23,7 +25,7 @@ import { taskModelAgentSpawnConfig } from '../../../session/components/AgentSpaw
 import { BranchCombobox } from '../../../worktree/BranchCombobox';
 import type { LocalBranchInfo } from '../../../worktree/worktree';
 import { EMPTY_ARRAY, useAppStore } from '../../../../store';
-import { useToast } from '../../../../app/components/Toast';
+import { useAgentStartedToast } from '../../../../shared/hooks/useAgentStartedToast';
 import { useSessionRepo } from '../../../../store/slices/worktrees/useSessionRepo';
 import { openUrl } from '../../../../shared/lib/editor';
 import { CONCEPT_ICONS, ICON_SIZE } from '../../../../shared/components/conceptIcons';
@@ -36,7 +38,6 @@ type Props = {
   readonly defaultTitle: string;
   readonly closedPr?: { number: number; url: string };
   readonly onCreated: () => void;
-  readonly onStudioClose: () => void;
   readonly onCancel?: () => void;
 };
 
@@ -45,14 +46,14 @@ export const CreatePrPanel = ({
   defaultTitle,
   closedPr,
   onCreated,
-  onStudioClose,
   onCancel,
 }: Props) => {
   const createPrForSession = useAppStore((s) => s.createPrForSession);
   const spawnAgent = useAppStore((s) => s.spawnAgent);
-  const selectAgent = useAppStore((s) => s.selectAgent);
+  const setActiveLens = useAppStore((s) => s.setActiveLens);
   const setCurrentSession = useAppStore((s) => s.setCurrentSession);
-  const { showToast } = useToast();
+  const announceAgentStarted = useAgentStartedToast();
+  const isDraftAgentRunning = usePrDraftAgentRunning({ sessionId });
   const repo = useSessionRepo({ sessionId });
   const branch = repo?.branch ?? null;
   const projectRoot = repo?.repoRoot ?? null;
@@ -135,7 +136,7 @@ export const CreatePrPanel = ({
   }, [projectId, projectRoot, workspaceId]);
 
   const onCreate = async () => {
-    if (busy || title.trim().length === 0) {
+    if (busy !== null || isDraftAgentRunning || title.trim().length === 0) {
       return;
     }
     setBusy('create');
@@ -151,7 +152,7 @@ export const CreatePrPanel = ({
   };
 
   const onCreateWithAi = async () => {
-    if (busy) {
+    if (busy !== null || isDraftAgentRunning) {
       return;
     }
     setBusy('ai');
@@ -176,25 +177,20 @@ export const CreatePrPanel = ({
         `Then run \`gh pr create\` to open it and report the PR URL.`,
       ].join('\n');
       const agentId = await spawnAgent(sessionId, {
-        name: 'open pull request',
+        name: PR_DRAFT_AGENT_NAME,
         initialPrompt: appendOperatorNotes({ prompt, hint: agentConfig.hint }),
         model: agentConfig.model,
         ...(agentConfig.provider !== '' && { provider: agentConfig.provider }),
         effort: agentConfig.effort,
         focus: 'none',
       });
-      showToast('success', 'An agent is drafting the pull request. You can keep working.', {
+      await setCurrentSession(sessionId);
+      setActiveLens(sessionId, null);
+      announceAgentStarted({
+        sessionId,
+        agentId,
         title: 'Agent started',
-        action: {
-          label: 'Open the agent',
-          onClick: () => {
-            void (async () => {
-              await setCurrentSession(sessionId);
-              await selectAgent(sessionId, agentId);
-              onStudioClose();
-            })();
-          },
-        },
+        message: 'An agent is drafting the pull request. You can keep working.',
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -338,6 +334,12 @@ export const CreatePrPanel = ({
       <footer className="shrink-0 px-6 py-3">
         <div className="mx-auto flex w-full max-w-2xl items-center gap-3">
           <div className="flex min-w-0 flex-1 items-center gap-3">
+            {error == null && isDraftAgentRunning && (
+              <span className="inline-flex min-w-0 items-center gap-1.5 truncate text-xs text-muted-foreground">
+                <CONCEPT_ICONS.agents size={ICON_SIZE.row} aria-hidden className="shrink-0" />
+                An agent is already opening a pull request for this session.
+              </span>
+            )}
             {error != null && (
               <span
                 role="alert"
@@ -357,7 +359,7 @@ export const CreatePrPanel = ({
           {mode === 'manual' ? (
             <Button
               onClick={() => void onCreate()}
-              disabled={busy !== null || title.trim().length === 0}
+              disabled={busy !== null || isDraftAgentRunning || title.trim().length === 0}
               className={cn(busy === 'create' && 'animate-border-pulse')}
             >
               {busy === 'create' ? (
@@ -372,7 +374,7 @@ export const CreatePrPanel = ({
           ) : (
             <Button
               onClick={() => void onCreateWithAi()}
-              disabled={busy !== null}
+              disabled={busy !== null || isDraftAgentRunning}
               className={cn(busy === 'ai' && 'animate-border-pulse')}
             >
               {busy === 'ai' ? (

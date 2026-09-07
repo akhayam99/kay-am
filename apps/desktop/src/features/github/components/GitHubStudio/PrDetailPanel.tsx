@@ -17,6 +17,7 @@ import { selectActiveProjectPrs } from '../../../../store/slices/github/activePr
 import type { CommentThread } from '../../comment-threads';
 import { PullRequestChip } from '../PullRequestChip';
 import { CreatePrPanel } from './CreatePrPanel';
+import { usePrDraftAgentRunning } from '../../usePrDraftAgentRunning';
 import { PrActionBar, type ActionBusy } from './PrActionBar';
 import type { PrVerdictSubmission } from './PrVerdictAction';
 import { PrChecks } from './PrChecks';
@@ -83,6 +84,7 @@ export const PrDetailPanel = ({
   );
 
   const { showToast } = useToast();
+  const isDraftAgentRunning = usePrDraftAgentRunning({ sessionId });
   const [busy, setBusy] = useState<ActionBusy>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [section, setSection] = useState<PrSection>('overview');
@@ -213,12 +215,7 @@ export const PrDetailPanel = ({
   if (activePr == null) {
     return (
       <div className="flex h-full flex-col">
-        <CreatePrPanel
-          sessionId={sessionId}
-          defaultTitle={session.goal}
-          onCreated={onMutated}
-          onStudioClose={onClose}
-        />
+        <CreatePrPanel sessionId={sessionId} defaultTitle={session.goal} onCreated={onMutated} />
       </div>
     );
   }
@@ -311,6 +308,7 @@ export const PrDetailPanel = ({
           onConvertDraft={() => void run('undraft', () => convertPrToDraft(sessionId, num))}
           onClose={() => void run('close', () => closePr(sessionId, num))}
           onReopen={() => void run('reopen', () => reopenPr(sessionId, num))}
+          canCreateNew={!isDraftAgentRunning}
           onCreateNew={() => setCreateOpen(true)}
           onMerge={() => run('merge', () => mergePr(sessionId, num))}
         />
@@ -330,7 +328,6 @@ export const PrDetailPanel = ({
             onMutated();
           }}
           onCancel={() => setCreateOpen(false)}
-          onStudioClose={onClose}
         />
       </StudioDetailLayout>
     );

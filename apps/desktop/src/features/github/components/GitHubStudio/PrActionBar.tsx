@@ -18,6 +18,7 @@ type Props = {
   readonly onConvertDraft: () => void;
   readonly onClose: () => void;
   readonly onReopen: () => void;
+  readonly canCreateNew: boolean;
   readonly onCreateNew: () => void;
   readonly onMerge: () => Promise<void>;
 };
@@ -33,6 +34,7 @@ export const PrActionBar = ({
   onConvertDraft,
   onClose,
   onReopen,
+  canCreateNew,
   onCreateNew,
   onMerge,
 }: Props) => {
@@ -153,7 +155,18 @@ export const PrActionBar = ({
             <RotateCcw size={ICON_SIZE.row} aria-hidden />
             Reopen
           </Button>
-          <Button variant="primary" emphasis="outline" size="sm" onClick={onCreateNew}>
+          <Button
+            variant="primary"
+            emphasis="outline"
+            size="sm"
+            onClick={onCreateNew}
+            disabled={canCreateNew === false || busy !== null}
+            title={
+              canCreateNew
+                ? 'Open a new pull request for this branch'
+                : 'An agent is already opening a pull request for this session'
+            }
+          >
             <Plus size={ICON_SIZE.row} aria-hidden />
             Create new PR
           </Button>
