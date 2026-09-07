@@ -42,7 +42,7 @@ describe('CountToggle', () => {
     expect(onChange).toHaveBeenCalledWith(true);
   });
 
-  it('builds the title from the label and items noun', () => {
+  it('does not set a native title', () => {
     render(
       <CountToggle
         label="Answered"
@@ -54,6 +54,6 @@ describe('CountToggle', () => {
       />,
     );
 
-    expect(screen.getByRole('button').getAttribute('title')).toBe('hide answered questions');
+    expect(screen.getByRole('button').getAttribute('title')).toBeNull();
   });
 });
