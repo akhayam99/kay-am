@@ -104,6 +104,7 @@ export const finalizeWorkflowStep = (set: SetFn, get: GetFn) => {
 
     continueAttempts.delete(agentId);
     const outputSummary = await summarizeWorkflowAgentOutput({
+      set,
       get,
       sessionId,
       agent,

@@ -49,6 +49,12 @@ type OtherProviderParams = {
   readonly weight: number | null;
 };
 
+type AlignedParams = {
+  readonly provider: ProviderId;
+  readonly model: string;
+  readonly candidateProviders: ReadonlyArray<ProviderId>;
+};
+
 const MAX_ATTEMPTS = 2;
 
 const COST_TIER_ORDER: ReadonlyArray<ModelCostTier> = ['cheap', 'mid', 'expensive'];
@@ -114,6 +120,20 @@ const otherProviderPlan = ({
     return null;
   }
   return { provider: target, model };
+};
+
+export const alignedProviderPlan = ({
+  provider,
+  model,
+  candidateProviders,
+}: AlignedParams): TurnFallbackPlan | null => {
+  const failed = descriptorFor({ provider, model });
+  return otherProviderPlan({
+    provider,
+    connectedProviders: candidateProviders,
+    tier: failed?.costTier ?? 'mid',
+    weight: failed?.weight ?? null,
+  });
 };
 
 const preferredPlan = ({

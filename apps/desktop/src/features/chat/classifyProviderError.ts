@@ -7,7 +7,7 @@ type ModelUnavailablePattern = {
   readonly action: ModelUnavailableAction;
 };
 
-type ProviderErrorClassification =
+export type ProviderErrorClassification =
   | { readonly kind: 'authentication' }
   | {
       readonly kind: 'model_not_available';

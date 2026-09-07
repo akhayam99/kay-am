@@ -7,6 +7,7 @@ import {
   extractMaterializeRequests,
   extractPlanFromMarker,
   extractScoutDomains,
+  planTaskModelFallback,
   resolveTaskModel,
   SLOT_BUDGETS,
   Summarizer,
@@ -49,6 +50,13 @@ import type {
 import { tauriDatabase } from '../shared/lib/db';
 import type { AgentKind } from '../features/session/agent-kind';
 import { kindReadsAttachment } from '../features/providers/attachment-routing';
+import { classifyProviderError } from '../features/chat/classifyProviderError';
+import {
+  cooldownWindowEnd,
+  providersCoolingDown,
+  routeTaskModel,
+  withFailureCooldown,
+} from '../features/providers/taskModelRouting';
 import { invokeBudgetRuleList } from '../features/budget/budget';
 import {
   listPlansForSession as invokeListPlansForSession,
@@ -111,6 +119,7 @@ type SummarizerQueueEntry = {
   readonly turnOutput: string;
   readonly oversizeRetried: boolean;
   readonly parseRetried?: boolean;
+  readonly providerAttempt?: number;
   readonly taskModelOverride?: TaskModelPreference;
 };
 
@@ -230,13 +239,54 @@ const runSummarizer = async ({ set, get, sessionId, entry }: Params): Promise<vo
   if (!session) {
     return;
   }
+  const connectedProviders = get()
+    .providers.filter((provider) => provider.connection === 'connected')
+    .map((provider) => provider.id);
+  const enabledProviders = session.providerPreference.enabledProviders ?? null;
   const taskModel =
     entry.taskModelOverride ??
-    resolveTaskModel(
-      'summarizer',
-      get().workspaceOverrides?.[session.workspaceId]?.taskModels,
-      session.providerPreference.defaultProvider,
+    routeTaskModel({
+      taskModel: resolveTaskModel(
+        'summarizer',
+        get().workspaceOverrides?.[session.workspaceId]?.taskModels,
+        session.providerPreference.defaultProvider,
+      ),
+      connectedProviders,
+      enabledProviders,
+      cooldowns: get().providerCooldowns,
+      nowMs: Date.now(),
+    });
+
+  if (taskModel === null) {
+    const windowEnd = cooldownWindowEnd({ cooldowns: get().providerCooldowns, nowMs: Date.now() });
+    set((state) => {
+      const prev = state.summarizerStatus[sessionId];
+      return {
+        summarizerStatus: {
+          ...state.summarizerStatus,
+          [sessionId]: {
+            status: 'error',
+            lastUpdate: now(),
+            error: 'every summarizer provider is cooling down',
+            lastUsage: prev?.lastUsage ?? null,
+            lastAttempt: { turnInput, turnOutput },
+          },
+        },
+      };
+    });
+    void get().emitNotification(
+      'error',
+      'error',
+      'summarizer paused',
+      'every summarizer provider is cooling down',
+      {
+        sessionId,
+        action: { kind: 'retry-summarizer', sessionId },
+        coalesceKey: `summarizer-cooling:${sessionId}:${windowEnd ?? 'unknown'}`,
+      },
     );
+    return;
+  }
 
   set((state) => {
     const prev = state.summarizerStatus[sessionId];
@@ -449,15 +499,42 @@ const runSummarizer = async ({ set, get, sessionId, entry }: Params): Promise<vo
       console.warn(`[summarizer] failed for session ${sessionId}: ${message}`);
     }
     const willRetryParse = err instanceof SummarizerParseError && entry.parseRetried !== true;
+    const failure = willRetryParse ? null : classifyProviderError({ message });
+    if (failure !== null) {
+      set((state) => ({
+        providerCooldowns: withFailureCooldown({
+          cooldowns: state.providerCooldowns,
+          provider: taskModel.providerId,
+          failure,
+          nowMs: Date.now(),
+        }),
+      }));
+    }
+    const providerAttempt = entry.providerAttempt ?? 0;
+    const providerFallback =
+      failure === null
+        ? null
+        : planTaskModelFallback({
+            failure: failure.kind,
+            taskModel,
+            attempt: providerAttempt,
+            connectedProviders,
+            enabledProviders,
+            coolingDownProviders: providersCoolingDown({
+              cooldowns: get().providerCooldowns,
+              nowMs: Date.now(),
+            }),
+          });
+    const willRetry = willRetryParse || providerFallback !== null;
     set((state) => {
       const prev = state.summarizerStatus[sessionId];
       return {
         summarizerStatus: {
           ...state.summarizerStatus,
           [sessionId]: {
-            status: willRetryParse ? 'running' : 'error',
+            status: willRetry ? 'running' : 'error',
             lastUpdate: now(),
-            error: willRetryParse ? null : message,
+            error: willRetry ? null : message,
             lastUsage: prev?.lastUsage ?? null,
             lastAttempt: prev?.lastAttempt ?? { turnInput, turnOutput },
           },
@@ -468,6 +545,19 @@ const runSummarizer = async ({ set, get, sessionId, entry }: Params): Promise<vo
       reenqueueSummarizer({ set, get, sessionId, entry: { ...entry, parseRetried: true } });
       return;
     }
+    if (providerFallback !== null) {
+      reenqueueSummarizer({
+        set,
+        get,
+        sessionId,
+        entry: {
+          ...entry,
+          providerAttempt: providerAttempt + 1,
+          taskModelOverride: providerFallback,
+        },
+      });
+      return;
+    }
     void get().emitNotification(
       'error',
       'error',
@@ -476,6 +566,7 @@ const runSummarizer = async ({ set, get, sessionId, entry }: Params): Promise<vo
       {
         sessionId,
         action: { kind: 'retry-summarizer', sessionId },
+        coalesceKey: `summarizer-failed:${sessionId}`,
       },
     );
   }
