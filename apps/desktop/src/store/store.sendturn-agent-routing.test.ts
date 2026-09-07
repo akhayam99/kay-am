@@ -2288,6 +2288,24 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
     expect(acquire).not.toHaveBeenCalled();
   });
 
+  it('lets a database failure looking up the resolver agent propagate instead of reporting it missing', async () => {
+    const useAppStore = await seedResolverTurn();
+    const worktreeMod = await import('../features/worktree/worktree');
+    const acquire = worktreeMod.acquireWorktreeWriter as ReturnType<typeof vi.fn>;
+    acquire.mockClear();
+    getAgentByIdSpy.mockRejectedValueOnce(new Error('db exploded'));
+    useAppStore.setState({ sessionPhaseRuns: { [SESSION_ID]: [] } });
+    runTurnSpy.mockReset();
+    runTurnSpy.mockImplementation(() => emptyStream());
+
+    await expect(
+      useAppStore.getState().sendTurn({ sessionId: SESSION_ID, agentId: AGENT_A, content: 'go' }),
+    ).rejects.toThrow('db exploded');
+
+    expect(runTurnSpy).not.toHaveBeenCalled();
+    expect(acquire).not.toHaveBeenCalled();
+  });
+
   it('acquires the writer lease for a resolver whose kind is only persisted, with no override in memory', async () => {
     const useAppStore = await seedResolverTurn();
     const worktreeMod = await import('../features/worktree/worktree');

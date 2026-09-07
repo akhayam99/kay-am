@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStore } from 'zustand/vanilla';
-import { migrate, type Database } from '@goodboy/db';
+import { migrate, upsertResolveThread, type Database } from '@goodboy/db';
 import { makeTestDatabase } from '@goodboy/db/test-helpers';
 import type { Agent, AgentId, IsoDateTime, ProjectId, SessionId } from '@goodboy/types';
 import type { GetFn, SetFn } from './types';
 import type { SendTurnResult } from '../turn/types';
 import { createResolveSlice } from './index';
-import { selectDirtyTreeThreads } from './selectDirtyTreeThreads';
+import { createResolveThread } from './createResolveThread';
+import { selectDirtyTreeThreads, withDirtyTreeReason } from './selectDirtyTreeThreads';
 import { resolveInitialState } from './state';
 
 type Lease = {
@@ -883,6 +884,38 @@ describe('resolve queue scheduler', () => {
     ).toEqual([]);
     expect(harness.sendTurn).toHaveBeenCalledTimes(2);
     expect(harness.sendTurn.mock.calls[1]?.[0]?.content).toBe('fix two');
+  });
+
+  it('keeps a persisted dirty block after a reload wiped the in-memory baseline', async () => {
+    const RELOAD_PATH = '/repo/reload';
+    const harness = createHarness({ worktreePathBySession: { [SESSION_A]: RELOAD_PATH } });
+    const dirtyRow = createResolveThread({
+      sessionId: SESSION_A,
+      threadId: 'PRRT_1',
+      projectId: PROJECT_ID,
+    });
+    await upsertResolveThread({
+      db,
+      row: { ...dirtyRow, stateReason: withDirtyTreeReason({ row: dirtyRow }) },
+      expectedRevision: null,
+    });
+    await queueRequest({
+      actions: harness.actions,
+      sessionId: SESSION_A,
+      agentId: AGENT_2,
+      instructions: 'fix two',
+    });
+    setTree({ unstaged: 2 });
+
+    await harness.actions.drainResolveQueue({ sessionId: SESSION_A });
+
+    expect(
+      selectDirtyTreeThreads({
+        sessionResolveThreads: harness.get().sessionResolveThreads,
+        sessionId: SESSION_A,
+      }),
+    ).toEqual(['PRRT_1']);
+    expect(harness.sendTurn).not.toHaveBeenCalled();
   });
 
   it('fails an interrupted running attempt on load and resumes the waiting one', async () => {
