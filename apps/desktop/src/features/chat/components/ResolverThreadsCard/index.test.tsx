@@ -102,7 +102,7 @@ describe('ResolverThreadsCard', () => {
     h.wontfix.mockReturnValue([{ threadId: 'PRRT_2', reason: 'already covered upstream' }]);
 
     render(<ResolverThreadsCard assistantText="x" sessionId={'s' as never} />);
-    fireEvent.click(screen.getByRole('button', { name: /Expand resolver findings/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Expand resolve findings/ }));
 
     expect(screen.getByTestId('resolver-thread-verdict-0')).toBeDefined();
     expect(screen.getByTestId('resolver-thread-verdict-1')).toBeDefined();
@@ -159,13 +159,29 @@ describe('ResolverThreadsCard', () => {
         agentId={'agent-1' as never}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /Expand resolver findings/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Expand resolve findings/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Open thread 2 in Review' }));
 
     expect(h.setReviewLensIntent).toHaveBeenCalledWith({
-      intent: { sessionId: 's', threadId: 'PRRT_1' },
+      intent: { sessionId: 's', threadId: 'PRRT_2' },
     });
     expect(h.setActiveLens).toHaveBeenCalledWith('s', 'review');
+  });
+
+  it('opens each row own thread, not the first verdict in the list', () => {
+    h.resolved.mockReturnValue([{ threadId: 'PRRT_1', commitSha: 'abcdef1234567890' }]);
+    h.wontfix.mockReturnValue([{ threadId: 'PRRT_2', reason: 'already covered upstream' }]);
+
+    render(<ResolverThreadsCard assistantText="x" sessionId={'s' as never} />);
+    fireEvent.click(screen.getByRole('button', { name: /Expand resolve findings/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open thread 2 in Review' }));
+
+    expect(h.setReviewLensIntent).toHaveBeenCalledWith({
+      intent: { sessionId: 's', threadId: 'PRRT_2' },
+    });
+    expect(h.setReviewLensIntent).not.toHaveBeenCalledWith({
+      intent: { sessionId: 's', threadId: 'PRRT_1' },
+    });
   });
 
   it('stays navigable even when the transcript card knows no agent', () => {
@@ -189,7 +205,7 @@ describe('ResolverThreadsCard', () => {
     h.rows = [{ threadId: 'PRRT_2', state: 'publishing' }];
 
     render(<ResolverThreadsCard assistantText="x" sessionId={'s' as never} />);
-    fireEvent.click(screen.getByRole('button', { name: /Expand resolver findings/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Expand resolve findings/ }));
 
     expect(screen.getByText('fix committed, thread closed')).toBeDefined();
     expect(screen.getByText('fix committed, reply queued')).toBeDefined();

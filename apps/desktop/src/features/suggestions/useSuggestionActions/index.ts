@@ -116,7 +116,7 @@ export const useSuggestionActions = ({
     })
       .then(() => setActiveLens(sessionId, 'review'))
       .catch((error: unknown) => {
-        reportError('resolver failed to start')(formatError(error));
+        reportError('Fix failed to start')(formatError(error));
       });
   };
 

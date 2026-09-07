@@ -148,12 +148,12 @@ export const ResolverThreadsCard = ({ assistantText, sessionId, agentId = null }
           grouped
           tone="neutral"
           icon={<Icon size={ICON_SIZE.row} aria-hidden />}
-          eyebrow="resolver findings"
+          eyebrow="resolve findings"
           preview={tallySentence({ verdicts })}
           meta={`${verdicts.length}`}
           open={open}
           onToggle={() => setOpen((value) => !value)}
-          aria-label={open ? 'Collapse resolver findings' : 'Expand resolver findings'}
+          aria-label={open ? 'Collapse resolve findings' : 'Expand resolve findings'}
         />
       }
     >
@@ -164,7 +164,7 @@ export const ResolverThreadsCard = ({ assistantText, sessionId, agentId = null }
               verdict={verdict}
               position={index + 1}
               nested
-              onOpen={() => onOpen(onlyVerdict.threadId)}
+              onOpen={() => onOpen(verdict.threadId)}
               onOpenCommit={onOpenCommit}
               data-testid={`resolver-thread-verdict-${index}`}
             />

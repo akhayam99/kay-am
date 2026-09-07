@@ -166,7 +166,7 @@ const failStart = async ({ get, sessionId, attempt, error, isCleanExit = false }
     error,
     isCleanExit,
   });
-  void get().emitNotification('error', 'error', 'resolver failed to start', error, { sessionId });
+  void get().emitNotification('error', 'error', 'Fix failed to start', error, { sessionId });
 };
 
 const startResolverTurn = async ({
@@ -201,7 +201,7 @@ const startResolverTurn = async ({
           ? 'interrupted'
           : result?.blockedOverBudget === true
             ? 'every provider is over its budget cap'
-            : 'the turn ended before the resolver started',
+            : 'the turn ended before the fix attempt started',
       });
     }
   } catch (error) {

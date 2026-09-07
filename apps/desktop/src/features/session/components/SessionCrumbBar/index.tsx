@@ -22,8 +22,9 @@ import { WorkflowAdvance } from './WorkflowAdvance';
 import { switcherPeers } from './switcherPeers';
 import type { SwitcherEntry } from './switcherEntry';
 
-const EMPTY_ATTEMPTS: ReadonlyArray<ResolveAttempt> = [];
 import { ICON_SIZE } from '../../../../shared/components/conceptIcons';
+
+const EMPTY_ATTEMPTS: ReadonlyArray<ResolveAttempt> = [];
 
 type SessionCrumbsProps = {
   readonly session: Session;

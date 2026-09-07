@@ -114,7 +114,7 @@ describe('ResolverKickoffCard', () => {
   it('hands the whole prompt over on demand, with every marker fenced as code', () => {
     const { container } = render(<ResolverKickoffCard item={kickoffItem()} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Expand resolver instructions' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Expand resolve instructions' }));
 
     expect(screen.getByText(/How to report each thread/)).toBeDefined();
     expect(container.querySelectorAll('code').length).toBeGreaterThan(0);
