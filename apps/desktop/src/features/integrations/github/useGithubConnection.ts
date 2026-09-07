@@ -63,3 +63,5 @@ export const useGithubConnection = ({ workspaceId }: Params) => {
     refresh,
   };
 };
+
+export type GithubConnection = ReturnType<typeof useGithubConnection>;

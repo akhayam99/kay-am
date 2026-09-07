@@ -4,11 +4,11 @@ import type { GhTokenStatus, WorkspaceId } from '@goodboy/types';
 import { ghClearToken, ghSetToken, ghStatus } from '../../github/github';
 import { ConnectForm } from '../components/ConnectForm';
 import { IntegrationConnectedRow } from '../components/IntegrationConnectedRow';
-import { notifyGithubConnectionChanged, type useGithubConnection } from './useGithubConnection';
+import { notifyGithubConnectionChanged, type GithubConnection } from './useGithubConnection';
 
 type Props = {
   workspaceId: WorkspaceId;
-  connection?: ReturnType<typeof useGithubConnection>;
+  connection?: GithubConnection;
   onConnected?: () => void;
   shouldAutoFocus?: boolean;
 };

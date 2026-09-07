@@ -1,11 +1,11 @@
 import { Button, StatusDot } from '@goodboy/ui';
 import type { WorkspaceId } from '@goodboy/types';
-import type { useGithubConnection } from '../../github/useGithubConnection';
+import type { GithubConnection } from '../../github/useGithubConnection';
 import { GithubFormBody } from '../../github/GithubFormBody';
 
 type Props = {
   readonly workspaceId: WorkspaceId;
-  readonly connection: ReturnType<typeof useGithubConnection>;
+  readonly connection: GithubConnection;
 };
 
 export const GithubToolConnection = ({ workspaceId, connection }: Props) => {

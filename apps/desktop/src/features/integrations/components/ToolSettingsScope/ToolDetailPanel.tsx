@@ -9,7 +9,7 @@ import {
 } from '../IntegrationGlyph';
 import { FORM_BODIES } from '../../formBodies';
 import { toolIdentity } from './toolIdentity';
-import type { useGithubConnection } from '../../github/useGithubConnection';
+import type { GithubConnection } from '../../github/useGithubConnection';
 import { GithubToolConnection } from './GithubToolConnection';
 
 type Props = {
@@ -17,7 +17,7 @@ type Props = {
   readonly provider: IntegrationGlyphProvider;
   readonly isConnected: boolean;
   readonly binding: IntegrationBinding | undefined;
-  readonly github: ReturnType<typeof useGithubConnection>;
+  readonly github: GithubConnection;
 };
 
 export const ToolDetailPanel = ({ workspaceId, provider, isConnected, binding, github }: Props) => {
