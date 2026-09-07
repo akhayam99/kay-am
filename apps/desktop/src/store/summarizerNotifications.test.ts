@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { IsoDateTime, SessionId, WorkspaceId } from '@goodboy/types';
+import type { IsoDateTime, ProviderId, SessionId, WorkspaceId } from '@goodboy/types';
 
 vi.mock('../features/chat/turn', () => ({
   runTurn: vi.fn(),
@@ -92,11 +92,16 @@ vi.mock('../features/providers/provider-pricing', () => ({
 
 const summarizeSpy = vi.fn();
 
+const summarizerRoutes: Array<{ providerId: string; model: string }> = [];
+
 vi.mock('@goodboy/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@goodboy/core')>();
   return {
     ...actual,
     Summarizer: class {
+      constructor(opts: { providerId: string; model: string }) {
+        summarizerRoutes.push({ providerId: opts.providerId, model: opts.model });
+      }
       summarize() {
         return summarizeSpy();
       }
@@ -104,7 +109,7 @@ vi.mock('@goodboy/core', async (importOriginal) => {
   };
 });
 
-const insertNotificationSpy = vi.fn(async () => undefined);
+const insertNotificationSpy = vi.fn(async (..._args: ReadonlyArray<unknown>) => undefined);
 
 vi.mock('@goodboy/db', () => ({
   getSetting: vi.fn(async () => null),
@@ -414,5 +419,295 @@ describe('summarizer notifications', () => {
 
     expect(summarizeSpy).toHaveBeenCalledTimes(2);
     expect(useAppStore.getState().summarizerStatus[SESSION_ID]?.status).toBe('error');
+  });
+});
+
+type SeedParams = {
+  readonly connected: ReadonlyArray<ProviderId>;
+  readonly cooldowns?: Readonly<Partial<Record<ProviderId, number>>>;
+};
+
+const seedSummarizerState = async ({ connected, cooldowns }: SeedParams) => {
+  const { useAppStore } = await import('./store');
+  const { PROVIDER_CAPABILITIES } = await import('@goodboy/core');
+  useAppStore.setState({
+    sessions: [
+      {
+        id: SESSION_ID,
+        workspaceId: WORKSPACE_ID,
+        goal: 'test',
+        state: { kind: 'idle', lastActivityAt: NOW },
+        contextSlots: [],
+        providerPreference: { defaultProvider: 'anthropic', allowTurnOverride: false },
+        permissionMode: 'bypassPermissions' as const,
+        autoRun: false,
+        titleUserEdited: false,
+        workflowRuns: [],
+        createdAt: NOW,
+        updatedAt: NOW,
+      },
+    ],
+    sessionSlots: {},
+    summarizerStatus: {},
+    providerCooldowns: cooldowns ?? {},
+    providers: connected.map((id) => ({
+      id,
+      label: id,
+      binary: id,
+      docsUrl: '',
+      capabilities: PROVIDER_CAPABILITIES[id],
+      connection: 'connected' as const,
+      version: null,
+      identity: null,
+      error: null,
+    })),
+    workspaces: [
+      {
+        id: WORKSPACE_ID,
+        name: 'ws',
+        slug: 'ws',
+        sessionsRoot: '/tmp',
+        overrides: {
+          defaultProviderId: null,
+          defaultWorkflowId: null,
+          defaultBranchPrefix: null,
+          parallelEnabled: null,
+          defaultVerbosity: null,
+          providerBindings: null,
+          taskModels: null,
+          roleModels: null,
+          parallelAgents: null,
+          providerPool: null,
+        },
+        createdAt: NOW,
+        updatedAt: NOW,
+      },
+    ],
+  });
+  return useAppStore;
+};
+
+const enqueue = async () => {
+  const { useAppStore } = await import('./store');
+  const { enqueueSummarizer, summarizerQueues } = await import('./turn-helpers');
+  summarizerQueues.delete(SESSION_ID);
+  enqueueSummarizer(
+    useAppStore.setState,
+    useAppStore.getState,
+    SESSION_ID,
+    'user input',
+    'agent output',
+  );
+};
+
+const coalesceKeys = (): ReadonlyArray<string | null | undefined> =>
+  insertNotificationSpy.mock.calls.map(
+    (args) => (args[1] as { coalesceKey?: string | null } | undefined)?.coalesceKey,
+  );
+
+describe('summarizer provider fallback', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    insertNotificationSpy.mockReset();
+    summarizerRoutes.length = 0;
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('moves to another provider when the first one is out of tokens', async () => {
+    summarizeSpy.mockRejectedValueOnce(new Error('Claude usage limit reached')).mockResolvedValue({
+      delta: { upserts: [] },
+      usage: { inputTokens: 4, outputTokens: 2, cachedInputTokens: 0, estimatedCostUsd: 0 },
+      model: 'gpt-5.4',
+    });
+
+    const useAppStore = await seedSummarizerState({ connected: ['anthropic', 'codex'] });
+    await enqueue();
+
+    await vi.waitFor(
+      () => expect(useAppStore.getState().summarizerStatus[SESSION_ID]?.status).toBe('idle'),
+      { timeout: 5000 },
+    );
+
+    expect(summarizerRoutes.map((route) => route.providerId)).toEqual(['anthropic', 'codex']);
+    expect(insertNotificationSpy).not.toHaveBeenCalled();
+  });
+
+  it('records a cooldown for the provider that ran out', async () => {
+    summarizeSpy.mockRejectedValueOnce(new Error('Claude usage limit reached')).mockResolvedValue({
+      delta: { upserts: [] },
+      usage: { inputTokens: 4, outputTokens: 2, cachedInputTokens: 0, estimatedCostUsd: 0 },
+      model: 'gpt-5.4',
+    });
+
+    const useAppStore = await seedSummarizerState({ connected: ['anthropic', 'codex'] });
+    await enqueue();
+
+    await vi.waitFor(
+      () => expect(useAppStore.getState().summarizerStatus[SESSION_ID]?.status).toBe('idle'),
+      { timeout: 5000 },
+    );
+
+    expect(useAppStore.getState().providerCooldowns.anthropic).toBeGreaterThan(Date.now());
+  });
+
+  it('moves to another provider on an authentication failure', async () => {
+    summarizeSpy.mockRejectedValueOnce(new Error('401 unauthorized')).mockResolvedValue({
+      delta: { upserts: [] },
+      usage: { inputTokens: 4, outputTokens: 2, cachedInputTokens: 0, estimatedCostUsd: 0 },
+      model: 'gpt-5.4',
+    });
+
+    const useAppStore = await seedSummarizerState({ connected: ['anthropic', 'codex'] });
+    await enqueue();
+
+    await vi.waitFor(
+      () => expect(useAppStore.getState().summarizerStatus[SESSION_ID]?.status).toBe('idle'),
+      { timeout: 5000 },
+    );
+
+    expect(summarizerRoutes.map((route) => route.providerId)).toEqual(['anthropic', 'codex']);
+  });
+
+  it('records a cooldown for a provider that is unauthenticated', async () => {
+    summarizeSpy.mockRejectedValueOnce(new Error('401 unauthorized')).mockResolvedValue({
+      delta: { upserts: [] },
+      usage: { inputTokens: 4, outputTokens: 2, cachedInputTokens: 0, estimatedCostUsd: 0 },
+      model: 'gpt-5.4',
+    });
+
+    const useAppStore = await seedSummarizerState({ connected: ['anthropic', 'codex'] });
+    await enqueue();
+
+    await vi.waitFor(
+      () => expect(useAppStore.getState().summarizerStatus[SESSION_ID]?.status).toBe('idle'),
+      { timeout: 5000 },
+    );
+
+    expect(useAppStore.getState().providerCooldowns.anthropic).toBeGreaterThan(Date.now());
+  });
+
+  it('records a cooldown for a provider that is rate limited', async () => {
+    summarizeSpy.mockRejectedValueOnce(new Error('429 too many requests')).mockResolvedValue({
+      delta: { upserts: [] },
+      usage: { inputTokens: 4, outputTokens: 2, cachedInputTokens: 0, estimatedCostUsd: 0 },
+      model: 'gpt-5.4',
+    });
+
+    const useAppStore = await seedSummarizerState({ connected: ['anthropic', 'codex'] });
+    await enqueue();
+
+    await vi.waitFor(
+      () => expect(useAppStore.getState().summarizerStatus[SESSION_ID]?.status).toBe('idle'),
+      { timeout: 5000 },
+    );
+
+    expect(useAppStore.getState().providerCooldowns.anthropic).toBeGreaterThan(Date.now());
+  });
+
+  it('stops at one provider switch and notifies once', async () => {
+    summarizeSpy.mockRejectedValue(new Error('Claude usage limit reached'));
+
+    const useAppStore = await seedSummarizerState({ connected: ['anthropic', 'codex', 'gemini'] });
+    await enqueue();
+
+    await vi.waitFor(
+      () => expect(useAppStore.getState().summarizerStatus[SESSION_ID]?.status).toBe('error'),
+      { timeout: 5000 },
+    );
+
+    expect(summarizeSpy).toHaveBeenCalledTimes(2);
+    expect(insertNotificationSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips a cooling-down provider on the next enqueue', async () => {
+    summarizeSpy.mockResolvedValue({
+      delta: { upserts: [] },
+      usage: { inputTokens: 4, outputTokens: 2, cachedInputTokens: 0, estimatedCostUsd: 0 },
+      model: 'gpt-5.4',
+    });
+
+    const useAppStore = await seedSummarizerState({
+      connected: ['anthropic', 'codex'],
+      cooldowns: { anthropic: Date.now() + 600_000 },
+    });
+    await enqueue();
+
+    await vi.waitFor(
+      () => expect(useAppStore.getState().summarizerStatus[SESSION_ID]?.status).toBe('idle'),
+      { timeout: 5000 },
+    );
+
+    expect(summarizerRoutes.map((route) => route.providerId)).toEqual(['codex']);
+  });
+
+  it('stops spawning and says so when no provider is left', async () => {
+    summarizeSpy.mockRejectedValue(new Error('Claude usage limit reached'));
+
+    const useAppStore = await seedSummarizerState({ connected: ['anthropic'] });
+    await enqueue();
+
+    await vi.waitFor(
+      () => expect(useAppStore.getState().summarizerStatus[SESSION_ID]?.status).toBe('error'),
+      { timeout: 5000 },
+    );
+
+    await enqueue();
+    await vi.waitFor(
+      () => expect(useAppStore.getState().summarizerStatus[SESSION_ID]?.error).toContain('cooling'),
+      { timeout: 5000 },
+    );
+
+    expect(summarizeSpy).toHaveBeenCalledTimes(1);
+    expect(coalesceKeys()).toEqual([
+      `summarizer-failed:${SESSION_ID}`,
+      expect.stringContaining(`summarizer-cooling:${SESSION_ID}:`),
+    ]);
+  });
+
+  it('does not write providerCooldowns for a non-cooldown failure kind', async () => {
+    summarizeSpy.mockRejectedValue(new Error('the model produced nonsense'));
+
+    const useAppStore = await seedSummarizerState({ connected: ['anthropic'] });
+    const setStateSpy = vi.spyOn(useAppStore, 'setState');
+    await enqueue();
+
+    await vi.waitFor(
+      () => expect(useAppStore.getState().summarizerStatus[SESSION_ID]?.status).toBe('error'),
+      { timeout: 5000 },
+    );
+
+    const cooldownWrites = setStateSpy.mock.calls.filter((call) => {
+      const updater = call[0];
+      const patch = typeof updater === 'function' ? updater(useAppStore.getState()) : updater;
+      return patch != null && 'providerCooldowns' in patch;
+    });
+    expect(cooldownWrites).toHaveLength(0);
+    expect(useAppStore.getState().providerCooldowns).toEqual({});
+  });
+
+  it('reuses one coalesce key while the same cooldown window holds', async () => {
+    summarizeSpy.mockRejectedValue(new Error('Claude usage limit reached'));
+
+    const useAppStore = await seedSummarizerState({
+      connected: ['anthropic'],
+      cooldowns: { anthropic: Date.now() + 600_000 },
+    });
+    await enqueue();
+    await vi.waitFor(
+      () => expect(useAppStore.getState().summarizerStatus[SESSION_ID]?.error).toContain('cooling'),
+      { timeout: 5000 },
+    );
+    await enqueue();
+    await vi.waitFor(() => expect(insertNotificationSpy).toHaveBeenCalledTimes(2), {
+      timeout: 5000,
+    });
+
+    expect(summarizeSpy).not.toHaveBeenCalled();
+    const keys = coalesceKeys();
+    expect(keys[0]).toBe(keys[1]);
+    expect(keys[0]).toContain(`summarizer-cooling:${SESSION_ID}:`);
   });
 });

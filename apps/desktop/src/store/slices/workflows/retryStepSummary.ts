@@ -2,6 +2,7 @@ import { resolveTaskModel } from '@goodboy/core';
 import { fallbackStepOutputSummary } from '@goodboy/core';
 import type { AgentId, SessionId, TaskModelPreference } from '@goodboy/types';
 import { invokeAgentUpdateStatus } from '../../../features/workflows/workflows';
+import { routeTaskModel } from '../../../features/providers/taskModelRouting';
 import { stepForAgent } from '../../../features/workflows/stepForAgent';
 import { summarizeAgentOutput, summarizedStepOutputs } from '../../summarizeAgentOutput';
 import { getSessionRepo } from '../worktrees/getSessionRepo';
@@ -35,11 +36,30 @@ export const retryStepSummary = (set: SetFn, get: GetFn) => {
 
     const taskModel =
       taskModelOverride ??
-      resolveTaskModel(
-        'summarizer',
-        get().workspaceOverrides?.[session.workspaceId]?.taskModels,
-        session.providerPreference.defaultProvider,
+      routeTaskModel({
+        taskModel: resolveTaskModel(
+          'summarizer',
+          get().workspaceOverrides?.[session.workspaceId]?.taskModels,
+          session.providerPreference.defaultProvider,
+        ),
+        connectedProviders: get()
+          .providers.filter((provider) => provider.connection === 'connected')
+          .map((provider) => provider.id),
+        enabledProviders: session.providerPreference.enabledProviders ?? null,
+        cooldowns: get().providerCooldowns,
+        nowMs: Date.now(),
+      });
+
+    if (taskModel == null) {
+      void get().emitNotification(
+        'summarizer-degraded',
+        'warning',
+        'step summary retry unavailable',
+        'every summarizer provider is cooling down',
+        { sessionId, action: { kind: 'retry-step-summary', sessionId, agentId } },
       );
+      return;
+    }
 
     const worktreePath = getSessionRepo({ get, sessionId })?.worktreePath ?? null;
     const expectedOutput =

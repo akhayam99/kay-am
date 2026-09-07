@@ -49,6 +49,7 @@ import { tauriDatabase } from '../../../shared/lib/db';
 import { invokePermissionRuleList } from '../../../features/permissions/permissions';
 import { invokeAgentList, invokeAgentUpdateStatus } from '../../../features/workflows/workflows';
 import { resolveProviderForTurn } from '../../../features/providers/routing';
+import { withProviderCooldown } from '../../../features/providers/taskModelRouting';
 import {
   scratchDirPrepare,
   sessionDirExists,
@@ -139,7 +140,6 @@ type Input = {
 
 const NOT_BLOCKED: SendTurnResult = { blockedOverBudget: false };
 
-const USAGE_LIMIT_COOLDOWN_MS = 30 * 60 * 1000;
 const MIN_USAGE_LIMIT_RETRY_MS = 1_000;
 const MAX_TIMEOUT_MS = 2_147_483_647;
 
@@ -1139,9 +1139,12 @@ export const sendTurn = (set: SetFn, get: GetFn) => {
       const usageLimitResetAtMs =
         failure.kind === 'usage_limit' ? (failure.resetAtMs ?? null) : null;
       if (failure.kind === 'usage_limit') {
-        const cooldownUntil = usageLimitResetAtMs ?? Date.now() + USAGE_LIMIT_COOLDOWN_MS;
         set((state) => ({
-          providerCooldowns: { ...state.providerCooldowns, [provider]: cooldownUntil },
+          providerCooldowns: withProviderCooldown({
+            cooldowns: state.providerCooldowns,
+            provider,
+            cooldownUntilMs: usageLimitResetAtMs,
+          }),
         }));
       }
       const preferredFallback = resolveRoleRouting({
