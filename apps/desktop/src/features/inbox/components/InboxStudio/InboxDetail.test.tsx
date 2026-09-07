@@ -1,13 +1,22 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import type { WorkspaceId } from '@goodboy/types';
 import type { InboxRecord } from '../../types';
 
 vi.mock('../../../github/GithubIssueDetail', () => ({
-  GithubIssueDetail: ({ issue, dock }: { issue: { title: string }; dock: ReactNode }) => (
+  GithubIssueDetail: ({
+    issue,
+    dock,
+    headerActions,
+  }: {
+    issue: { title: string };
+    dock: ReactNode;
+    headerActions: ReactNode;
+  }) => (
     <div data-testid="panel">
       github-issue:{issue.title}
+      {headerActions}
       {dock}
     </div>
   ),
@@ -110,11 +119,20 @@ const baseErrors = {
   bitbucket: null,
 };
 
-const renderDetail = (record: InboxRecord | null) =>
+const onDeselect = vi.fn();
+
+type RenderPaneParams = {
+  readonly record: InboxRecord | null;
+  readonly records?: ReadonlyArray<InboxRecord>;
+  readonly hasVisibleRecords?: boolean;
+};
+
+const renderPane = ({ record, records, hasVisibleRecords = false }: RenderPaneParams) =>
   render(
     <InboxDetail
       record={record}
-      records={record == null ? [] : [record]}
+      records={records ?? (record == null ? [] : [record])}
+      hasVisibleRecords={hasVisibleRecords}
       hasFiltersActive={false}
       workspaceId={workspaceId}
       rootPath="/repo"
@@ -122,13 +140,45 @@ const renderDetail = (record: InboxRecord | null) =>
       errors={baseErrors}
       onRefresh={vi.fn()}
       onClose={vi.fn()}
+      onDeselect={onDeselect}
       launchFocusRequest={0}
       onClearFilters={vi.fn()}
       onOpenIntegrations={vi.fn()}
     />,
   );
 
-afterEach(() => cleanup());
+const renderDetail = (record: InboxRecord | null) => renderPane({ record });
+
+const githubRecord: InboxRecord = {
+  key: 'github:issue:1',
+  provider: 'github',
+  kind: 'issue',
+  identifier: '#1',
+  title: 'github item',
+  state: 'open',
+  updatedAt: '2026-08-01T10:00:00Z',
+  url: '',
+  meta: 'GitHub',
+  payload: {
+    provider: 'github',
+    kind: 'issue',
+    issue: {
+      number: 1,
+      title: 'github item',
+      body: '',
+      url: '',
+      state: 'OPEN',
+      labels: [],
+      updatedAt: '',
+    },
+    sessionId: null,
+  },
+};
+
+afterEach(() => {
+  cleanup();
+  onDeselect.mockReset();
+});
 
 describe('InboxDetail', () => {
   it('summarises the inbox when nothing is selected', () => {
@@ -139,35 +189,27 @@ describe('InboxDetail', () => {
     expect(screen.queryByTestId('panel')).toBeNull();
   });
 
+  it('invites a pick when items are listed and none is selected', () => {
+    renderPane({ record: null, records: [], hasVisibleRecords: true });
+
+    expect(screen.getByText('Nothing selected')).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Open integrations' })).toBeNull();
+    expect(screen.queryByTestId('panel')).toBeNull();
+  });
+
   it('renders the github issue panel', () => {
-    renderDetail({
-      key: 'github:issue:1',
-      provider: 'github',
-      kind: 'issue',
-      identifier: '#1',
-      title: 'github item',
-      state: 'open',
-      updatedAt: '2026-08-01T10:00:00Z',
-      url: '',
-      meta: 'GitHub',
-      payload: {
-        provider: 'github',
-        kind: 'issue',
-        issue: {
-          number: 1,
-          title: 'github item',
-          body: '',
-          url: '',
-          state: 'OPEN',
-          labels: [],
-          updatedAt: '',
-        },
-        sessionId: null,
-      },
-    });
+    renderDetail(githubRecord);
 
     expect(screen.getByTestId('panel').textContent).toContain('github-issue:github item');
     expect(screen.getByTestId('dock')).toBeDefined();
+  });
+
+  it('closes the selected record from the detail header', () => {
+    renderDetail(githubRecord);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close the item' }));
+
+    expect(onDeselect).toHaveBeenCalledTimes(1);
   });
 
   it('renders the gitlab issue panel', () => {

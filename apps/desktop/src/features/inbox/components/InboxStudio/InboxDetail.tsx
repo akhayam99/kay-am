@@ -1,3 +1,5 @@
+import { IconButton } from '@goodboy/ui';
+import { X } from 'lucide-react';
 import type { WorkspaceId } from '@goodboy/types';
 import { GithubIssueDetail } from '../../../github/GithubIssueDetail';
 import { GitlabIssueDetail } from '../../../integrations/gitlab/GitlabIssueDetail';
@@ -15,6 +17,7 @@ import { InboxEmptySummary } from './InboxEmptySummary';
 type Props = {
   readonly record: InboxRecord | null;
   readonly records: ReadonlyArray<InboxRecord>;
+  readonly hasVisibleRecords: boolean;
   readonly hasFiltersActive: boolean;
   readonly workspaceId: WorkspaceId;
   readonly rootPath: string;
@@ -22,6 +25,7 @@ type Props = {
   readonly errors: Readonly<Record<InboxProvider, string | null>>;
   readonly onRefresh: () => void;
   readonly onClose: () => void;
+  readonly onDeselect: () => void;
   readonly onClearFilters: () => void;
   readonly onOpenIntegrations: () => void;
   readonly launchFocusRequest: number;
@@ -30,6 +34,7 @@ type Props = {
 export const InboxDetail = ({
   record,
   records,
+  hasVisibleRecords,
   hasFiltersActive,
   workspaceId,
   rootPath,
@@ -37,6 +42,7 @@ export const InboxDetail = ({
   errors,
   onRefresh,
   onClose,
+  onDeselect,
   onClearFilters,
   onOpenIntegrations,
   launchFocusRequest,
@@ -48,6 +54,7 @@ export const InboxDetail = ({
     return (
       <InboxEmptySummary
         records={records}
+        hasVisibleRecords={hasVisibleRecords}
         hasFiltersActive={hasFiltersActive}
         onClearFilters={onClearFilters}
         onOpenIntegrations={onOpenIntegrations}
@@ -56,6 +63,14 @@ export const InboxDetail = ({
   }
 
   const payload = record.payload;
+  const deselectAction = (
+    <IconButton
+      icon={X}
+      label="Close the item"
+      tooltip="Back to the inbox summary"
+      onClick={onDeselect}
+    />
+  );
 
   switch (payload.provider) {
     case 'github':
@@ -63,6 +78,7 @@ export const InboxDetail = ({
         <GithubIssueDetail
           issue={payload.issue}
           editContext={{ workspaceId, rootPath }}
+          headerActions={deselectAction}
           dock={
             <RecordLaunchDock
               record={record}
@@ -80,6 +96,7 @@ export const InboxDetail = ({
             <GitlabIssueDetail
               issue={payload.issue}
               workspaceId={workspaceId}
+              headerActions={deselectAction}
               dock={
                 <RecordLaunchDock
                   record={record}
@@ -98,6 +115,7 @@ export const InboxDetail = ({
               host={payload.host}
               onRefresh={onRefresh}
               onClose={onClose}
+              headerActions={deselectAction}
               dock={
                 <RecordLaunchDock
                   record={record}
@@ -118,6 +136,7 @@ export const InboxDetail = ({
         <LinearIssueDetail
           issue={payload.issue}
           workspaceId={workspaceId}
+          headerActions={deselectAction}
           dock={
             <RecordLaunchDock
               record={record}
@@ -134,6 +153,7 @@ export const InboxDetail = ({
           issue={payload.issue}
           workspaceId={workspaceId}
           onIssueWritten={onRefresh}
+          headerActions={deselectAction}
           dock={
             <RecordLaunchDock
               record={record}
@@ -163,6 +183,7 @@ export const InboxDetail = ({
           summaryIsLoading={false}
           summaryError={null}
           onRetrySummary={() => undefined}
+          headerActions={deselectAction}
           dock={
             <RecordLaunchDock
               record={record}
@@ -182,6 +203,7 @@ export const InboxDetail = ({
           fallbackChannelName={payload.channel.name}
           fallbackMessage={payload.head}
           fallbackUrl={record.url}
+          headerActions={deselectAction}
           dock={
             <RecordLaunchDock
               record={record}
@@ -203,6 +225,7 @@ export const InboxDetail = ({
           error={errors.bitbucket}
           onRefresh={onRefresh}
           onClose={onClose}
+          headerActions={deselectAction}
           dock={
             <RecordLaunchDock
               record={record}
