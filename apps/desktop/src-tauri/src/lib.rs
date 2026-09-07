@@ -16,6 +16,7 @@ mod gitlab;
 mod integration_credentials;
 mod jira;
 mod linear;
+mod local_image;
 mod path_env;
 mod permissions;
 mod planner;
@@ -192,6 +193,7 @@ pub fn run() {
             editor::open_file_in_workspace,
             editor::open_url,
             remote_image::fetch_remote_image,
+            local_image::local_image_read,
             releases::releases_list,
             explore::explore_list,
             explore::explore_read,

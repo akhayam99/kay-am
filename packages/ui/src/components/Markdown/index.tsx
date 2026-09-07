@@ -2,6 +2,7 @@ import { Fragment, memo, useMemo, type ReactNode } from 'react';
 import { Activity, CheckCheck, FileEdit, HelpCircle, Target, type LucideIcon } from 'lucide-react';
 import { cn } from '../../cn';
 import { RemoteImage } from '../RemoteImage';
+import { LocalImage } from '../LocalImage';
 import { parseMarkdown, type Block, type CellAlign } from './parseMarkdown';
 
 type CtxTagStyle = {
@@ -128,10 +129,21 @@ const renderImage = ({ alt, url, key, variant }: ImageParams): ReactNode => {
       />
     );
   }
-  if (!/^https?:/i.test(url)) {
+  if (/^data:/i.test(url)) {
     return alt;
   }
   if (variant === 'preview') {
+    return alt;
+  }
+  if (!/^https?:/i.test(url)) {
+    if (
+      url.length <= 1024 &&
+      !/\s/.test(url) &&
+      !/^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(url) &&
+      /\.(?:png|jpe?g|gif|webp)$/i.test(url)
+    ) {
+      return <LocalImage key={`${key}-${url}`} url={url} alt={alt} />;
+    }
     return alt;
   }
   return <RemoteImage key={key} url={url} alt={alt} />;

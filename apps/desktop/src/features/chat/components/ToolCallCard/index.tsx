@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState } from 'react';
 import { Wrench } from 'lucide-react';
 import { cn, tintClasses } from '@goodboy/ui';
 import type { TranscriptItem } from '../../utils/transcript-items';
@@ -7,6 +7,8 @@ import { useElapsedMs } from '../../hooks/useElapsedMs';
 import { TranscriptDisclosure } from '../TranscriptDisclosure';
 import { TranscriptRowHeader } from '../TranscriptRowHeader';
 import { StructuredData } from './StructuredData';
+import { hasImagePath } from './hasImagePath';
+import { Section } from './Section';
 import { ICON_SIZE } from '../../../../shared/components/conceptIcons';
 
 type Props = {
@@ -17,16 +19,9 @@ const dangerTint = tintClasses('danger');
 const successTint = tintClasses('success');
 const runningTint = tintClasses('info');
 
-const Section = ({ label, children }: { label: string; children: ReactNode }) => (
-  <div className="flex min-w-0 flex-col gap-1">
-    <span className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
-      {label}
-    </span>
-    {children}
-  </div>
-);
-
 export const ToolCallCard = ({ item }: Props) => {
+  const hasInputImages = useMemo(() => hasImagePath({ data: item.input }), [item.input]);
+  const hasOutputImages = useMemo(() => hasImagePath({ data: item.output }), [item.output]);
   const [open, setOpen] = useState(false);
   const [rawMode, setRawMode] = useState(false);
   const running = !item.ended;
@@ -102,13 +97,13 @@ export const ToolCallCard = ({ item }: Props) => {
         <>
           <Section label="input">
             <div className="min-w-0 text-xs">
-              <StructuredData data={item.input} label="input" />
+              <StructuredData data={item.input} label="input" hasImages={hasInputImages} />
             </div>
           </Section>
           {item.ended ? (
             <Section label="output">
               <div className="min-w-0 text-xs">
-                <StructuredData data={item.output} label="output" />
+                <StructuredData data={item.output} label="output" hasImages={hasOutputImages} />
               </div>
             </Section>
           ) : null}
