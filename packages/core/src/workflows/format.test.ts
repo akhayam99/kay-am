@@ -95,6 +95,7 @@ describe('formatWorkflowFromNL', () => {
   function makeDeps(overrides: Partial<WorkflowFormatDeps> = {}): WorkflowFormatDeps {
     return {
       providerId: 'gemini',
+      model: 'gemini-3.5-flash',
       invokeFn: vi.fn().mockResolvedValue({ stdout: validMarker, stderr: '', exitCode: 0 }),
       ...overrides,
     };
@@ -102,7 +103,7 @@ describe('formatWorkflowFromNL', () => {
 
   it('returns null for an empty description', async () => {
     const deps = makeDeps();
-    const result = await formatWorkflowFromNL(deps, { description: '   ' });
+    const result = await formatWorkflowFromNL({ deps, input: { description: '   ' } });
     expect(result).toBeNull();
     expect(deps.invokeFn).not.toHaveBeenCalled();
   });
@@ -111,12 +112,18 @@ describe('formatWorkflowFromNL', () => {
     const deps = makeDeps({
       invokeFn: vi.fn().mockResolvedValue({ stdout: '', stderr: 'err', exitCode: 1 }),
     });
-    const result = await formatWorkflowFromNL(deps, { description: 'plan and build' });
+    const result = await formatWorkflowFromNL({
+      deps,
+      input: { description: 'plan and build' },
+    });
     expect(result).toBeNull();
   });
 
   it('parses the workflow from a valid marker response', async () => {
-    const result = await formatWorkflowFromNL(makeDeps(), { description: 'plan and build' });
+    const result = await formatWorkflowFromNL({
+      deps: makeDeps(),
+      input: { description: 'plan and build' },
+    });
     expect(result?.name).toBe('plan-implement-review');
     expect(result?.steps).toHaveLength(2);
   });
@@ -127,7 +134,10 @@ describe('formatWorkflowFromNL', () => {
       providerId: 'anthropic',
       invokeFn: vi.fn().mockResolvedValue({ stdout: envelope, stderr: '', exitCode: 0 }),
     });
-    const result = await formatWorkflowFromNL(deps, { description: 'plan and build' });
+    const result = await formatWorkflowFromNL({
+      deps,
+      input: { description: 'plan and build' },
+    });
     expect(result?.steps).toHaveLength(2);
   });
 
@@ -137,8 +147,38 @@ describe('formatWorkflowFromNL', () => {
         .fn()
         .mockResolvedValue({ stdout: 'not json and no marker', stderr: '', exitCode: 0 }),
     });
-    const result = await formatWorkflowFromNL(deps, { description: 'plan and build' });
+    const result = await formatWorkflowFromNL({
+      deps,
+      input: { description: 'plan and build' },
+    });
     expect(result).toBeNull();
+  });
+
+  it('passes the configured model and effort to generation', async () => {
+    const invokeFn = vi.fn().mockResolvedValue({
+      stdout: validMarker,
+      stderr: '',
+      exitCode: 0,
+    });
+    const deps = makeDeps({
+      providerId: 'codex',
+      model: 'gpt-5.6-luna',
+      effort: 'high',
+      invokeFn,
+    });
+
+    await formatWorkflowFromNL({ deps, input: { description: 'plan and build' } });
+
+    expect(invokeFn).toHaveBeenCalledWith(
+      'summarize_session',
+      expect.objectContaining({
+        args: expect.objectContaining({
+          providerId: 'codex',
+          model: 'gpt-5.6-luna',
+          effort: 'high',
+        }),
+      }),
+    );
   });
 });
 

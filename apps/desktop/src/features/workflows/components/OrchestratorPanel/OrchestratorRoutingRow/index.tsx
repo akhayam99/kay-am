@@ -30,19 +30,34 @@ export const OrchestratorRoutingRow = ({ sessionId, run, disabled }: Props) => {
   const taskModels = useAppStore((state) =>
     session == null ? undefined : state.workspaceOverrides?.[session.workspaceId]?.taskModels,
   );
+  const workspaceDefaultProviderId = useAppStore((state) =>
+    session == null
+      ? undefined
+      : state.workspaceOverrides?.[session.workspaceId]?.defaultProviderId,
+  );
   const setWorkflowOrchestratorRouting = useAppStore(
     (state) => state.setWorkflowOrchestratorRouting,
   );
   const defaultProvider = (session?.providerOverride ??
     session?.providerPreference.defaultProvider ??
     'anthropic') as ProviderId;
-  const automatic = resolveTaskModel('workflow_orchestrator', taskModels, defaultProvider);
+  const automatic = resolveTaskModel({
+    task: 'workflow_orchestrator',
+    preferences: taskModels,
+    workspaceDefaultProviderId,
+    sessionDefaultProviderId: defaultProvider,
+  });
   const pinned = run.orchestratorRouting ?? null;
   const preferredProviderId = pinned?.providerId ?? automatic.providerId;
   const [providerId, setProviderId] = useState<ProviderId>(preferredProviderId);
   const pendingProvider = useRef<ProviderId>(preferredProviderId);
   const model = pinned?.model ?? '';
-  const recommendedModel = resolveTaskModel('workflow_orchestrator', taskModels, providerId).model;
+  const recommendedModel = resolveTaskModel({
+    task: 'workflow_orchestrator',
+    preferences: taskModels,
+    workspaceDefaultProviderId: providerId,
+    sessionDefaultProviderId: defaultProvider,
+  }).model;
   const effortModel = model === '' ? recommendedModel : model;
   const effortValue = pinned?.effort ?? automatic.effort ?? DEFAULT_EFFORT;
   const connectedProviders = providers
@@ -100,7 +115,14 @@ export const OrchestratorRoutingRow = ({ sessionId, run, disabled }: Props) => {
           if (pinned == null) {
             return;
           }
-          apply(resolveTaskModel('workflow_orchestrator', taskModels, next));
+          apply(
+            resolveTaskModel({
+              task: 'workflow_orchestrator',
+              preferences: taskModels,
+              workspaceDefaultProviderId: next,
+              sessionDefaultProviderId: defaultProvider,
+            }),
+          );
         }}
         onModel={(nextModel) => {
           if (nextModel === '') {

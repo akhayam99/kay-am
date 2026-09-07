@@ -79,11 +79,12 @@ export const generateWorkflowTitle = (set: SetFn, get: GetFn) => {
       if (prompt.length === 0) {
         return;
       }
-      const taskModel = resolveTaskModel(
-        'agent_naming',
-        get().workspaceOverrides?.[workspaceId]?.taskModels,
-        session.providerPreference.defaultProvider,
-      );
+      const taskModel = resolveTaskModel({
+        task: 'agent_naming',
+        preferences: get().workspaceOverrides?.[workspaceId]?.taskModels,
+        workspaceDefaultProviderId: get().workspaceOverrides?.[workspaceId]?.defaultProviderId,
+        sessionDefaultProviderId: session.providerPreference.defaultProvider,
+      });
       const worktreePath = get().sessionWorktrees?.[sessionId]?.[0] ?? null;
 
       const generated = await generateTitleText({

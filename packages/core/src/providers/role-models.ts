@@ -4,9 +4,11 @@ import type {
   RoleModelFallback,
   RoleModelPreferences,
 } from '@goodboy/types';
+import { devWarn } from '../dev-log';
 import { PROVIDER_CAPABILITIES } from './capabilities';
 import { defaultsForRole, isAgentRole } from '../roles';
 import { resolveModelArgs } from './resolveModelArgs';
+import { resolvedStoredModelId } from './resolvedStoredModelId';
 import { resolveStoredModelSelection } from './resolveStoredModelSelection';
 
 export type ResolvedRoleFallback = Readonly<{
@@ -56,7 +58,10 @@ const resolveRoleFallback = ({ fallback, effort }: FallbackParams): ResolvedRole
   });
   return {
     provider: fallback.providerId,
-    model: stored.selection.key,
+    model: resolvedStoredModelId({
+      provider: fallback.providerId,
+      selection: stored.selection,
+    }),
     effort: resolved.clamped?.applied ?? requested,
   };
 };
@@ -75,6 +80,9 @@ export const resolveRoleRouting = ({ role, prefs }: Params): ResolvedRoleRouting
   }
   const capabilities = PROVIDER_CAPABILITIES[preference.providerId];
   if (capabilities == null) {
+    devWarn(
+      `[role-models] invalid ${role} provider ${preference.providerId}; using the ${compiled.provider} default model`,
+    );
     return compiled;
   }
   const stored = resolveStoredModelSelection({
@@ -83,6 +91,9 @@ export const resolveRoleRouting = ({ role, prefs }: Params): ResolvedRoleRouting
     effort: preference.effort,
   });
   if (stored.report?.kind === 'unknown') {
+    devWarn(
+      `[role-models] invalid ${role} model ${preference.model} for ${preference.providerId}; using the ${compiled.provider} default model`,
+    );
     return compiled;
   }
   const resolved = resolveModelArgs({
@@ -93,7 +104,10 @@ export const resolveRoleRouting = ({ role, prefs }: Params): ResolvedRoleRouting
   const fallback = resolveRoleFallback({ fallback: preference.fallback, effort });
   return {
     provider: preference.providerId,
-    model: stored.selection.key,
+    model: resolvedStoredModelId({
+      provider: preference.providerId,
+      selection: stored.selection,
+    }),
     effort,
     isOverride: true,
     ...(fallback != null && { fallback }),

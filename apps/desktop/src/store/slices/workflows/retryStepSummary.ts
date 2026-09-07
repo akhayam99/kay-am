@@ -37,11 +37,13 @@ export const retryStepSummary = (set: SetFn, get: GetFn) => {
     const taskModel =
       taskModelOverride ??
       routeTaskModel({
-        taskModel: resolveTaskModel(
-          'summarizer',
-          get().workspaceOverrides?.[session.workspaceId]?.taskModels,
-          session.providerPreference.defaultProvider,
-        ),
+        taskModel: resolveTaskModel({
+          task: 'summarizer',
+          preferences: get().workspaceOverrides?.[session.workspaceId]?.taskModels,
+          workspaceDefaultProviderId:
+            get().workspaceOverrides?.[session.workspaceId]?.defaultProviderId,
+          sessionDefaultProviderId: session.providerPreference.defaultProvider,
+        }),
         connectedProviders: get()
           .providers.filter((provider) => provider.connection === 'connected')
           .map((provider) => provider.id),

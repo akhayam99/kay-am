@@ -32,7 +32,12 @@ export const TaskModelRow = ({
   disabled,
   onChange,
 }: Props) => {
-  const automatic = resolveTaskModel(task, null, defaultProviderId);
+  const automatic = resolveTaskModel({
+    task,
+    preferences: null,
+    workspaceDefaultProviderId: defaultProviderId,
+    sessionDefaultProviderId: defaultProviderId,
+  });
   const preferredProviderId = preference?.providerId ?? automatic.providerId;
   const [providerId, setProviderId] = useState(preferredProviderId);
   const pendingProvider = useRef(preferredProviderId);
@@ -40,7 +45,12 @@ export const TaskModelRow = ({
   const availableProviderIds = connectedProviderIds.filter(
     (candidate) => PROVIDER_CAPABILITIES[candidate].models.length > 0,
   );
-  const recommendedModel = resolveTaskModel(task, null, providerId).model;
+  const recommendedModel = resolveTaskModel({
+    task,
+    preferences: null,
+    workspaceDefaultProviderId: providerId,
+    sessionDefaultProviderId: defaultProviderId,
+  }).model;
   const effortModel = model === '' ? recommendedModel : model;
   const effortValue = preference?.effort ?? DEFAULT_EFFORT;
   const pendingModel = useRef(effortModel);
@@ -89,11 +99,23 @@ export const TaskModelRow = ({
               }
               setProviderId(next);
               pendingProvider.current = next;
-              pendingModel.current = resolveTaskModel(task, null, next).model;
+              pendingModel.current = resolveTaskModel({
+                task,
+                preferences: null,
+                workspaceDefaultProviderId: next,
+                sessionDefaultProviderId: defaultProviderId,
+              }).model;
               if (preference == null) {
                 return;
               }
-              onChange(resolveTaskModel(task, null, next));
+              onChange(
+                resolveTaskModel({
+                  task,
+                  preferences: null,
+                  workspaceDefaultProviderId: next,
+                  sessionDefaultProviderId: defaultProviderId,
+                }),
+              );
             }}
             onModel={(nextModel) => {
               if (nextModel === '') {

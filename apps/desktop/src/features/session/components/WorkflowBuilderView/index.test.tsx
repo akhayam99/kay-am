@@ -682,7 +682,7 @@ describe('WorkflowBuilderView (orchestrated mode)', () => {
     const orchestrator = orchestratorPicker();
     expect(
       within(orchestrator).getByRole('button', { name: /^model:auto$/i }).dataset.recommendedModel,
-    ).toBe('gpt-5.6');
+    ).toBe('gpt-5.6-sol');
     expect(within(orchestrator).getByRole('button', { name: /^effort:high$/i })).toBeDefined();
 
     fireEvent.click(within(orchestrator).getByRole('button', { name: /^effort:high$/i }));
@@ -693,7 +693,7 @@ describe('WorkflowBuilderView (orchestrated mode)', () => {
       'sess-1',
       expect.any(String),
       expect.objectContaining({
-        orchestratorRouting: { providerId: 'codex', model: 'gpt-5.6', effort: 'xhigh' },
+        orchestratorRouting: { providerId: 'codex', model: 'gpt-5.6-sol', effort: 'xhigh' },
       }),
     );
   });
@@ -1259,6 +1259,32 @@ describe('WorkflowBuilderView (planner model picker)', () => {
 
     expect(vi.mocked(PlannerClient)).toHaveBeenCalledWith(
       expect.objectContaining({ effort: 'xhigh' }),
+    );
+  });
+
+  it('PlannerClient receives the configured plan_generation effort', async () => {
+    storeState.workspaceOverrides = {
+      'ws-1': {
+        taskModels: {
+          plan_generation: {
+            providerId: 'anthropic',
+            model: 'claude-sonnet-5',
+            effort: 'medium',
+          },
+        },
+      },
+    };
+    mockPlan.mockResolvedValue({ output: PLAN_FIXTURE });
+    render(<WorkflowBuilderView session={session} onClose={vi.fn()} />);
+    setGoal();
+    fireEvent.change(screen.getByPlaceholderText(/describe the process/i), {
+      target: { value: 'do something' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /generate plan/i }));
+    await waitFor(() => screen.getByText('Ready'));
+
+    expect(vi.mocked(PlannerClient)).toHaveBeenCalledWith(
+      expect.objectContaining({ providerId: 'anthropic', model: 'sonnet-5', effort: 'medium' }),
     );
   });
 

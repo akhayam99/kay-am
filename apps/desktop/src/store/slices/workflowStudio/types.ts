@@ -1,4 +1,4 @@
-import type { ProviderId, Workflow, WorkflowId, WorkspaceId } from '@goodboy/types';
+import type { Workflow, WorkflowId, WorkspaceId } from '@goodboy/types';
 import type { WorkflowDraft } from '../../../features/workflows/engine';
 
 export type { GetFn, SetFn } from '../../slice-types';
@@ -23,7 +23,6 @@ export type WorkflowGeneration =
 
 export type StartWorkflowGenerationParams = {
   readonly workspaceId: WorkspaceId;
-  readonly providerId: ProviderId;
   readonly description: string;
   readonly workingDir?: string;
   readonly workflow: Workflow | null;

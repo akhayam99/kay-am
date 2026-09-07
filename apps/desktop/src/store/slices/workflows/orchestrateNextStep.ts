@@ -535,11 +535,13 @@ export const orchestrateNextStep = (set: SetFn, get: GetFn) => {
         workspace: workspaceRoleModels,
         run: run.roleModelOverrides,
       });
-      const taskModel = resolveTaskModel(
-        'workflow_orchestrator',
-        get().workspaceOverrides?.[session.workspaceId]?.taskModels,
-        defaultProvider,
-      );
+      const taskModel = resolveTaskModel({
+        task: 'workflow_orchestrator',
+        preferences: get().workspaceOverrides?.[session.workspaceId]?.taskModels,
+        workspaceDefaultProviderId:
+          get().workspaceOverrides?.[session.workspaceId]?.defaultProviderId,
+        sessionDefaultProviderId: defaultProvider,
+      });
       const routing = options?.routing ?? run.orchestratorRouting ?? taskModel;
       const profileBlock = buildProfileGuard({
         profile: get().workspaces.find((candidate) => candidate.id === session.workspaceId)

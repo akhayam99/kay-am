@@ -91,6 +91,18 @@ describe('OrchestratorRoutingRow', () => {
     }
   });
 
+  it('uses the workspace default provider, not the session provider, for the automatic routing', () => {
+    Object.assign(storeState, {
+      workspaceOverrides: {
+        'workspace-1': { defaultProviderId: 'cursor' },
+      },
+    });
+
+    renderRow(run());
+
+    expect(screen.getByRole('button', { name: /^Orchestrator routing: Cursor/ })).toBeTruthy();
+  });
+
   it('commits the provider just picked, not the one pinned before', () => {
     renderRow(run({ providerId: 'anthropic', model: 'claude-sonnet-4-6' }));
 

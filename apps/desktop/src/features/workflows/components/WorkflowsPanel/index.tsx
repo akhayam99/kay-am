@@ -338,8 +338,7 @@ export const WorkflowsPanel = ({ workspaceId }: Props) => {
   };
 
   const createWithAgent = async () => {
-    const providerId = connectedProviders[0];
-    if (providerId === undefined) {
+    if (connectedProviders.length === 0) {
       return;
     }
     const generationDescription =
@@ -353,7 +352,6 @@ export const WorkflowsPanel = ({ workspaceId }: Props) => {
     const workflow = editing !== null && editing !== 'new' ? editing : null;
     const accepted = await startWorkflowGeneration({
       workspaceId,
-      providerId,
       description: generationDescription,
       ...(workspaceRoot !== null && { workingDir: workspaceRoot }),
       workflow,

@@ -39,11 +39,13 @@ export const reprocessGoalForWorkflow = (set: SetFn, get: GetFn) => {
 
       const worktreePath = getSessionRepo({ get, sessionId })?.worktreePath ?? null;
       const taskModel = routeTaskModel({
-        taskModel: resolveTaskModel(
-          'prose_polish',
-          state.workspaceOverrides?.[session.workspaceId]?.taskModels,
-          session.providerPreference.defaultProvider,
-        ),
+        taskModel: resolveTaskModel({
+          task: 'prose_polish',
+          preferences: state.workspaceOverrides?.[session.workspaceId]?.taskModels,
+          workspaceDefaultProviderId:
+            state.workspaceOverrides?.[session.workspaceId]?.defaultProviderId,
+          sessionDefaultProviderId: session.providerPreference.defaultProvider,
+        }),
         connectedProviders: state.providers
           .filter((provider) => provider.connection === 'connected')
           .map((provider) => provider.id),

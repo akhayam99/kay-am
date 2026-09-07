@@ -418,10 +418,22 @@ const RetryWithPicker = ({ action, onDone }: RetryWithPickerProps) => {
   if (providerId == null) {
     return null;
   }
-  const recommendedModel = resolveTaskModel('summarizer', null, providerId).model;
+  const recommendedModel = resolveTaskModel({
+    task: 'summarizer',
+    preferences: null,
+    workspaceDefaultProviderId: providerId,
+    sessionDefaultProviderId: providerId,
+  }).model;
   const dispatch = () => {
     const taskModel =
-      model === '' ? resolveTaskModel('summarizer', null, providerId) : { providerId, model };
+      model === ''
+        ? resolveTaskModel({
+            task: 'summarizer',
+            preferences: null,
+            workspaceDefaultProviderId: providerId,
+            sessionDefaultProviderId: providerId,
+          })
+        : { providerId, model };
     const override: TaskModelPreference = { ...taskModel, effort };
     const store = useAppStore.getState();
     switch (action.kind) {

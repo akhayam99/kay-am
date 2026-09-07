@@ -7,19 +7,26 @@ import { DEFAULT_AGENT_SPAWN_CONFIG } from './defaultAgentSpawnConfig';
 type Params = {
   readonly task: AuxTaskId;
   readonly preferences: TaskModelPreferences | null | undefined;
-  readonly defaultProviderId: ProviderId;
+  readonly workspaceDefaultProviderId: ProviderId | null | undefined;
+  readonly sessionDefaultProviderId: ProviderId;
 };
 
 export const taskModelAgentSpawnConfig = ({
   task,
   preferences,
-  defaultProviderId,
+  workspaceDefaultProviderId,
+  sessionDefaultProviderId,
 }: Params): AgentSpawnConfigValue => {
-  const taskModel = resolveTaskModel(task, preferences, defaultProviderId);
+  const taskModel = resolveTaskModel({
+    task,
+    preferences,
+    workspaceDefaultProviderId,
+    sessionDefaultProviderId,
+  });
   return {
     ...DEFAULT_AGENT_SPAWN_CONFIG,
     provider: taskModel.providerId,
     model: taskModel.model,
-    effort: clampEffort(taskModel.model, DEFAULT_AGENT_SPAWN_CONFIG.effort),
+    effort: clampEffort(taskModel.model, taskModel.effort ?? DEFAULT_AGENT_SPAWN_CONFIG.effort),
   };
 };

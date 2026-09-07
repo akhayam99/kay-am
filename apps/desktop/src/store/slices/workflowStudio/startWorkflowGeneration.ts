@@ -1,13 +1,45 @@
-import { formatWorkflowFromNL } from '@goodboy/core';
+import { formatWorkflowFromNL, resolveTaskModel } from '@goodboy/core';
 import { invoke } from '@tauri-apps/api/core';
 import type { WorkflowUpsertArgs } from '../../../features/workflows/workflows';
 import { formatError } from '@goodboy/ui';
+import { DEFAULT_SESSION_PROVIDER_PREFERENCE } from '@goodboy/types';
+import type { TaskModelPreference, WorkspaceId } from '@goodboy/types';
 import type { GetFn, SetFn, StartWorkflowGenerationParams } from './types';
+
+type GenerationModelParams = {
+  readonly state: ReturnType<GetFn>;
+  readonly workspaceId: WorkspaceId;
+};
+
+const generationTaskModel = ({
+  state,
+  workspaceId,
+}: GenerationModelParams): TaskModelPreference => {
+  const overrides = state.workspaceOverrides?.[workspaceId] ?? null;
+  const connected = state.providers
+    .filter((provider) => provider.connection === 'connected')
+    .map((provider) => provider.id);
+  const firstConnected = connected[0];
+  const resolved = resolveTaskModel({
+    task: 'plan_generation',
+    preferences: overrides?.taskModels,
+    workspaceDefaultProviderId: overrides?.defaultProviderId,
+    sessionDefaultProviderId: firstConnected ?? DEFAULT_SESSION_PROVIDER_PREFERENCE.defaultProvider,
+  });
+  if (firstConnected == null || connected.includes(resolved.providerId)) {
+    return resolved;
+  }
+  return resolveTaskModel({
+    task: 'plan_generation',
+    preferences: null,
+    workspaceDefaultProviderId: firstConnected,
+    sessionDefaultProviderId: firstConnected,
+  });
+};
 
 export const startWorkflowGeneration = (set: SetFn, get: GetFn) => {
   return async ({
     workspaceId,
-    providerId,
     description,
     workingDir,
     workflow,
@@ -25,9 +57,14 @@ export const startWorkflowGeneration = (set: SetFn, get: GetFn) => {
       },
     }));
     try {
-      const formatted = await formatWorkflowFromNL(
-        { providerId, invokeFn: invoke, ...(workingDir !== undefined && { workingDir }) },
-        {
+      const taskModel = generationTaskModel({ state: get(), workspaceId });
+      const formatted = await formatWorkflowFromNL({
+        deps: {
+          ...taskModel,
+          invokeFn: invoke,
+          ...(workingDir !== undefined && { workingDir }),
+        },
+        input: {
           description: cleanDescription,
           ...(form !== null && {
             currentName: form.name,
@@ -37,7 +74,7 @@ export const startWorkflowGeneration = (set: SetFn, get: GetFn) => {
               .filter((name) => name.trim().length > 0),
           }),
         },
-      );
+      });
       if (formatted === null) {
         throw new Error(
           'The agent could not build a workflow from that description. Try adding the outcome and the steps you expect.',

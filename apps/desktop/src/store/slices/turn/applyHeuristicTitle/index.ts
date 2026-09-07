@@ -110,11 +110,13 @@ export const applyHeuristicTitle = async ({
       return;
     }
 
-    const taskModel = resolveTaskModel(
-      'agent_naming',
-      get().workspaceOverrides?.[session.workspaceId]?.taskModels,
-      session.providerPreference.defaultProvider,
-    );
+    const taskModel = resolveTaskModel({
+      task: 'agent_naming',
+      preferences: get().workspaceOverrides?.[session.workspaceId]?.taskModels,
+      workspaceDefaultProviderId:
+        get().workspaceOverrides?.[session.workspaceId]?.defaultProviderId,
+      sessionDefaultProviderId: session.providerPreference.defaultProvider,
+    });
 
     let generatedTitle: string;
     try {
