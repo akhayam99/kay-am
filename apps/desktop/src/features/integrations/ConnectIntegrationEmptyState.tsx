@@ -1,12 +1,6 @@
-import type { ComponentType } from 'react';
 import type { WorkspaceId } from '@goodboy/types';
+import { FORM_BODIES } from './formBodies';
 import { IntegrationConnectPanel } from './components/IntegrationConnectPanel';
-import { BitbucketFormBody } from './bitbucket/BitbucketFormBody';
-import { GitlabFormBody } from './gitlab/GitlabFormBody';
-import { JiraFormBody } from './jira/JiraFormBody';
-import { LinearFormBody } from './linear/LinearFormBody';
-import { SentryFormBody } from './sentry/SentryFormBody';
-import { SlackFormBody } from './slack/SlackFormBody';
 
 type Provider = 'linear' | 'sentry' | 'gitlab' | 'jira' | 'bitbucket' | 'slack';
 
@@ -18,11 +12,6 @@ type Props = {
   readonly wrapped?: boolean;
 };
 
-type FormBodyProps = {
-  readonly workspaceId: WorkspaceId;
-  readonly shouldAutoFocus?: boolean;
-};
-
 const PROVIDER_DESCRIPTIONS: Record<Provider, string> = {
   linear: 'Connect Linear to review issues from this project',
   sentry: 'Connect Sentry to review errors from this project',
@@ -30,15 +19,6 @@ const PROVIDER_DESCRIPTIONS: Record<Provider, string> = {
   jira: 'Connect Jira to review issues from this project',
   bitbucket: 'Connect Bitbucket to review pull requests from this project',
   slack: 'Connect Slack to read the threads a task came out of',
-};
-
-const FORM_BODIES: Record<Provider, ComponentType<FormBodyProps>> = {
-  linear: LinearFormBody,
-  sentry: SentryFormBody,
-  gitlab: GitlabFormBody,
-  jira: JiraFormBody,
-  bitbucket: BitbucketFormBody,
-  slack: SlackFormBody,
 };
 
 export const ConnectIntegrationEmptyState = ({

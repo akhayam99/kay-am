@@ -160,7 +160,7 @@ export const SessionKickoff = ({ session, onOpenWorkflowBuilder }: Props) => {
               {issues.hasSources ? 'No open issues detected' : 'No tracker connected yet'}
             </p>
             <div className="ml-auto">
-              <TrackerStudioLinks links={emptyStateLinks} />
+              <TrackerStudioLinks links={emptyStateLinks} connected={issues.connected} />
             </div>
           </div>
         ) : null}

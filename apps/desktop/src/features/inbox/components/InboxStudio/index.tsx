@@ -1,3 +1,4 @@
+import { openToolSettings } from '../../../integrations/openToolSettings';
 import { useEffect, useMemo, useState } from 'react';
 import { IconButton, StudioRailLayout } from '@goodboy/ui';
 import { RefreshCw } from 'lucide-react';
@@ -165,11 +166,7 @@ export const InboxStudio = ({
     selectedProviders.size > 0 ||
     sessionFilter != null;
 
-  const onOpenIntegrations = (): void => {
-    window.dispatchEvent(
-      new CustomEvent('goodboy:open-settings', { detail: { scope: 'providers' } }),
-    );
-  };
+  const onOpenIntegrations = () => openToolSettings({});
 
   return (
     <StudioShell

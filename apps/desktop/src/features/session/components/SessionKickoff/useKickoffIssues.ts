@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { GitlabIntegrationBinding, WorkspaceId } from '@goodboy/types';
-import { EMPTY_ARRAY, useAppStore } from '../../../../store';
+import { useAppStore } from '../../../../store';
 import { primaryProjectRoot } from '../../../workspace/primaryProjectRoot';
 import {
   fetchIssueCandidates,
   type IssueCandidate,
 } from '../../../integrations/fetchIssueCandidates';
 import { resolveIssueSources, type IssueSource } from '../../../integrations/issueSources';
-import { useGithubConnection } from '../../../integrations/github/useGithubConnection';
+import { useToolConnections } from '../../../integrations/useToolConnections';
+import type { TrackerProvider } from '../../../integrations/components/TrackerStudioLinks';
 import { useJiraConfig } from '../../../integrations/jira/useJiraConfig';
 
 const ROWS_PER_SOURCE = 5;
@@ -17,6 +18,7 @@ type Params = {
 };
 
 type Result = {
+  readonly connected: Readonly<Record<TrackerProvider, boolean>>;
   readonly hasSources: boolean;
   readonly rows: ReadonlyArray<IssueCandidate>;
   readonly isLoaded: boolean;
@@ -24,10 +26,7 @@ type Result = {
 };
 
 export const useKickoffIssues = ({ workspaceId }: Params): Result => {
-  const integrations = useAppStore(
-    (state) => state.workspaceIntegrations[workspaceId] ?? EMPTY_ARRAY,
-  );
-  const github = useGithubConnection({ workspaceId });
+  const { integrations, github, connected } = useToolConnections({ workspaceId });
   const rootPath = useAppStore((state) =>
     primaryProjectRoot({ projects: state.projects, workspaceId }),
   );
@@ -98,6 +97,7 @@ export const useKickoffIssues = ({ workspaceId }: Params): Result => {
   );
 
   return {
+    connected,
     hasSources: sources.length > 0,
     rows,
     isLoaded: sources.every((source) => settled.has(source.provider)),
