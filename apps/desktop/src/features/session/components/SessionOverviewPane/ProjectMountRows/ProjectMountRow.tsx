@@ -1,4 +1,4 @@
-import { Skeleton, Tooltip } from '@goodboy/ui';
+import { cn, Skeleton, Tooltip } from '@goodboy/ui';
 import type {
   Project,
   PullRequestState,
@@ -14,6 +14,7 @@ import {
   projectGlyph,
 } from '../../../../../shared/components/conceptIcons';
 import { PullRequestChip } from '../../../../github/components/PullRequestChip';
+import { usePrDraftAgentRunning } from '../../../../github/usePrDraftAgentRunning';
 import { useRemoteHostKind } from '../../../../worktree/useRemoteHostKind';
 import { DiffStat } from '../../DiffStat';
 import { EditorMenu } from '../EditorMenu';
@@ -62,6 +63,8 @@ export const ProjectMountRow = ({
   const changes = diffStat != null && (diffStat.additions > 0 || diffStat.deletions > 0);
   const isStatusPending = isStatusPendingProp && worktreeStatus == null && project?.kind === 'repo';
   const remoteKind = useRemoteHostKind({ sessionId });
+  const isDraftAgentRunning = usePrDraftAgentRunning({ sessionId });
+  const isCreateBlocked = remoteKind !== 'gitlab' && isDraftAgentRunning;
   const activity = useProjectActivity({
     sessionId,
     projectId: mount.projectId,
@@ -139,7 +142,12 @@ export const ProjectMountRow = ({
       {pullRequest == null && changes && remoteKind != null ? (
         <button
           type="button"
-          aria-label={`Create a PR for ${projectName}`}
+          disabled={isCreateBlocked}
+          aria-label={
+            isCreateBlocked
+              ? `An agent is opening a PR for ${projectName}`
+              : `Create a PR for ${projectName}`
+          }
           onClick={() => {
             void setSessionActiveProject({ sessionId, projectId: mount.projectId }).then(() => {
               window.dispatchEvent(
@@ -152,9 +160,12 @@ export const ProjectMountRow = ({
               );
             });
           }}
-          className="rounded-md px-1.5 py-1 text-xs text-muted-foreground/70 hover:bg-muted/40 hover:text-foreground"
+          className={cn(
+            'rounded-md px-1.5 py-1 text-xs text-muted-foreground/70 hover:bg-muted/40 hover:text-foreground',
+            'disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent',
+          )}
         >
-          {remoteKind === 'gitlab' ? 'Create MR' : 'Create PR'}
+          {remoteKind === 'gitlab' ? 'Create MR' : isCreateBlocked ? 'Opening PR…' : 'Create PR'}
         </button>
       ) : null}
       {pullRequest != null ? (

@@ -28,6 +28,7 @@ const { store, remoteKind } = vi.hoisted(() => ({
       ReadonlyArray<{ id: string; projectId?: string; status: string }>
     >,
     scriptRuns: {} as Record<string, Record<string, { status: string }>>,
+    sessionPhaseRuns: {} as Record<string, ReadonlyArray<{ name: string; status: string }>>,
     projectScripts: {} as Record<string, ReadonlyArray<{ id: string; projectId: string }>>,
   },
 }));
@@ -151,6 +152,7 @@ beforeEach(() => {
     ],
   };
   store.sessionWorktrees = { [sessionId]: ['/session-root'] };
+  store.sessionPhaseRuns = {};
   store.detectedEditors = [{ binary: 'code', label: 'VS Code' }];
   vi.mocked(openInEditor).mockClear();
 });
@@ -171,6 +173,17 @@ describe('ProjectMountRow create pr action', () => {
     expect(event.detail).toEqual({ sessionId });
     expect(store.setSessionActiveProject).toHaveBeenCalledWith({ sessionId, projectId: 'api' });
     window.removeEventListener('goodboy:open-github-session', listener);
+  });
+
+  it('blocks create pr while an agent is opening one', () => {
+    store.sessionPhaseRuns = {
+      [sessionId]: [{ name: 'open pull request', status: 'running' }],
+    };
+    renderRow({ diffStat: { additions: 3, deletions: 1 } });
+
+    const action = screen.getByRole('button', { name: 'An agent is opening a PR for API' });
+    expect(action.hasAttribute('disabled')).toBe(true);
+    expect(action.textContent).toBe('Opening PR…');
   });
 
   it('hides create pr without changes', () => {

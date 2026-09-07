@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type {
+  Agent,
+  AgentId,
   IsoDateTime,
   SessionExternalTask,
   SessionId,
@@ -27,7 +29,9 @@ type Store = {
   readonly createPrForSession: ReturnType<typeof vi.fn<CreatePr>>;
   readonly spawnAgent: ReturnType<typeof vi.fn<SpawnAgent>>;
   readonly selectAgent: ReturnType<typeof vi.fn>;
+  readonly setActiveLens: ReturnType<typeof vi.fn>;
   readonly setCurrentSession: ReturnType<typeof vi.fn>;
+  sessionPhaseRuns: Record<string, ReadonlyArray<Agent>>;
   readonly sessionBranches: Record<string, string>;
   readonly sessionProjectMounts: Record<string, ReadonlyArray<never>>;
   readonly sessionActiveProject: Record<string, string>;
@@ -68,7 +72,9 @@ const h = vi.hoisted(() => ({
     createPrForSession: vi.fn<CreatePr>(async () => undefined),
     spawnAgent: vi.fn<SpawnAgent>(async () => 'agent-2'),
     selectAgent: vi.fn(async () => undefined),
+    setActiveLens: vi.fn(),
     setCurrentSession: vi.fn(async () => undefined),
+    sessionPhaseRuns: {} as Record<string, ReadonlyArray<Agent>>,
     sessionBranches: { 'session-2': 'ak/card-config' },
     sessionProjectMounts: {},
     sessionActiveProject: {},
@@ -140,13 +146,16 @@ const linkedIssue = (overrides: Partial<SessionExternalTask>): SessionExternalTa
 
 const renderPanel = () =>
   render(
-    <CreatePrPanel
-      sessionId={SESSION_ID}
-      defaultTitle="Refactor PR cards"
-      onCreated={vi.fn()}
-      onStudioClose={vi.fn()}
-    />,
+    <CreatePrPanel sessionId={SESSION_ID} defaultTitle="Refactor PR cards" onCreated={vi.fn()} />,
   );
+
+const draftingAgent = (): Agent => ({
+  id: 'agent-1' as AgentId,
+  sessionId: SESSION_ID,
+  ordinal: 1,
+  name: 'open pull request',
+  status: 'running',
+});
 
 const switchToAgentMode = () => {
   fireEvent.click(screen.getByRole('tab', { name: 'With an agent' }));
@@ -157,7 +166,9 @@ beforeEach(() => {
   h.store.createPrForSession.mockImplementation(async () => undefined);
   h.store.spawnAgent.mockClear();
   h.store.selectAgent.mockClear();
+  h.store.setActiveLens.mockClear();
   h.store.setCurrentSession.mockClear();
+  h.store.sessionPhaseRuns = {};
   h.showToast.mockClear();
   h.store.workspaceOverrides = {};
   h.store.sessionExternalTasks = {};
@@ -238,15 +249,7 @@ describe('CreatePrPanel', () => {
   });
 
   it('spawns a PR agent with the chosen config and operator notes', async () => {
-    const onStudioClose = vi.fn();
-    render(
-      <CreatePrPanel
-        sessionId={SESSION_ID}
-        defaultTitle="Refactor PR cards"
-        onCreated={vi.fn()}
-        onStudioClose={onStudioClose}
-      />,
-    );
+    renderPanel();
     switchToAgentMode();
     fireEvent.click(screen.getByRole('button', { name: 'Choose agent config' }));
     fireEvent.click(screen.getByRole('button', { name: 'Draft with agent' }));
@@ -262,23 +265,16 @@ describe('CreatePrPanel', () => {
       '\n\nOperator notes:\n---\nKeep the public API stable.\n---',
     );
     expect(args).toMatchObject({ focus: 'none' });
-    expect(onStudioClose).not.toHaveBeenCalled();
   });
 
-  it('keeps the panel in place after the spawn and opens the agent only from the toast action', async () => {
-    const onStudioClose = vi.fn();
-    render(
-      <CreatePrPanel
-        sessionId={SESSION_ID}
-        defaultTitle="Refactor PR cards"
-        onCreated={vi.fn()}
-        onStudioClose={onStudioClose}
-      />,
-    );
+  it('sends the operator back to the overview and follows the agent from the toast action', async () => {
+    renderPanel();
     switchToAgentMode();
     fireEvent.click(screen.getByRole('button', { name: 'Draft with agent' }));
 
     await waitFor(() => expect(h.showToast).toHaveBeenCalledOnce());
+    expect(h.store.setCurrentSession).toHaveBeenCalledWith(SESSION_ID);
+    expect(h.store.setActiveLens).toHaveBeenCalledWith(SESSION_ID, null);
     expect(h.store.selectAgent).not.toHaveBeenCalled();
     const action = h.showToast.mock.calls[0]![2]?.action;
     expect(action?.label).toBe('Open the agent');
@@ -286,7 +282,22 @@ describe('CreatePrPanel', () => {
     action?.onClick();
 
     await waitFor(() => expect(h.store.selectAgent).toHaveBeenCalledWith(SESSION_ID, 'agent-2'));
-    await waitFor(() => expect(onStudioClose).toHaveBeenCalledOnce());
+    expect(h.store.setActiveLens).toHaveBeenCalledWith(SESSION_ID, 'agents');
+  });
+
+  it('blocks both create actions while a drafting agent runs', async () => {
+    h.store.sessionPhaseRuns = { 'session-2': [draftingAgent()] };
+    renderPanel();
+    await screen.findByRole('combobox', { name: 'Branch' });
+
+    expect(screen.getByRole('button', { name: 'Create PR' }).hasAttribute('disabled')).toBe(true);
+    expect(
+      screen.getByText('An agent is already opening a pull request for this session.'),
+    ).toBeDefined();
+    switchToAgentMode();
+    fireEvent.click(screen.getByRole('button', { name: 'Draft with agent' }));
+
+    expect(h.store.spawnAgent).not.toHaveBeenCalled();
   });
 
   it('preserves the prompt for a whitespace-only hint', async () => {
@@ -316,12 +327,7 @@ describe('CreatePrPanel', () => {
 
   it('uses a workspace task model loaded after mount', async () => {
     const { rerender } = render(
-      <CreatePrPanel
-        sessionId={SESSION_ID}
-        defaultTitle="Refactor PR cards"
-        onCreated={vi.fn()}
-        onStudioClose={vi.fn()}
-      />,
+      <CreatePrPanel sessionId={SESSION_ID} defaultTitle="Refactor PR cards" onCreated={vi.fn()} />,
     );
     h.store.workspaceOverrides = {
       'workspace-1': {
@@ -329,12 +335,7 @@ describe('CreatePrPanel', () => {
       },
     };
     rerender(
-      <CreatePrPanel
-        sessionId={SESSION_ID}
-        defaultTitle="Refactor PR cards"
-        onCreated={vi.fn()}
-        onStudioClose={vi.fn()}
-      />,
+      <CreatePrPanel sessionId={SESSION_ID} defaultTitle="Refactor PR cards" onCreated={vi.fn()} />,
     );
     switchToAgentMode();
     fireEvent.click(screen.getByRole('button', { name: 'Draft with agent' }));
