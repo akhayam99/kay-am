@@ -556,6 +556,7 @@ export const advanceClusterImplementation = (set: SetFn, get: GetFn) => {
     const outputSummary =
       assistantText.length > 0
         ? await summarizeWorkflowAgentOutput({
+            set,
             get,
             sessionId,
             agent: child,

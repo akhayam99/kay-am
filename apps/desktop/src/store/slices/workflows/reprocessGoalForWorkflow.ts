@@ -3,6 +3,7 @@ import { resolveTaskModel, rewriteWorkflowGoal } from '@goodboy/core';
 import { upsertContextSlot } from '@goodboy/db';
 import { invoke } from '@tauri-apps/api/core';
 import { tauriDatabase } from '../../../shared/lib/db';
+import { routeTaskModel } from '../../../features/providers/taskModelRouting';
 import { getSessionRepo } from '../worktrees/getSessionRepo';
 import type { GetFn, SetFn } from './types';
 
@@ -37,11 +38,22 @@ export const reprocessGoalForWorkflow = (set: SetFn, get: GetFn) => {
       }
 
       const worktreePath = getSessionRepo({ get, sessionId })?.worktreePath ?? null;
-      const taskModel = resolveTaskModel(
-        'prose_polish',
-        state.workspaceOverrides?.[session.workspaceId]?.taskModels,
-        session.providerPreference.defaultProvider,
-      );
+      const taskModel = routeTaskModel({
+        taskModel: resolveTaskModel(
+          'prose_polish',
+          state.workspaceOverrides?.[session.workspaceId]?.taskModels,
+          session.providerPreference.defaultProvider,
+        ),
+        connectedProviders: state.providers
+          .filter((provider) => provider.connection === 'connected')
+          .map((provider) => provider.id),
+        enabledProviders: session.providerPreference.enabledProviders ?? null,
+        cooldowns: state.providerCooldowns,
+        nowMs: Date.now(),
+      });
+      if (taskModel == null) {
+        return;
+      }
       const rewritten = await rewriteWorkflowGoal(
         {
           ...taskModel,
