@@ -16,7 +16,6 @@ export type ResolverActionKind =
   | 'proceed'
   | 'answer'
   | 'review'
-  | 'run'
   | 'rerun'
   | 'fix'
   | 'rework'
@@ -62,7 +61,6 @@ type Params = {
   readonly surface: ResolverActionSurface;
   readonly queuedThreadIds: ReadonlyArray<string>;
   readonly prNumber: number | null;
-  readonly isQueueStalled: boolean;
   readonly hasOtherActiveResolvers: boolean;
 };
 
@@ -99,15 +97,6 @@ const withoutGithubActions = (plan: ResolverActionPlan): ResolverActionPlan => {
     overflow: plan.overflow.filter((action) => !GITHUB_ONLY_KINDS.has(action.kind)),
     note: null,
   };
-};
-
-const RUN_NOW: ResolverAction = {
-  kind: 'run',
-  label: 'Run now',
-  role: 'primary',
-  isEnabled: true,
-  confirm: null,
-  opensInspector: false,
 };
 
 const RUN_AGAIN: ResolverAction = {
@@ -392,9 +381,6 @@ const statusBlock = (params: Params & { readonly status: ActionableResolverStatu
 
 const blockFor = (params: Params): Block => {
   if (!isActionableResolverStatus(params.status)) {
-    if (params.status === 'pending' && params.isQueueStalled) {
-      return { primary: RUN_NOW, secondary: null, note: null };
-    }
     return {
       primary: null,
       secondary: null,

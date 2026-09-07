@@ -23,6 +23,7 @@ import { ReleaseToast } from './features/changelog/components/ReleaseToast';
 import { OnboardingCard } from './features/onboarding/OnboardingCard';
 import { listenBridgeCommands } from './features/companion/commandExecutor';
 import { listenProjectMaterializeRequests } from './features/session/projectMaterializeBridge';
+import { startWorktreeWriterBridge } from './features/session/resolve/worktreeWriterBridge';
 import { useProviderRefreshOnFocus } from './shared/hooks/useProviderRefreshOnFocus';
 import { useZoomShortcuts } from './shared/hooks/useZoomShortcuts';
 import { useUnhandledRejectionNotice } from './shared/hooks/useUnhandledRejectionNotice';
@@ -159,6 +160,22 @@ export const App = () => {
     let off: (() => void) | undefined;
     let cancelled = false;
     void listenProjectMaterializeRequests().then((fn) => {
+      if (cancelled) {
+        fn();
+        return;
+      }
+      off = fn;
+    });
+    return () => {
+      cancelled = true;
+      off?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    let off: (() => void) | undefined;
+    let cancelled = false;
+    void startWorktreeWriterBridge().then((fn) => {
       if (cancelled) {
         fn();
         return;

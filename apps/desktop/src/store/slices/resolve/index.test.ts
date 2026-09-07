@@ -645,10 +645,13 @@ describe('durable resolve store', () => {
     });
   });
 
-  it('keeps an interrupted streaming candidate out of the settled outcomes', async () => {
-    const live = createHarness();
-    await live.actions.loadResolveSession({ sessionId: SESSION_ID });
-    const attemptId = await live.actions.recordResolveAttempt({
+  const recordCandidateRun = async ({
+    harness,
+  }: {
+    readonly harness: ReturnType<typeof createHarness>;
+  }) => {
+    await harness.actions.loadResolveSession({ sessionId: SESSION_ID });
+    const attemptId = await harness.actions.recordResolveAttempt({
       sessionId: SESSION_ID,
       agent,
       provider: 'anthropic',
@@ -657,13 +660,19 @@ describe('durable resolve store', () => {
       instructions: null,
       phase: 'running',
     });
-    await live.actions.persistResolveTurn({
+    await harness.actions.persistResolveTurn({
       sessionId: SESSION_ID,
       agent,
-      assistantText: ASSISTANT_TEXT,
+      assistantText: '<<comment-resolved threadId="PRRT_1" commitSha="abcdef1234567890">>',
       attemptId,
       isCandidate: true,
     });
+    return attemptId;
+  };
+
+  it('keeps the streaming candidate of a cancelled run out of the settled outcomes', async () => {
+    const live = createHarness();
+    const attemptId = await recordCandidateRun({ harness: live });
     await live.actions.recordResolvePhase({
       sessionId: SESSION_ID,
       agentId: AGENT_ID,
@@ -672,10 +681,39 @@ describe('durable resolve store', () => {
     });
     const rebooted = createHarness();
     await rebooted.actions.loadResolveSession({ sessionId: SESSION_ID });
+    const rows = rebooted.get().sessionResolveThreads[SESSION_ID] ?? [];
     expect(statusFor({ get: rebooted.get })).toBe('stopped');
     expect(rebooted.get().resolverThreadOutcomes[AGENT_ID]).toEqual({});
-    expect(
-      rebooted.get().sessionResolveThreads[SESSION_ID]?.find((row) => row.threadId === 'PRRT_1'),
-    ).toMatchObject({ commitShas: ['abcdef1234567890'] });
+    expect(rows.find((row) => row.threadId === 'PRRT_1')).toMatchObject({
+      state: 'failed',
+      commitShas: ['abcdef1234567890'],
+    });
+    expect(rows.find((row) => row.threadId === 'PRRT_2')).toMatchObject({
+      state: 'failed',
+      stateReason: 'stopped:interrupted',
+    });
+  });
+
+  it('promotes the fix a cleanly exited run already reported and fails the rest', async () => {
+    const live = createHarness();
+    const attemptId = await recordCandidateRun({ harness: live });
+    await live.actions.recordResolvePhase({
+      sessionId: SESSION_ID,
+      agentId: AGENT_ID,
+      attemptId,
+      phase: 'failed',
+      isCleanExit: true,
+    });
+    const rebooted = createHarness();
+    await rebooted.actions.loadResolveSession({ sessionId: SESSION_ID });
+    const rows = rebooted.get().sessionResolveThreads[SESSION_ID] ?? [];
+    expect(rows.find((row) => row.threadId === 'PRRT_1')).toMatchObject({
+      state: 'fixed',
+      commitShas: ['abcdef1234567890'],
+    });
+    expect(rows.find((row) => row.threadId === 'PRRT_2')).toMatchObject({
+      state: 'failed',
+      stateReason: 'failed:interrupted',
+    });
   });
 });

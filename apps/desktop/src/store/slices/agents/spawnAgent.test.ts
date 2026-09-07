@@ -154,8 +154,13 @@ function buildHarness(
   const sendTurn = vi.fn(
     async (_arg: { sessionId: SessionId; agentId: AgentId; content: string }) => undefined,
   );
+  const drainResolveQueue = vi.fn(async () => undefined);
+  const recordResolveAttempt = vi.fn(
+    async (_params: { phase: string; instructions: string | null }) => 'attempt-id',
+  );
   const state = {
-    recordResolveAttempt: vi.fn(async () => 'attempt-id'),
+    recordResolveAttempt,
+    drainResolveQueue,
     sessions: [session],
     phaseTemplates: { [WS_ID]: [] },
     sessionPhaseRuns: { [SESSION_ID]: [] },
@@ -182,7 +187,6 @@ function buildHarness(
     agentProviderOverride: {},
     agentEffortOverride: {},
     agentKindOverride: {},
-    pendingResolverKickoff: {},
     sessionCreations: {},
     sendTurn,
   };
@@ -197,6 +201,8 @@ function buildHarness(
   });
   return {
     getState: get,
+    drainResolveQueue,
+    recordResolveAttempt,
     sendTurn,
     spawn: spawnAgent(set, get),
   };
@@ -353,8 +359,8 @@ describe('spawnAgent ad-hoc cluster fan-out', () => {
     expect(sendTurn.mock.calls[0]?.[0]?.content).toContain('fix the typo in README');
   });
 
-  it('stores neutral instructions and a hint for a deferred batch resolver', async () => {
-    const { getState, sendTurn, spawn } = buildHarness([]);
+  it('persists a queued request instead of sending the resolver kickoff itself', async () => {
+    const { drainResolveQueue, recordResolveAttempt, sendTurn, spawn } = buildHarness([]);
     const args = buildCommentAgentArgs(COMMENT, PR, {
       hint: 'Avoid schema changes.',
     });
@@ -362,13 +368,14 @@ describe('spawnAgent ad-hoc cluster fan-out', () => {
     await spawn(SESSION_ID, {
       kindOverride: 'resolver',
       initialPrompt: args.initialPrompt,
-      deferKickoff: true,
     });
 
-    const kickoff = getState().pendingResolverKickoff[INSERTED_ID];
-    expect(kickoff).toContain('Judge the thread above on the merits in one pass.');
-    expect(kickoff).toContain('Operator notes\nAvoid schema changes.');
+    const request = recordResolveAttempt.mock.calls[0]?.[0];
+    expect(request?.phase).toBe('queued');
+    expect(request?.instructions).toContain('Judge the thread above on the merits in one pass.');
+    expect(request?.instructions).toContain('Operator notes\nAvoid schema changes.');
     expect(sendTurn).not.toHaveBeenCalled();
+    expect(drainResolveQueue).toHaveBeenCalledWith({ sessionId: SESSION_ID });
   });
 
   it('persists every combined source thread and the first compatibility thread', async () => {
@@ -393,7 +400,6 @@ describe('spawnAgent ad-hoc cluster fan-out', () => {
       kindOverride: 'resolver',
       initialPrompt: args.initialPrompt,
       sourceThreadIds: args.sourceThreadIds,
-      deferKickoff: true,
     });
 
     expect(invokeAgentInsertSpy).toHaveBeenCalledOnce();

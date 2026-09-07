@@ -55,7 +55,6 @@ type Store = {
   readonly selectAgent: ReturnType<typeof vi.fn>;
   readonly setCurrentSession: ReturnType<typeof vi.fn>;
   readonly setActiveLens: ReturnType<typeof vi.fn>;
-  readonly activateNextResolver: ReturnType<typeof vi.fn>;
   readonly setAgentConfig: ReturnType<typeof vi.fn>;
   readonly sessionCreations: Record<string, ReadonlyArray<{ readonly kind: string }>>;
 };
@@ -169,7 +168,6 @@ const h = vi.hoisted(() => {
       selectAgent: vi.fn(async () => undefined),
       setCurrentSession: vi.fn(async () => undefined),
       setActiveLens: vi.fn(),
-      activateNextResolver: vi.fn(async () => undefined),
       setAgentConfig: vi.fn(async () => undefined),
       sessionCreations: {},
     } satisfies Store,

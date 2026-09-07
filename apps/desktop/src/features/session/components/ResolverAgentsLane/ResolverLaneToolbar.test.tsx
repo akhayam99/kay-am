@@ -26,21 +26,7 @@ import { ResolverLaneToolbar } from './ResolverLaneToolbar';
 
 const SID = 'sess-1' as SessionId;
 
-const renderToolbar = ({
-  queuedCount,
-  isStalled,
-}: {
-  readonly queuedCount: number;
-  readonly isStalled: boolean;
-}) =>
-  render(
-    <ResolverLaneToolbar
-      sessionId={SID}
-      queuedCount={queuedCount}
-      isStalled={isStalled}
-      onForceNext={() => undefined}
-    />,
-  );
+const renderToolbar = () => render(<ResolverLaneToolbar sessionId={SID} />);
 
 afterEach(() => {
   cleanup();
@@ -48,29 +34,20 @@ afterEach(() => {
 });
 
 describe('ResolverLaneToolbar', () => {
-  it('does not show Run next when only one resolver is queued', () => {
-    renderToolbar({ queuedCount: 1, isStalled: true });
+  it('never offers a manual queue control', () => {
+    h.hasPending = true;
+    renderToolbar();
     expect(screen.queryByRole('button', { name: /Run next/ })).toBeNull();
   });
 
-  it('shows Run next only when more than one resolver waits behind the stalled head', () => {
-    renderToolbar({ queuedCount: 3, isStalled: true });
-    expect(screen.getByRole('button', { name: 'Run next (3)' })).toBeTruthy();
-  });
-
-  it('does not show Run next when the queue is not stalled', () => {
-    renderToolbar({ queuedCount: 3, isStalled: false });
-    expect(screen.queryByRole('button', { name: /Run next/ })).toBeNull();
-  });
-
-  it('renders nothing when there is neither pending resolution nor stalled queue', () => {
-    const { container } = renderToolbar({ queuedCount: 0, isStalled: false });
+  it('renders nothing when there is no pending resolution', () => {
+    const { container } = renderToolbar();
     expect(container.textContent).toBe('');
   });
 
   it('shows the pending strip when there are pending resolutions', () => {
     h.hasPending = true;
-    renderToolbar({ queuedCount: 0, isStalled: false });
+    renderToolbar();
     expect(screen.getByTestId('pending-strip')).toBeTruthy();
   });
 });

@@ -55,7 +55,6 @@ type Harness = {
     sessionPendingResolutions: Record<SessionId, ReadonlyArray<PendingResolution>>;
     queueResolution: ReturnType<typeof vi.fn>;
     refreshUnreadWorkspaces: ReturnType<typeof vi.fn>;
-    activateNextResolver: ReturnType<typeof vi.fn>;
     emitNotification: ReturnType<typeof vi.fn>;
   };
   readonly set: SetFn;
@@ -78,7 +77,6 @@ const createHarness = ({}: HarnessParams): Harness => {
     sessionPendingResolutions: {},
     queueResolution: vi.fn(async () => undefined),
     refreshUnreadWorkspaces: vi.fn(async () => undefined),
-    activateNextResolver: vi.fn(async () => undefined),
     emitNotification: vi.fn(async () => undefined),
   };
   const set = ((update: unknown) => {
@@ -169,7 +167,6 @@ describe('completeResolvedAgent', () => {
 
     expect(state.resolverState[AGENT_ID]).toBe('awaiting');
     expect(Object.keys(state.resolverThreadOutcomes[AGENT_ID] ?? {})).toEqual(['PRRT_1', 'PRRT_2']);
-    expect(state.activateNextResolver).toHaveBeenCalledWith(SESSION_ID);
   });
 
   it('settles an agent as committed once every owned thread has an outcome', async () => {

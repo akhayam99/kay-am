@@ -287,7 +287,6 @@ export type AppState = AppSliceState & {
   readonly agentProviderOverride: Readonly<Record<AgentId, ProviderId>>;
   readonly agentEffortOverride: Readonly<Record<AgentId, string>>;
   readonly agentKindOverride: Readonly<Record<AgentId, AgentKind>>;
-  readonly pendingResolverKickoff: Readonly<Record<AgentId, string>>;
   readonly resolverState: Readonly<Record<AgentId, ResolverState>>;
   readonly resolverThreadOutcomes: Readonly<
     Record<AgentId, Readonly<Record<string, ResolverThreadOutcome>>>

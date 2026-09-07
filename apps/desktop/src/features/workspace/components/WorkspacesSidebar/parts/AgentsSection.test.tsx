@@ -292,7 +292,6 @@ function reset() {
     diffComments: {},
     resolverState: {},
     selectAgent: vi.fn(),
-    activateNextResolver: vi.fn(),
     resolveGithubThread: vi.fn(),
     dequeueResolution: vi.fn(),
     spawnAgent: vi.fn(),

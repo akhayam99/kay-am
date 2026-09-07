@@ -14,7 +14,6 @@ type Props = {
   readonly sessionId: SessionId;
   readonly status: ResolverStatus;
   readonly commitSha: string | null;
-  readonly isQueueStalled: boolean;
   readonly hasOtherActiveResolvers: boolean;
   readonly onOpenPanel: () => void;
   readonly onArmConfirm: (params: { action: ResolverAction; run: () => Promise<void> }) => void;
@@ -35,7 +34,6 @@ export const ResolverCardAction = ({
   sessionId,
   status,
   commitSha,
-  isQueueStalled,
   hasOtherActiveResolvers,
   onOpenPanel,
   onArmConfirm,
@@ -46,7 +44,6 @@ export const ResolverCardAction = ({
     status,
     commitSha,
     surface: 'lane',
-    isQueueStalled,
     hasOtherActiveResolvers,
   });
   const action = actions.plan.primary;

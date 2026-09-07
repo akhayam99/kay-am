@@ -24,7 +24,6 @@ vi.mock('../../../../store', () => ({
       resolveAgentThreads: vi.fn(),
       queueResolution: vi.fn(),
       dequeueResolution: vi.fn(),
-      activateNextResolver: vi.fn(),
       forceCloseResolver: vi.fn(),
       sendTurn: vi.fn(),
       selectAgent: vi.fn(),
@@ -116,7 +115,6 @@ const renderCard = ({
       reportedCommitSha={reportedCommitSha}
       diffTarget={diffTarget}
       canOpenDiff={canOpenDiff}
-      isQueueStalled={false}
       hasOtherActiveResolvers={hasOtherActiveResolvers}
       isSelected={false}
       isTaskActive

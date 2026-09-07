@@ -97,6 +97,11 @@ type SpawnArgs = {
   readonly apiKeyEnv?: string;
   readonly credentialId?: string;
   readonly cursorMaxMode?: boolean;
+  readonly writerLease?: {
+    readonly path: string;
+    readonly holder: string;
+    readonly token: string;
+  };
 };
 
 type RawTurnEnvelope =

@@ -2,7 +2,9 @@ import type { AgentId, IsoDateTime, SessionId } from '@goodboy/types';
 import { updateSessionState } from '@goodboy/db';
 import { tauriDatabase } from '../../../shared/lib/db';
 import { cancelTurn, deleteAttachment } from '../../../features/chat/turn';
+import { abandonWorktreeWriter } from '../../../features/worktree/worktree';
 import { invokeAgentList } from '../../../features/workflows/workflows';
+import { resolveWorktreePath } from '../resolve/resolveWorktreePath';
 import { cancelledRunIds, deriveSessionState } from '../../session-mutators';
 import { dropPendingTurnEvents } from '../transcripts/buffer';
 import type { GetFn, SetFn } from './types';
@@ -14,6 +16,11 @@ export const deleteAgent = (set: SetFn, get: GetFn) => {
     if (agentRunId !== null) {
       cancelledRunIds.add(agentRunId);
       await cancelTurn(agentRunId).catch(() => undefined);
+    }
+
+    const writerPath = await resolveWorktreePath({ get, sessionId });
+    if (writerPath !== null) {
+      await abandonWorktreeWriter({ path: writerPath, holder: agentId });
     }
 
     const worktree = (get().sessionWorktrees[sessionId] ?? [])[0] ?? null;
@@ -53,8 +60,6 @@ export const deleteAgent = (set: SetFn, get: GetFn) => {
       delete nextEffortOverride[agentId];
       const nextKindOverride = { ...s.agentKindOverride };
       delete nextKindOverride[agentId];
-      const nextResolverKickoff = { ...s.pendingResolverKickoff };
-      delete nextResolverKickoff[agentId];
       const nextResolverState = { ...s.resolverState };
       delete nextResolverState[agentId];
       const nextResolverThreadOutcomes = { ...s.resolverThreadOutcomes };
@@ -76,7 +81,6 @@ export const deleteAgent = (set: SetFn, get: GetFn) => {
         agentProviderOverride: nextProviderOverride,
         agentEffortOverride: nextEffortOverride,
         agentKindOverride: nextKindOverride,
-        pendingResolverKickoff: nextResolverKickoff,
         resolverState: nextResolverState,
         resolverThreadOutcomes: nextResolverThreadOutcomes,
         sessions: s.sessions.map((sess) =>

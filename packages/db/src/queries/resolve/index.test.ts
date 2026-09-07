@@ -6,6 +6,7 @@ import { migrations } from '../../migrations';
 import { listResolveThreads, setResolveThreadState, upsertResolveThread } from '../resolve-thread';
 import {
   insertResolveAttempt,
+  listActiveResolveAttempts,
   listResolveAttempts,
   setResolveAttemptPhase,
 } from '../resolve-attempt';
@@ -109,6 +110,24 @@ describe('durable resolve rows', () => {
     expect((await listResolveAttempts({ db, sessionId: SESSION }))[0]?.endedAt).not.toBeNull();
     await setResolveAttemptPhase({ db, id: 'attempt', phase: 'queued' });
     expect((await listResolveAttempts({ db, sessionId: SESSION }))[0]?.endedAt).toBeNull();
+  });
+
+  it('lists the queued and running attempts of every session, unopened ones included', async () => {
+    const db = await seed();
+    await migrate(db);
+    await db.execute(
+      "INSERT INTO sessions (id, workspace_id, goal, state_kind, created_at, updated_at) VALUES ('other', 'workspace', 'Goal', 'idle', 1, 1)",
+    );
+    await db.execute(
+      `INSERT INTO resolve_attempts (id, session_id, agent_id, pr_number, thread_ids_json, provider, model, phase, created_at) VALUES
+        ('queued-here', 'session', 'agent-1', 12, '[]', 'anthropic', 'recorded-model', 'queued', 1),
+        ('running-elsewhere', 'other', 'agent-2', 12, '[]', 'anthropic', 'recorded-model', 'running', 2),
+        ('done', 'session', 'agent-3', 12, '[]', 'anthropic', 'recorded-model', 'finished', 3)`,
+    );
+    expect((await listActiveResolveAttempts({ db })).map((attempt) => attempt.id)).toEqual([
+      'queued-here',
+      'running-elsewhere',
+    ]);
   });
 
   it('does not roll back unrelated writes when an import fails inside another transaction', async () => {

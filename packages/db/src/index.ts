@@ -320,6 +320,7 @@ export {
 export { listResolveThreads, upsertResolveThread } from './queries/resolve-thread';
 export {
   listResolveAttempts,
+  listActiveResolveAttempts,
   insertResolveAttempt,
   setResolveAttemptPhase,
 } from './queries/resolve-attempt';

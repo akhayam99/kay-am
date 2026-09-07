@@ -7,6 +7,16 @@ const hoisted = vi.hoisted(() => ({
   invokeAgentUpdateStatus: vi.fn(async () => undefined),
   invokeAgentList: vi.fn(async () => [] as ReadonlyArray<Agent>),
   updateSessionState: vi.fn(async () => undefined),
+  listWorktreesForSession: vi.fn(async () => []),
+  abandonWorktreeWriter: vi.fn(async () => ({
+    path: '/repo/one',
+    holder: null,
+    token: null,
+    runId: null,
+    isGranted: false,
+    hasExited: false,
+    waiting: [],
+  })),
 }));
 
 vi.mock('../../../features/chat/turn', () => ({ cancelTurn: hoisted.cancelTurn }));
@@ -14,10 +24,15 @@ vi.mock('../../../features/workflows/workflows', () => ({
   invokeAgentUpdateStatus: hoisted.invokeAgentUpdateStatus,
   invokeAgentList: hoisted.invokeAgentList,
 }));
-vi.mock('@goodboy/db', () => ({ updateSessionState: hoisted.updateSessionState }));
+vi.mock('@goodboy/db', () => ({
+  updateSessionState: hoisted.updateSessionState,
+  listWorktreesForSession: hoisted.listWorktreesForSession,
+}));
 vi.mock('../../../shared/lib/db', () => ({ tauriDatabase: {} }));
+vi.mock('../../../features/worktree/worktree', () => ({
+  abandonWorktreeWriter: hoisted.abandonWorktreeWriter,
+}));
 
-import { activateNextResolver } from './activateNextResolver';
 import { forceCloseResolver } from './forceCloseResolver';
 
 const SID = 'sess-1' as SessionId;
@@ -50,8 +65,16 @@ const makeStore = () => {
     },
     agentKindOverride: {},
     resolverState: {},
-    pendingResolverKickoff: { [NEXT]: 'resolve the next comment' },
-    sessions: [{ id: SID, state: { kind: 'idle', lastActivityAt: '2026-07-25T09:00:00.000Z' } }],
+    drainResolveQueue: vi.fn(async () => undefined),
+    sessionProjectMounts: { [SID]: [{ projectId: 'project-1', worktreePath: '/repo/one' }] },
+    sessionActiveProject: { [SID]: 'project-1' },
+    sessions: [
+      {
+        id: SID,
+        activeProjectId: 'project-1',
+        state: { kind: 'idle', lastActivityAt: '2026-07-25T09:00:00.000Z' },
+      },
+    ],
     sendTurn,
     selectAgent,
   };
@@ -63,7 +86,6 @@ const makeStore = () => {
         : (u as Record<string, unknown>);
     Object.assign(state, patch);
   }) as unknown as SetFn;
-  state.activateNextResolver = activateNextResolver(set, get);
   return { state, get, set, sendTurn, selectAgent };
 };
 
@@ -98,8 +120,8 @@ describe('forceCloseResolver', () => {
     expect((state.agentTurnState as Record<string, { kind: string }>)[STUCK]?.kind).toBe('idle');
   });
 
-  it('frees the serial queue so the next queued resolver starts', async () => {
-    const { get, set, sendTurn } = makeStore();
+  it('frees the worktree writer lease and drains the persisted queue', async () => {
+    const { state, get, set } = makeStore();
     hoisted.invokeAgentList.mockResolvedValue([
       resolver({ id: STUCK, status: 'skipped', ordinal: 0 }),
       resolver({ id: NEXT, status: 'pending', ordinal: 1 }),
@@ -107,16 +129,10 @@ describe('forceCloseResolver', () => {
 
     await forceCloseResolver(set, get)(SID, STUCK);
 
-    expect(sendTurn).toHaveBeenCalledWith(
-      expect.objectContaining({ agentId: NEXT, content: 'resolve the next comment' }),
-    );
-  });
-
-  it('leaves the queue untouched while the stuck resolver is still running', async () => {
-    const { get, set, sendTurn } = makeStore();
-
-    await activateNextResolver(set, get)(SID);
-
-    expect(sendTurn).not.toHaveBeenCalled();
+    expect(hoisted.abandonWorktreeWriter).toHaveBeenCalledWith({
+      path: '/repo/one',
+      holder: STUCK,
+    });
+    expect(state.drainResolveQueue).toHaveBeenCalledWith({ sessionId: SID });
   });
 });

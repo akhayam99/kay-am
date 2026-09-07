@@ -47,7 +47,6 @@ const base = {
   surface: 'inspector' as ResolverActionSurface,
   queuedThreadIds: [] as ReadonlyArray<string>,
   prNumber: 7,
-  isQueueStalled: false,
   hasOtherActiveResolvers: false,
 };
 
@@ -231,13 +230,10 @@ describe('resolverActionPlan', () => {
     expect(resolved.overflow).toEqual([]);
   });
 
-  it('runs a queued resolver only once the queue is stalled', () => {
+  it('never offers a manual start for a queued resolver', () => {
     const queued = resolverActionPlan({ ...base, status: 'pending' });
-    const stalled = resolverActionPlan({ ...base, status: 'pending', isQueueStalled: true });
     expect(queued.primary).toBeNull();
     expect(queued.note).not.toBeNull();
-    expect(stalled.primary?.label).toBe('Run now');
-    expect(stalled.note).toBeNull();
   });
 
   it('offers a rerun on a dead end, and leaves a single thread to its own card', () => {
