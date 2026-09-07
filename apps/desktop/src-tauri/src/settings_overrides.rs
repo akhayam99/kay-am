@@ -23,8 +23,8 @@ pub struct SettingsOverrides {
     pub role_models: Option<serde_json::Value>,
     #[serde(rename = "parallelAgents")]
     pub parallel_agents: Option<bool>,
-    #[serde(rename = "enabledProviders")]
-    pub enabled_providers: Option<Vec<String>>,
+    #[serde(rename = "providerPool")]
+    pub provider_pool: Option<Vec<String>>,
     #[serde(rename = "attributionFooter")]
     pub attribution_footer: Option<bool>,
 }
@@ -74,7 +74,7 @@ pub async fn get_workspace_overrides(
             task_models: json_from_text(row.get(6)?),
             role_models: json_from_text(row.get(7)?),
             parallel_agents: parallel_agents_raw.map(|v| v != 0),
-            enabled_providers: string_array_from_text(row.get(9)?),
+            provider_pool: string_array_from_text(row.get(9)?),
             attribution_footer: attribution_footer_raw.map(|v| v != 0),
         })
     })?;
@@ -121,7 +121,7 @@ pub async fn set_workspace_overrides(
             json_to_text(&overrides.task_models),
             json_to_text(&overrides.role_models),
             parallel_agents_val,
-            string_array_to_text(&overrides.enabled_providers),
+            string_array_to_text(&overrides.provider_pool),
             attribution_footer_val,
             now,
             workspace_id,
@@ -152,7 +152,7 @@ pub async fn get_session_overrides(
             task_models: None,
             role_models: None,
             parallel_agents: None,
-            enabled_providers: None,
+            provider_pool: None,
             attribution_footer: None,
         })
     })?;
@@ -191,4 +191,59 @@ pub async fn set_session_overrides(
         ],
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_provider_pool_survives_the_wire_names_the_frontend_sends() {
+        let payload = serde_json::json!({
+            "defaultProviderId": "anthropic",
+            "defaultWorkflowId": null,
+            "defaultBranchPrefix": null,
+            "parallelEnabled": null,
+            "defaultVerbosity": null,
+            "providerBindings": null,
+            "taskModels": null,
+            "roleModels": null,
+            "parallelAgents": null,
+            "providerPool": ["anthropic", "codex"],
+            "attributionFooter": null,
+        });
+
+        let overrides: SettingsOverrides =
+            serde_json::from_value(payload).expect("deserialize overrides");
+
+        assert_eq!(
+            overrides.provider_pool,
+            Some(vec!["anthropic".to_string(), "codex".to_string()])
+        );
+
+        let encoded = serde_json::to_value(&overrides).expect("serialize overrides");
+        assert_eq!(
+            encoded.get("providerPool"),
+            Some(&serde_json::json!(["anthropic", "codex"]))
+        );
+        assert!(encoded.get("enabledProviders").is_none());
+    }
+
+    #[test]
+    fn an_absent_provider_pool_reads_back_as_none() {
+        let overrides: SettingsOverrides =
+            serde_json::from_value(serde_json::json!({})).expect("deserialize overrides");
+
+        assert_eq!(overrides.provider_pool, None);
+        assert_eq!(string_array_to_text(&overrides.provider_pool), None);
+    }
+
+    #[test]
+    fn the_provider_pool_column_text_round_trips() {
+        let pool = Some(vec!["anthropic".to_string(), "codex".to_string()]);
+        let text = string_array_to_text(&pool);
+
+        assert_eq!(text.as_deref(), Some(r#"["anthropic","codex"]"#));
+        assert_eq!(string_array_from_text(text), pool);
+    }
 }

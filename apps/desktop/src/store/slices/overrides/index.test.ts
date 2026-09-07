@@ -549,6 +549,11 @@ describe('store contract', () => {
         workspaceId: WS_ID,
         overrides,
       });
+      const payload = vi.mocked(invoke).mock.calls[0]?.[1] as {
+        readonly overrides: Record<string, unknown>;
+      };
+      expect(payload.overrides).toHaveProperty('providerPool', ['anthropic', 'codex']);
+      expect(payload.overrides).not.toHaveProperty('enabledProviders');
     });
 
     it('setTaskOverrides caches the override map keyed by session', async () => {
