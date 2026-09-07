@@ -113,6 +113,7 @@ export { RemoteImage } from './components/RemoteImage';
 export { LocalImageLoaderProvider } from './components/LocalImage/LocalImageLoaderProvider';
 export { LocalImage } from './components/LocalImage';
 export { LocalImageLoaderContext } from './components/LocalImage/loaderContext';
+export type { LocalImageLoader } from './components/LocalImage/loaderContext';
 export { RemoteImageLoaderProvider } from './components/RemoteImage/RemoteImageLoaderProvider';
 export type { RemoteImageLoader } from './components/RemoteImage/loaderContext';
 export { ResizeHandle } from './components/ResizeHandle';

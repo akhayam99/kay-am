@@ -1,9 +1,8 @@
 import type { ReactNode } from 'react';
-import type { RemoteImageLoader } from '../RemoteImage/loaderContext';
-import { LocalImageLoaderContext } from './loaderContext';
+import { LocalImageLoaderContext, type LocalImageLoader } from './loaderContext';
 
 type Props = {
-  readonly load: RemoteImageLoader | null;
+  readonly load: LocalImageLoader | null;
   readonly children: ReactNode;
 };
 

@@ -1,4 +1,6 @@
 import { createContext } from 'react';
 import type { RemoteImageLoader } from '../RemoteImage/loaderContext';
 
-export const LocalImageLoaderContext = createContext<RemoteImageLoader | null>(null);
+export type LocalImageLoader = RemoteImageLoader;
+
+export const LocalImageLoaderContext = createContext<LocalImageLoader | null>(null);

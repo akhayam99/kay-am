@@ -70,7 +70,7 @@ fn read_image(root: &Path, path: &Path) -> Result<String, String> {
     let relative = canonical_path
         .strip_prefix(&canonical_root)
         .map_err(|_| "image path escapes the selected root")?;
-    let file = open_scoped(&canonical_root, relative).map_err(|_| "image is unavailable")?;
+    let file = open_scoped(&canonical_root, relative).map_err(open_scoped_error_message)?;
     let metadata = file.metadata().map_err(|_| "image is unavailable")?;
     if !metadata.is_file() {
         return Err("image must be a regular file".to_string());
@@ -92,6 +92,14 @@ fn read_image(root: &Path, path: &Path) -> Result<String, String> {
         "data:{expected_mime};base64,{}",
         STANDARD.encode(bytes)
     ))
+}
+
+fn open_scoped_error_message(error: std::io::Error) -> String {
+    if error.kind() == std::io::ErrorKind::Unsupported {
+        error.to_string()
+    } else {
+        "image is unavailable".to_string()
+    }
 }
 
 #[cfg(unix)]
@@ -144,7 +152,9 @@ fn open_scoped(_root: &Path, _relative: &Path) -> std::io::Result<File> {
 
 #[cfg(test)]
 mod tests {
-    use super::{open_scoped, read_image, resolve_root, MAX_IMAGE_BYTES};
+    #[cfg(unix)]
+    use super::open_scoped;
+    use super::{open_scoped_error_message, read_image, resolve_root, MAX_IMAGE_BYTES};
     use rusqlite::Connection;
     use std::fs;
     use std::path::PathBuf;
@@ -403,6 +413,21 @@ mod tests {
                 .kind(),
             std::io::ErrorKind::Unsupported
         );
-        assert!(read_image(&fixture.0, &PathBuf::from("out/chart.png")).is_err());
+        assert_eq!(
+            read_image(&fixture.0, &PathBuf::from("out/chart.png")).unwrap_err(),
+            "local images are unavailable on this platform"
+        );
+    }
+
+    #[test]
+    fn propagates_the_specific_message_for_unsupported_platform_errors() {
+        let error = std::io::Error::new(std::io::ErrorKind::Unsupported, "not supported here");
+        assert_eq!(open_scoped_error_message(error), "not supported here");
+    }
+
+    #[test]
+    fn maps_genuine_open_failures_to_a_generic_message() {
+        let error = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied");
+        assert_eq!(open_scoped_error_message(error), "image is unavailable");
     }
 }
