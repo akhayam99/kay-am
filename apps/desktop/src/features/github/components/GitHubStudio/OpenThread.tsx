@@ -1,12 +1,7 @@
 import { ExternalLink } from 'lucide-react';
-import { Chip, Tooltip } from '@goodboy/ui';
+import { Button, Chip, Tooltip } from '@goodboy/ui';
 import type { CommentThread } from '../../comment-threads';
 import { isBot } from '../../comment-threads';
-import {
-  ResolverStateBadge,
-  resolverBadgeState,
-} from '../../../session/components/ResolverStateBadge';
-import type { ResolverLink } from '../../../session/resolver-linkage';
 import { formatRelativeAge } from '../../../../shared/utils/relativeDate';
 import { Avatar } from '@goodboy/ui';
 import { ThreadBody } from './ThreadBody';
@@ -16,11 +11,11 @@ import { ICON_SIZE } from '../../../../shared/components/conceptIcons';
 
 type Props = {
   readonly thread: CommentThread;
-  readonly link?: ResolverLink;
   readonly onOpenUrl: (url: string) => void;
+  readonly onFix?: () => void;
 };
 
-export const OpenThread = ({ thread, link, onOpenUrl }: Props) => {
+export const OpenThread = ({ thread, onOpenUrl, onFix }: Props) => {
   const { head, replies } = thread;
   const open = head.source === 'review' && head.resolved === false;
 
@@ -42,9 +37,6 @@ export const OpenThread = ({ thread, link, onOpenUrl }: Props) => {
             open
           </span>
         ) : null}
-        {link ? (
-          <ResolverStateBadge state={resolverBadgeState(link.status)} className="ml-1" />
-        ) : null}
         {head.outdated === true ? (
           <Chip
             tone="neutral"
@@ -53,16 +45,23 @@ export const OpenThread = ({ thread, link, onOpenUrl }: Props) => {
             title="This comment is anchored to code that later commits changed"
           />
         ) : null}
-        <Tooltip content="Open in browser">
-          <button
-            type="button"
-            onClick={() => onOpenUrl(head.url)}
-            aria-label="Open in browser"
-            className="ml-auto rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <ExternalLink size={ICON_SIZE.row} aria-hidden />
-          </button>
-        </Tooltip>
+        <span className="ml-auto inline-flex shrink-0 items-center gap-1">
+          {onFix !== undefined ? (
+            <Button size="sm" variant="ghost" onClick={onFix}>
+              Fix
+            </Button>
+          ) : null}
+          <Tooltip content="Open in browser">
+            <button
+              type="button"
+              onClick={() => onOpenUrl(head.url)}
+              aria-label="Open in browser"
+              className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <ExternalLink size={ICON_SIZE.row} aria-hidden />
+            </button>
+          </Tooltip>
+        </span>
       </div>
 
       {head.path != null && head.path !== '' ? (

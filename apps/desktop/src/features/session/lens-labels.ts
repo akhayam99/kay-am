@@ -14,7 +14,7 @@ export const LENS_LABEL: Record<LensKind, string> = {
   goal: 'Goal',
   decisions: 'Decisions',
   last_output_summary: 'Session summary',
-  pr: 'GitHub',
+  pr: 'Code host',
   files: 'Diff',
   explore: 'Explore',
   linear: 'Linear',

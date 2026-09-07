@@ -46,7 +46,7 @@ const renderBar = (overrides: Partial<Parameters<typeof PublishConversationsBar>
       selectedCount={0}
       selectedReadyCount={0}
       draftCount={0}
-      isWriteReviewActive={false}
+      mode="conversations"
       preview={null}
       titleByThreadId={
         new Map([
@@ -62,7 +62,7 @@ const renderBar = (overrides: Partial<Parameters<typeof PublishConversationsBar>
       onCancel={vi.fn()}
       onViewChanges={vi.fn()}
       onBlockerAction={vi.fn()}
-      onWriteReview={vi.fn()}
+      onSelectMode={vi.fn()}
       {...overrides}
     />,
   );
@@ -86,7 +86,7 @@ describe('PublishConversationsBar', () => {
         selectedCount={2}
         selectedReadyCount={2}
         draftCount={0}
-        isWriteReviewActive={false}
+        mode="conversations"
         preview={null}
         titleByThreadId={new Map()}
         staleNote={null}
@@ -97,7 +97,7 @@ describe('PublishConversationsBar', () => {
         onCancel={vi.fn()}
         onViewChanges={vi.fn()}
         onBlockerAction={vi.fn()}
-        onWriteReview={vi.fn()}
+        onSelectMode={vi.fn()}
       />,
     );
     expect(screen.getByRole('button', { name: 'Publish selected (2)' })).toBeDefined();
@@ -172,11 +172,36 @@ describe('PublishConversationsBar', () => {
   });
 
   it('keeps the write review flow one click away and shows its draft count', () => {
-    const onWriteReview = vi.fn();
-    renderBar({ draftCount: 2, onWriteReview });
+    const onSelectMode = vi.fn();
+    renderBar({ draftCount: 2, onSelectMode });
 
     fireEvent.click(screen.getByRole('button', { name: 'Write review (2)' }));
-    expect(onWriteReview).toHaveBeenCalledTimes(1);
+    expect(onSelectMode).toHaveBeenCalledWith('write_review');
+  });
+
+  it('switches the detail region to each pull request mode from the dock', () => {
+    const onSelectMode = vi.fn();
+    renderBar({ onSelectMode });
+
+    fireEvent.click(screen.getByRole('button', { name: 'PR details' }));
+    fireEvent.click(screen.getByRole('button', { name: 'PR activity' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Checks' }));
+
+    expect(onSelectMode.mock.calls.map(([mode]) => mode)).toEqual([
+      'pr_details',
+      'pr_activity',
+      'checks',
+    ]);
+  });
+
+  it('returns to the conversations when the active mode is pressed again', () => {
+    const onSelectMode = vi.fn();
+    renderBar({ mode: 'checks', onSelectMode });
+
+    const checks = screen.getByRole('button', { name: 'Checks' });
+    expect(checks.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(checks);
+    expect(onSelectMode).toHaveBeenCalledWith('conversations');
   });
 
   it('never renders a dialog', () => {

@@ -83,6 +83,7 @@ import type {
   FocusedExternalTask,
   LensHistory,
   LensKind,
+  ReviewLensIntent,
   SessionCreation,
   SessionStudio,
 } from './slices/session-view';
@@ -320,11 +321,7 @@ export type AppState = AppSliceState & {
   readonly sessionLoading: Readonly<Record<SessionId, SessionLoadingFlags>>;
   readonly boardReady: boolean;
   readonly scriptsLensScope: { readonly projectId: ProjectId } | null;
-  readonly reviewLensIntent: {
-    readonly sessionId: SessionId;
-    readonly threadId?: string;
-    readonly attemptId?: string;
-  } | null;
+  readonly reviewLensIntent: ReviewLensIntent | null;
   readonly sessionViewPrefs: Readonly<Record<WorkspaceId, SessionViewPrefs>>;
   readonly activeLens: Readonly<Record<SessionId, LensKind | null>>;
   readonly lensHistory: Readonly<Record<SessionId, LensHistory>>;

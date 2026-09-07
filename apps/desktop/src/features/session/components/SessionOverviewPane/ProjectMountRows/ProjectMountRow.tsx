@@ -15,6 +15,7 @@ import {
 } from '../../../../../shared/components/conceptIcons';
 import { PullRequestChip } from '../../../../github/components/PullRequestChip';
 import { usePrDraftAgentRunning } from '../../../../github/usePrDraftAgentRunning';
+import { openReview } from '../../../../review/openReview';
 import { useRemoteHostKind } from '../../../../worktree/useRemoteHostKind';
 import { DiffStat } from '../../DiffStat';
 import { EditorMenu } from '../EditorMenu';
@@ -150,14 +151,13 @@ export const ProjectMountRow = ({
           }
           onClick={() => {
             void setSessionActiveProject({ sessionId, projectId: mount.projectId }).then(() => {
-              window.dispatchEvent(
-                new CustomEvent(
-                  remoteKind === 'gitlab'
-                    ? 'goodboy:open-gitlab-mr'
-                    : 'goodboy:open-github-session',
-                  { detail: { sessionId } },
-                ),
-              );
+              if (remoteKind === 'gitlab') {
+                window.dispatchEvent(
+                  new CustomEvent('goodboy:open-gitlab-mr', { detail: { sessionId } }),
+                );
+                return;
+              }
+              openReview({ sessionId, mode: 'create_pr' });
             });
           }}
           className={cn(
@@ -172,13 +172,7 @@ export const ProjectMountRow = ({
         <button
           type="button"
           aria-label={`Open PR #${pullRequest.number}`}
-          onClick={() =>
-            window.dispatchEvent(
-              new CustomEvent('goodboy:open-github-session', {
-                detail: { sessionId, prNumber: pullRequest.number },
-              }),
-            )
-          }
+          onClick={() => openReview({ sessionId, prNumber: pullRequest.number })}
           className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs hover:bg-muted/40"
         >
           <PullRequestChip

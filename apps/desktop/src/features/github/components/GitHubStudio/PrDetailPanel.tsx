@@ -1,9 +1,7 @@
 import { StudioDetailLayout } from '../../../../shared/components/StudioDetail';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SessionId } from '@goodboy/types';
 import { EmptyState, formatError } from '@goodboy/ui';
-import { useResolverIndex } from '../../../session/hooks/useResolverIndex';
-import { resolverForComment, type ResolverLink } from '../../../session/resolver-linkage';
 import { openUrl } from '../../../../shared/lib/editor';
 import { HeaderBand, StudioDetailTabs } from '@goodboy/ui';
 import { githubPullRequestFields, resolveDetailFields } from '../../../../shared/detail-fields';
@@ -14,7 +12,6 @@ import { CONCEPT_ICONS, CONCEPT_TONE } from '../../../../shared/components/conce
 import { RefreshIconButton } from '@goodboy/ui';
 import { EMPTY_ARRAY, useAppStore, useSessions } from '../../../../store';
 import { selectActiveProjectPrs } from '../../../../store/slices/github/activeProjectPrs';
-import type { CommentThread } from '../../comment-threads';
 import { PullRequestChip } from '../PullRequestChip';
 import { CreatePrPanel } from './CreatePrPanel';
 import { usePrDraftAgentRunning } from '../../usePrDraftAgentRunning';
@@ -42,16 +39,10 @@ const VERDICT_TOAST = {
 type Props = {
   readonly sessionId: SessionId | null;
   readonly initialPrNumber?: number | null;
-  readonly initialThreadId?: string | null;
   readonly onClose: () => void;
 };
 
-export const PrDetailPanel = ({
-  sessionId,
-  initialPrNumber = null,
-  initialThreadId = null,
-  onClose,
-}: Props) => {
+export const PrDetailPanel = ({ sessionId, initialPrNumber = null, onClose }: Props) => {
   const sessions = useSessions();
   const session =
     sessionId != null ? sessions.find((candidate) => candidate.id === sessionId) : undefined;
@@ -76,19 +67,11 @@ export const PrDetailPanel = ({
   const requestReview = useAppStore((s) => s.requestReview);
   const publishPrReview = useAppStore((s) => s.publishPrReview);
 
-  const resolverIndex = useResolverIndex((sessionId ?? '') as SessionId);
-  const resolverFor = useCallback(
-    (thread: CommentThread): ResolverLink | undefined =>
-      resolverForComment(resolverIndex, { threadId: thread.head.threadId, url: thread.head.url }),
-    [resolverIndex],
-  );
-
   const { showToast } = useToast();
   const isDraftAgentRunning = usePrDraftAgentRunning({ sessionId });
   const [busy, setBusy] = useState<ActionBusy>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [section, setSection] = useState<PrSection>('overview');
-  const [jumpThreadId, setJumpThreadId] = useState<string | null>(null);
   const requestedPrRef = useRef<string | null>(null);
 
   const primary = github?.pr ?? null;
@@ -134,13 +117,6 @@ export const PrDetailPanel = ({
     requestedPrRef.current = requested;
     void selectSessionPr(sessionId, initialPrNumber);
   }, [sessionId, initialPrNumber, options, selectSessionPr]);
-
-  useEffect(() => {
-    if (initialThreadId == null) {
-      return;
-    }
-    setSection('comments');
-  }, [initialThreadId]);
 
   useEffect(() => {
     if (sessionId == null || activePr == null) {
@@ -367,8 +343,6 @@ export const PrDetailPanel = ({
             <PrConversation
               comments={detail?.comments ?? []}
               pr={activePr}
-              resolverFor={resolverFor}
-              scrollToThreadId={jumpThreadId ?? initialThreadId}
               onOpenUrl={(url) => void openUrl(url)}
             />
           ) : (

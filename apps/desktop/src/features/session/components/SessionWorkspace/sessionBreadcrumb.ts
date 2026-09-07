@@ -73,21 +73,6 @@ export const buildSessionBreadcrumb = (input: SessionBreadcrumbInput): Breadcrum
     if (studio.kind === 'workflow') {
       return sealLast([overview, workflowsList, { id: 'create', label: 'Create' }]);
     }
-    if (studio.kind === 'github') {
-      return sealLast([
-        overview,
-        {
-          id: 'pr',
-          label: lensLabel('pr'),
-          icon: LENS_ICON.pr,
-          onClick: () => handlers.toLens('pr'),
-        },
-        {
-          id: 'github',
-          label: studio.prNumber != null ? `PR #${studio.prNumber}` : 'GitHub',
-        },
-      ]);
-    }
     if (studio.kind === 'bitbucket') {
       return sealLast([
         overview,

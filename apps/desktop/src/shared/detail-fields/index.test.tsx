@@ -146,7 +146,11 @@ describe('detail field registries', () => {
       'tags',
     ]);
     expect(githubIssueFields.map((field) => field.key)).toEqual(['labels', 'updated']);
-    expect(githubPullRequestFields.map((field) => field.key)).toEqual(['baseBranch', 'updated']);
+    expect(githubPullRequestFields.map((field) => field.key)).toEqual([
+      'baseBranch',
+      'review',
+      'updated',
+    ]);
     expect(gitlabIssueFields.map((field) => field.key)).toEqual(['milestone', 'labels', 'updated']);
     expect(gitlabMergeRequestFields.map((field) => field.key)).toEqual([
       'sourceBranch',
@@ -186,7 +190,7 @@ describe('detail field registries', () => {
       resolveDetailFields({ registry: githubPullRequestFields, entity: GITHUB_PR }).map(
         (entry) => entry.label,
       ),
-    ).toEqual(['Base branch', 'Updated']);
+    ).toEqual(['Base branch', 'Review', 'Updated']);
     expect(
       resolveDetailFields({ registry: gitlabIssueFields, entity: GITLAB_ISSUE }).map(
         (entry) => entry.label,
@@ -255,7 +259,7 @@ describe('detail field registries', () => {
         registry: githubPullRequestFields,
         entity: { ...GITHUB_PR, baseBranch: '' },
       }).map((entry) => entry.label),
-    ).toEqual(['Updated']);
+    ).toEqual(['Review', 'Updated']);
   });
 
   it('keeps a draft merge request row only while it is a draft', () => {

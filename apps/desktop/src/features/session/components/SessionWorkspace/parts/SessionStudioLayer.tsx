@@ -3,7 +3,6 @@ import { cn } from '@goodboy/ui';
 import type { Session } from '@goodboy/types';
 import { useCurrentWorkspace, type SessionStudio } from '../../../../../store';
 import { WorkflowBuilderView } from '../../WorkflowBuilderView';
-import { GitHubSessionPane } from '../../../../github/components/GitHubSessionPane';
 import { MrSessionPane } from '../../../../integrations/gitlab/MrSessionPane';
 import { BitbucketStudio } from '../../../../integrations/bitbucket/BitbucketStudio';
 
@@ -32,9 +31,6 @@ export const SessionStudioLayer = ({ session, studio, onClose }: Props) => {
     timer.current = setTimeout(onClose, STUDIO_OUT_MS);
   }, [onClose]);
 
-  const studioIdentityPrNumber = studio.kind === 'github' ? studio.prNumber : undefined;
-  const studioIdentityThreadId = studio.kind === 'github' ? studio.threadId : undefined;
-
   const discardStaleCloseTimerForNewStudio = () => {
     if (timer.current != null) {
       clearTimeout(timer.current);
@@ -42,11 +38,7 @@ export const SessionStudioLayer = ({ session, studio, onClose }: Props) => {
     }
     setClosing(false);
   };
-  useEffect(discardStaleCloseTimerForNewStudio, [
-    studio.kind,
-    studioIdentityPrNumber,
-    studioIdentityThreadId,
-  ]);
+  useEffect(discardStaleCloseTimerForNewStudio, [studio.kind]);
 
   const clearPendingCloseTimerOnUnmount = () => () => {
     if (timer.current != null) {
@@ -65,16 +57,6 @@ export const SessionStudioLayer = ({ session, studio, onClose }: Props) => {
     switch (studio.kind) {
       case 'workflow':
         return <WorkflowBuilderView session={session} onClose={requestClose} />;
-      case 'github':
-        return (
-          <GitHubSessionPane
-            sessionId={session.id}
-            workspaceName={workspaceName}
-            initialPrNumber={studio.prNumber ?? null}
-            initialThreadId={studio.threadId ?? null}
-            onClose={requestClose}
-          />
-        );
       case 'bitbucket':
         return (
           <BitbucketStudio

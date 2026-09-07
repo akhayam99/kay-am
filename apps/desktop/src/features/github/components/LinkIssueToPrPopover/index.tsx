@@ -2,10 +2,10 @@ import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import type { SessionId } from '@goodboy/types';
 import { AnchoredPopover, Button, formatError, useDropdown } from '@goodboy/ui';
-import { useAppStore } from '../../../../../store';
-import { appendClosingReferences } from '../../../../github/appendClosingReferences';
-import type { ClosingIssueReference } from '../../../../github/closingIssueReferences';
-import { ICON_SIZE } from '../../../../../shared/components/conceptIcons';
+import { useAppStore } from '../../../../store';
+import { appendClosingReferences } from '../../appendClosingReferences';
+import type { ClosingIssueReference } from '../../closingIssueReferences';
+import { ICON_SIZE } from '../../../../shared/components/conceptIcons';
 
 type Props = {
   readonly sessionId: SessionId;

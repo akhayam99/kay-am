@@ -26,6 +26,7 @@ export { readPersistedLens } from './workSurfaceStorage';
 export type { GroupedSessions, SessionViewSlice } from './types';
 export type {
   FocusedExternalTask,
+  ReviewLensIntent,
   SessionStudio,
   LensKind,
   LensHistory,

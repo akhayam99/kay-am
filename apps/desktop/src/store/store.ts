@@ -129,6 +129,7 @@ import { createInitialSessionViewState } from './slices/session-view/createIniti
 import type {
   DiffFocus,
   LensKind,
+  ReviewLensIntent,
   SessionCreationId,
   SessionCreationKind,
   SessionStudio,
@@ -853,13 +854,7 @@ type AppActions = {
   dismissSessionNudge(sessionId: SessionId, outcome?: 'accepted' | 'dismissed'): Promise<void>;
   acceptSessionNudgeHandoff(sessionId: SessionId): Promise<AgentId | null>;
   setScriptsLensScope(params: { readonly scope: { readonly projectId: ProjectId } | null }): void;
-  setReviewLensIntent(params: {
-    readonly intent: {
-      readonly sessionId: SessionId;
-      readonly threadId?: string;
-      readonly attemptId?: string;
-    } | null;
-  }): void;
+  setReviewLensIntent(params: { readonly intent: ReviewLensIntent | null }): void;
   getSessionViewPrefs(workspaceId: WorkspaceId): SessionViewPrefs;
   setSessionSort(workspaceId: WorkspaceId, sort: SessionSortKey): void;
   setSessionGroup(workspaceId: WorkspaceId, group: SessionGroupKey): void;

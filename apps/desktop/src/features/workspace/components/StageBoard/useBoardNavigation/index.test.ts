@@ -5,6 +5,9 @@ import type { Session, SessionId } from '@goodboy/types';
 type StoreState = {
   setCurrentSession: ReturnType<typeof vi.fn>;
   setActiveLens: ReturnType<typeof vi.fn>;
+  setReviewLensIntent: ReturnType<typeof vi.fn>;
+  selectSessionPr: ReturnType<typeof vi.fn>;
+  sessionSelectedPrNumber: Record<string, number | null>;
   selectAgent: ReturnType<typeof vi.fn>;
   unarchiveTask: ReturnType<typeof vi.fn>;
   sessionPhaseRuns: Record<string, ReadonlyArray<{ id: string }>>;
@@ -14,6 +17,7 @@ type StoreState = {
 const {
   setCurrentSessionMock,
   setActiveLensMock,
+  setReviewLensIntentMock,
   selectAgentMock,
   unarchiveTaskMock,
   openInEditorMock,
@@ -22,12 +26,16 @@ const {
 } = vi.hoisted(() => {
   const setCurrentSessionMock = vi.fn(async () => undefined);
   const setActiveLensMock = vi.fn();
+  const setReviewLensIntentMock = vi.fn();
   const selectAgentMock = vi.fn(async () => undefined);
   const unarchiveTaskMock = vi.fn(async () => undefined);
   const store: { state: StoreState } = {
     state: {
       setCurrentSession: setCurrentSessionMock,
       setActiveLens: setActiveLensMock,
+      setReviewLensIntent: setReviewLensIntentMock,
+      selectSessionPr: vi.fn(async () => undefined),
+      sessionSelectedPrNumber: {},
       selectAgent: selectAgentMock,
       unarchiveTask: unarchiveTaskMock,
       sessionPhaseRuns: {},
@@ -37,6 +45,7 @@ const {
   return {
     setCurrentSessionMock,
     setActiveLensMock,
+    setReviewLensIntentMock,
     selectAgentMock,
     unarchiveTaskMock,
     openInEditorMock: vi.fn(),
@@ -68,6 +77,9 @@ function reset() {
   store.state = {
     setCurrentSession: setCurrentSessionMock,
     setActiveLens: setActiveLensMock,
+    setReviewLensIntent: setReviewLensIntentMock,
+    selectSessionPr: vi.fn(async () => undefined),
+    sessionSelectedPrNumber: {},
     selectAgent: selectAgentMock,
     unarchiveTask: unarchiveTaskMock,
     sessionPhaseRuns: {},
@@ -75,6 +87,7 @@ function reset() {
   };
   setCurrentSessionMock.mockClear();
   setActiveLensMock.mockClear();
+  setReviewLensIntentMock.mockClear();
   selectAgentMock.mockClear();
   unarchiveTaskMock.mockClear();
   openInEditorMock.mockClear();
@@ -164,17 +177,19 @@ describe('useBoardNavigation', () => {
     expect(setActiveLensMock).toHaveBeenCalledWith(SESSION_ID, 'workflows');
   });
 
-  it('openGithub navigates then dispatches goodboy:open-github-session', async () => {
+  it('openGithub navigates then lands on the review lens, with no studio overlay', async () => {
     const dispatch = vi.spyOn(window, 'dispatchEvent');
     const { result } = renderHook(() => useBoardNavigation());
     result.current.openGithub(session);
     await Promise.resolve();
     expect(setCurrentSessionMock).toHaveBeenCalledWith(SESSION_ID);
-    const event = dispatch.mock.calls
-      .map((c) => c[0])
-      .find((e): e is CustomEvent => e.type === 'goodboy:open-github-session');
-    expect(event).toBeTruthy();
-    expect((event as CustomEvent).detail).toEqual({ sessionId: SESSION_ID });
+    expect(setReviewLensIntentMock).toHaveBeenCalledWith({ intent: { sessionId: SESSION_ID } });
+    expect(setActiveLensMock).toHaveBeenCalledWith(SESSION_ID, 'review');
+    expect(
+      dispatch.mock.calls
+        .map((c) => c[0])
+        .find((e): e is CustomEvent => e.type === 'goodboy:open-github-session'),
+    ).toBeUndefined();
     dispatch.mockRestore();
   });
 });

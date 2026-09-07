@@ -22,6 +22,15 @@ describe('shortcut registry', () => {
     }
   });
 
+  it('gives the review lens exactly one chord', () => {
+    const reviewLensIds = entries
+      .filter(([id, entry]) => entry.plane === 'lens' && id.startsWith('lens.'))
+      .filter(([, entry]) => entry.label === 'Review')
+      .map(([id]) => id);
+
+    expect(reviewLensIds).toEqual(['lens.review']);
+  });
+
   it('never binds a combo macOS reserves, or the text field owns', () => {
     for (const [id, entry] of entries) {
       expect(RESERVED_COMBOS, `${id} binds the reserved ${entry.combo}`).not.toContain(entry.combo);

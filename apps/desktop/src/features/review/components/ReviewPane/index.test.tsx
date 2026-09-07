@@ -15,6 +15,9 @@ import type {
 const h = vi.hoisted(() => {
   const state = {
     sessionGithub: {} as Record<string, unknown>,
+    sessionSelectedPrNumber: {} as Record<string, number | null>,
+    sessionExternalTasks: {} as Record<string, ReadonlyArray<unknown>>,
+    branchPrs: [] as ReadonlyArray<unknown>,
     sessionResolveThreads: {} as Record<string, ReadonlyArray<unknown>>,
     sessionResolveAttempts: {} as Record<string, ReadonlyArray<unknown>>,
     activePublicationPreview: {} as Record<string, unknown>,
@@ -22,10 +25,24 @@ const h = vi.hoisted(() => {
     sessionOpenQuestions: {} as Record<string, ReadonlyArray<unknown>>,
     reviewDrafts: {} as Record<string, ReadonlyArray<unknown>>,
     diffComments: {} as Record<string, ReadonlyArray<unknown>>,
-    reviewLensIntent: null as { sessionId: string; threadId?: string } | null,
+    reviewLensIntent: null as {
+      sessionId: string;
+      threadId?: string;
+      mode?: string;
+    } | null,
     setReviewLensIntent: vi.fn(),
     loadResolveSession: vi.fn(async () => undefined),
+    refreshSessionPr: vi.fn(async () => undefined),
     refreshSessionPrDetail: vi.fn(async () => undefined),
+    selectSessionPr: vi.fn(async () => undefined),
+    markPrReady: vi.fn(async () => undefined),
+    convertPrToDraft: vi.fn(async () => undefined),
+    mergePr: vi.fn(async () => undefined),
+    closePr: vi.fn(async () => undefined),
+    reopenPr: vi.fn(async () => undefined),
+    editPr: vi.fn(async () => undefined),
+    requestReview: vi.fn(async () => undefined),
+    setFocusedGithubIssueNumber: vi.fn(),
     preparePublication: vi.fn(async () => null as unknown),
     publishConversations: vi.fn(
       async (params: { readonly sessionId: string; readonly publicationId: string }) => {
@@ -85,7 +102,20 @@ const h = vi.hoisted(() => {
 vi.mock('../../../../store', () => ({
   EMPTY_ARRAY: Object.freeze([]),
   useAppStore: h.useAppStore,
+  useCurrentWorkspace: () => ({ id: 'workspace-1', name: 'goodboy' }),
   useDiffComments: (sessionId: string) => h.state.diffComments[sessionId] ?? [],
+}));
+vi.mock('../../../../store/slices/github/activeProjectPrs', () => ({
+  selectActiveProjectPrs: () => h.state.branchPrs,
+}));
+vi.mock('../../../github/components/GitHubStudio/CreatePrPanel', () => ({
+  CreatePrPanel: ({ onCancel }: { readonly onCancel?: () => void }) => (
+    <div data-testid="create-pr">
+      <button type="button" onClick={onCancel}>
+        Cancel
+      </button>
+    </div>
+  ),
 }));
 vi.mock('../../../../app/components/Toast', () => ({
   useToast: () => ({ showToast: h.showToast }),
@@ -289,6 +319,9 @@ const seed = () => {
   h.state.reviewDrafts = { [SESSION_ID]: [] };
   h.state.diffComments = { [SESSION_ID]: [] };
   h.state.reviewLensIntent = null;
+  h.state.sessionSelectedPrNumber = {};
+  h.state.sessionExternalTasks = {};
+  h.state.branchPrs = [];
 };
 
 beforeEach(() => {
@@ -500,5 +533,210 @@ describe('ReviewPane', () => {
 
     expect(screen.getByRole('heading', { name: 'src/retry.ts:84' })).toBeDefined();
     expect(h.state.setReviewLensIntent).toHaveBeenCalledWith({ intent: null });
+  });
+
+  it('opens the mode an intent names', () => {
+    h.state.reviewLensIntent = { sessionId: SESSION_ID, mode: 'checks' };
+    render(<ReviewPane session={SESSION} />);
+
+    expect(screen.getByRole('button', { name: 'Checks' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+  });
+
+  it('edits the pull request title from PR details, without leaving the list', () => {
+    render(<ReviewPane session={SESSION} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'PR details' }));
+
+    expect(listbox()).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    const field = screen.getByDisplayValue('Retry failed requests before opening the connection');
+    fireEvent.change(field, { target: { value: 'Retry sooner' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(h.state.editPr).toHaveBeenCalledWith(SESSION_ID, 248, { title: 'Retry sooner' });
+  });
+
+  it('confirms a merge inline from the PR actions menu, never in a dialog', async () => {
+    render(<ReviewPane session={SESSION} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'PR actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /^Merge/ }));
+
+    expect(screen.getByText('Squash merge this pull request?')).toBeDefined();
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm merge' }));
+    await waitFor(() => expect(h.state.mergePr).toHaveBeenCalledWith(SESSION_ID, 248));
+  });
+
+  it('marks the pull request ready from the PR actions menu', async () => {
+    h.state.sessionGithub = {
+      [SESSION_ID]: {
+        ...(h.state.sessionGithub[SESSION_ID] as Record<string, unknown>),
+        pr: {
+          ...((h.state.sessionGithub[SESSION_ID] as { pr: Record<string, unknown> }).pr ?? {}),
+          isDraft: true,
+        },
+      },
+    };
+    render(<ReviewPane session={SESSION} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'PR actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /^Mark ready/ }));
+
+    await waitFor(() => expect(h.state.markPrReady).toHaveBeenCalledWith(SESSION_ID, 248));
+  });
+
+  it('opens the create pull request form from the PR actions menu and comes back', () => {
+    render(<ReviewPane session={SESSION} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'PR actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /^Create new PR/ }));
+
+    expect(screen.getByTestId('create-pr')).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByTestId('create-pr')).toBeNull();
+  });
+
+  it('drafts a pull request inline when the session has none', () => {
+    h.state.sessionGithub = { [SESSION_ID]: { pr: null, detail: null } };
+    render(<ReviewPane session={SESSION} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Draft a pull request' }));
+
+    expect(screen.getByTestId('create-pr')).toBeDefined();
+    expect(h.state.setActiveLens).not.toHaveBeenCalled();
+  });
+
+  it('lists the checks in the Checks mode and reaches it from the context row chip', () => {
+    h.state.sessionGithub = {
+      [SESSION_ID]: {
+        ...(h.state.sessionGithub[SESSION_ID] as Record<string, unknown>),
+        detail: {
+          ...((h.state.sessionGithub[SESSION_ID] as { detail: Record<string, unknown> }).detail ??
+            {}),
+          checks: [
+            {
+              name: 'build',
+              status: 'completed',
+              conclusion: 'success',
+              url: 'https://github.com/acme/web/runs/1',
+              startedAt: null,
+              completedAt: null,
+            },
+          ],
+        },
+      },
+    };
+    render(<ReviewPane session={SESSION} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Checks 1 passed' }));
+
+    expect(screen.getByText('build')).toBeDefined();
+  });
+
+  it('keeps general comments and local notes in PR activity, with no publish verb', () => {
+    h.state.sessionGithub = {
+      [SESSION_ID]: {
+        ...(h.state.sessionGithub[SESSION_ID] as Record<string, unknown>),
+        detail: {
+          ...((h.state.sessionGithub[SESSION_ID] as { detail: Record<string, unknown> }).detail ??
+            {}),
+          comments: [
+            ...((
+              h.state.sessionGithub[SESSION_ID] as {
+                detail: { comments: ReadonlyArray<PrComment> };
+              }
+            ).detail.comments ?? []),
+            {
+              id: 'issue-1',
+              author: 'dhh',
+              authorAvatarUrl: null,
+              body: 'Please squash before merging',
+              createdAt: '2026-01-01T00:00:00Z',
+              url: 'https://github.com/acme/web/pull/248#issuecomment-1',
+              source: 'issue',
+              resolved: false,
+              threadId: null,
+              path: null,
+              line: null,
+            } as unknown as PrComment,
+          ],
+        },
+      },
+    };
+    h.state.diffComments = {
+      [SESSION_ID]: [
+        {
+          id: 'note-1',
+          sessionId: SESSION_ID,
+          path: 'src/retry.ts',
+          line: 84,
+          body: 'check the backoff',
+          status: 'open',
+          createdAt: '2026-01-01T00:00:00Z',
+        } as unknown as never,
+      ],
+    };
+    render(<ReviewPane session={SESSION} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'PR activity' }));
+
+    const activity = screen.getByRole('region', { name: 'PR activity' });
+    expect(within(activity).getByText('Please squash before merging')).toBeDefined();
+    expect(within(activity).getByText('Local notes 1')).toBeDefined();
+    expect(within(activity).queryByRole('button', { name: /^Publish/ })).toBeNull();
+  });
+
+  it('spawns a standalone resolver for a general pull request comment', async () => {
+    h.state.sessionGithub = {
+      [SESSION_ID]: {
+        ...(h.state.sessionGithub[SESSION_ID] as Record<string, unknown>),
+        detail: {
+          ...((h.state.sessionGithub[SESSION_ID] as { detail: Record<string, unknown> }).detail ??
+            {}),
+          comments: [
+            {
+              id: 'issue-1',
+              author: 'dhh',
+              authorAvatarUrl: null,
+              body: 'Please squash before merging',
+              createdAt: '2026-01-01T00:00:00Z',
+              url: 'https://github.com/acme/web/pull/248#issuecomment-1',
+              source: 'issue',
+              resolved: false,
+              threadId: null,
+              path: null,
+              line: null,
+            } as unknown as PrComment,
+          ],
+        },
+      },
+    };
+    render(<ReviewPane session={SESSION} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'PR activity' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Fix' }));
+
+    await waitFor(() => expect(h.state.spawnAgent).toHaveBeenCalledTimes(1));
+    expect(h.state.spawnAgent.mock.calls[0]?.[1].kindOverride).toBe('resolver');
+  });
+
+  it('submits the review from Write review and returns to the conversations', async () => {
+    h.state.reviewDrafts = {
+      [SESSION_ID]: [{ id: 'draft-1', status: 'draft' } as unknown as never],
+    };
+    render(<ReviewPane session={SESSION} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Write review (1)' }));
+    expect(screen.getByTestId('write-review')).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Submit review (1)' }));
+    await waitFor(() => expect(h.state.publishPrReview).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to conversations' }));
+    expect(listbox()).toBeDefined();
   });
 });

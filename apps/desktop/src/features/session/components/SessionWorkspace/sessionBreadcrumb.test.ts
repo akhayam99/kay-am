@@ -306,21 +306,6 @@ describe('buildSessionBreadcrumb', () => {
     expect(last(crumbs)?.onClick).toBeUndefined();
   });
 
-  it('renders PR #n for a github studio with a prNumber', () => {
-    const h = makeHandlers();
-    const crumbs = buildSessionBreadcrumb(base({ studio: { kind: 'github', prNumber: 42 } }, h));
-    expect(labels(crumbs)).toEqual(['Overview', 'pr', 'PR #42']);
-    crumbs[1]!.onClick!();
-    expect(h.toLens).toHaveBeenCalledWith('pr');
-    expect(last(crumbs)?.onClick).toBeUndefined();
-  });
-
-  it('renders GitHub for a github studio without a prNumber', () => {
-    const h = makeHandlers();
-    const crumbs = buildSessionBreadcrumb(base({ studio: { kind: 'github' } }, h));
-    expect(labels(crumbs)).toEqual(['Overview', 'pr', 'GitHub']);
-  });
-
   it('roots the merge request studio in the GitLab lens, not the GitHub one', () => {
     const h = makeHandlers();
     const crumbs = buildSessionBreadcrumb(base({ studio: { kind: 'mr' } }, h));
