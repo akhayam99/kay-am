@@ -8,6 +8,7 @@ export const createResolveCandidateWriter = ({ persist }: Params) => {
   let isDirty = false;
   let pending: Promise<void> | null = null;
   let failure: unknown = null;
+  let tail = '';
   const drain = async (): Promise<void> => {
     try {
       while (isDirty) {
@@ -22,7 +23,9 @@ export const createResolveCandidateWriter = ({ persist }: Params) => {
   };
   return {
     append: ({ delta }: DeltaParams): void => {
-      if (!delta.includes('>>')) {
+      const combined = tail + delta;
+      tail = combined.slice(-1);
+      if (!combined.includes('>>')) {
         return;
       }
       isDirty = true;

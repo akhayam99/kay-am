@@ -16,6 +16,15 @@ describe('resolve candidate persistence', () => {
     expect(persist).toHaveBeenCalledTimes(1);
   });
 
+  it('marks dirty when a marker ending is split across two deltas', async () => {
+    const persist = vi.fn(async () => undefined);
+    const writer = createResolveCandidateWriter({ persist });
+    writer.append({ delta: 'marker ends here>' });
+    writer.append({ delta: '> and continues' });
+    await writer.flush();
+    expect(persist).toHaveBeenCalledTimes(1);
+  });
+
   it('saves the latest text once more when markers arrive during an in-flight write', async () => {
     let release = (): void => {};
     const gate = new Promise<void>((resolve) => {

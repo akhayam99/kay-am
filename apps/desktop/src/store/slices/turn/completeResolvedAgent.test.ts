@@ -147,7 +147,7 @@ describe('completeResolvedAgent', () => {
     });
 
     const outcome = state.resolverThreadOutcomes[AGENT_ID]?.PRRT_1;
-    expect(outcome).toEqual({ kind: 'analyzed', reply: summary });
+    expect(outcome).toEqual({ kind: 'analyzed', reply: summary, verdict: 'wontfix' });
     expect(buildResolutionReplyBody(outcome, null)).toBe(summary);
   });
 
@@ -219,6 +219,7 @@ describe('completeResolvedAgent', () => {
     expect(state.resolverThreadOutcomes[AGENT_ID]?.PRRT_2).toEqual({
       kind: 'analyzed',
       reply: 'already covered',
+      verdict: 'wontfix',
     });
     expect(state.resolverState[AGENT_ID]).toBe('committed');
   });

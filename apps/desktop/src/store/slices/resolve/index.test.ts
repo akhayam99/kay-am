@@ -1,4 +1,3 @@
-import { DatabaseSync } from 'node:sqlite';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStore } from 'zustand/vanilla';
 import {
@@ -9,6 +8,7 @@ import {
   upsertResolveThread,
   type Database,
 } from '@goodboy/db';
+import { makeTestDatabase } from '@goodboy/db/test-helpers';
 import type { Agent, AgentId, IsoDateTime, MessageId, SessionId } from '@goodboy/types';
 import { resolverMissingVerdicts } from '../../../features/session/resolverMissingVerdicts';
 import { resolverThreadSettlements } from '../../../features/session/resolverThreadSettlements';
@@ -95,25 +95,7 @@ const missingVerdictsFor = ({ get }: StatusParams) =>
 
 beforeEach(async () => {
   h.listLiveRunIds.mockReset().mockResolvedValue(new Set());
-  const sqlite = new DatabaseSync(':memory:');
-  sqlite.exec('PRAGMA foreign_keys = ON');
-  db = {
-    exec: async (sql) => {
-      sqlite.exec(sql);
-    },
-    execute: async (sql, params = []) => ({
-      rowsAffected: Number(
-        sqlite.prepare(sql).run(...(params as ReadonlyArray<import('node:sqlite').SQLInputValue>))
-          .changes,
-      ),
-    }),
-    select: async <T>(sql: string, params: ReadonlyArray<unknown> = []) =>
-      sqlite
-        .prepare(sql)
-        .all(
-          ...(params as ReadonlyArray<import('node:sqlite').SQLInputValue>),
-        ) as unknown as ReadonlyArray<T>,
-  };
+  db = makeTestDatabase();
   h.exec.mockReset().mockImplementation(db.exec);
   h.execute.mockReset().mockImplementation(db.execute);
   h.select.mockReset().mockImplementation(db.select);
@@ -547,6 +529,7 @@ describe('durable resolve store', () => {
     expect(rebooted.get().resolverThreadOutcomes[AGENT_ID]?.PRRT_1).toEqual({
       kind: 'analyzed',
       reply: 'The guard already handles this.',
+      verdict: 'wontfix',
     });
   });
 
@@ -636,6 +619,29 @@ describe('durable resolve store', () => {
       kind: 'analyzed',
       verdict: 'fix',
       reply: 'Add a guard',
+    });
+  });
+
+  it('retains an analysis wontfix verdict after a markerless follow-up and restart', async () => {
+    const live = createHarness();
+    await live.actions.loadResolveSession({ sessionId: SESSION_ID });
+    await live.actions.persistResolveTurn({
+      sessionId: SESSION_ID,
+      agent,
+      assistantText:
+        '<<comment-analysis threadId="PRRT_1" verdict="wontfix" summary="Already guarded">>',
+    });
+    await live.actions.persistResolveTurn({
+      sessionId: SESSION_ID,
+      agent,
+      assistantText: 'No additional result.',
+    });
+    const rebooted = createHarness();
+    await rebooted.actions.loadResolveSession({ sessionId: SESSION_ID });
+    expect(rebooted.get().resolverThreadOutcomes[AGENT_ID]?.PRRT_1).toEqual({
+      kind: 'analyzed',
+      verdict: 'wontfix',
+      reply: 'Already guarded',
     });
   });
 

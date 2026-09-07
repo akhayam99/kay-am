@@ -31,6 +31,7 @@ export const threadOutcome = ({
       kind: 'analyzed',
       ...reply,
       ...(stateReason === 'proposed_fix' && { verdict: 'fix' }),
+      ...(stateReason === 'analysis_wontfix' && { verdict: 'wontfix' }),
     };
   }
   return null;
