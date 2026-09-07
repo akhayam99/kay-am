@@ -64,6 +64,8 @@ vi.mock('@goodboy/ui', async (importOriginal) => {
 });
 
 type FooterProps = {
+  readonly onOpenLinear: () => void;
+  readonly linearEnabled: boolean;
   readonly onOpenSlack: () => void;
   readonly slackEnabled: boolean;
   readonly onOpenBitbucket: () => void;
@@ -77,6 +79,8 @@ type FooterProps = {
 
 vi.mock('../app/components/AppFooter', () => ({
   AppFooter: ({
+    onOpenLinear,
+    linearEnabled,
     onOpenSlack,
     slackEnabled,
     onOpenBitbucket,
@@ -88,6 +92,9 @@ vi.mock('../app/components/AppFooter', () => ({
     onOpenChangelog,
   }: FooterProps) => (
     <>
+      <button type="button" onClick={onOpenLinear}>
+        {linearEnabled ? 'Open Linear' : 'Connect Linear'}
+      </button>
       <button type="button" onClick={onOpenSlack}>
         {slackEnabled ? 'Launch a session from a Slack thread' : 'Connect Slack'}
       </button>
@@ -165,8 +172,12 @@ vi.mock('../features/session/components/ArchiveSessionConfirm', () => ({
   ArchiveSessionConfirm: () => null,
 }));
 vi.mock('../features/settings/components/SettingsStudio', () => ({
-  SettingsStudio: ({ initialFocus }: { initialFocus: { scope: string } }) => (
-    <div data-testid="settings-studio" data-scope={initialFocus.scope} />
+  SettingsStudio: ({ initialFocus }: { initialFocus: { scope: string; tool?: string } }) => (
+    <div
+      data-testid="settings-studio"
+      data-scope={initialFocus.scope}
+      data-tool={initialFocus.tool}
+    />
   ),
 }));
 vi.mock('../features/settings/components/GuideStudio', () => ({ GuideStudio: () => null }));
@@ -286,12 +297,14 @@ describe('Slack studio reachability', () => {
     expect((await screen.findByTestId('inbox-studio')).textContent).toBe('Workspace:slack');
   });
 
-  it('still opens the studio when slack is not connected, so the connect form is reachable', () => {
+  it('opens Tools settings when slack is not connected', async () => {
     render(<App />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Connect Slack' }));
 
-    expect(screen.getByTestId('inbox-studio').textContent).toBe('Workspace:slack');
+    expect((await screen.findByTestId('settings-studio')).getAttribute('data-scope')).toBe('tools');
+    expect(screen.getByTestId('settings-studio').getAttribute('data-tool')).toBe('slack');
+    expect(screen.queryByTestId('inbox-studio')).toBeNull();
   });
 });
 
@@ -317,7 +330,9 @@ describe('GitHub footer state', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Connect GitHub' }));
 
-    expect(screen.getByTestId('inbox-studio').textContent).toBe('Workspace:github');
+    expect(screen.getByTestId('settings-studio').getAttribute('data-scope')).toBe('tools');
+    expect(screen.getByTestId('settings-studio').getAttribute('data-tool')).toBe('github');
+    expect(screen.queryByTestId('inbox-studio')).toBeNull();
   });
 });
 
@@ -391,7 +406,9 @@ describe('Bitbucket studio reachability', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Connect Bitbucket' }));
 
-    expect(screen.getByTestId('inbox-studio').textContent).toBe('Workspace:bitbucket');
+    expect(screen.getByTestId('settings-studio').getAttribute('data-scope')).toBe('tools');
+    expect(screen.getByTestId('settings-studio').getAttribute('data-tool')).toBe('bitbucket');
+    expect(screen.queryByTestId('inbox-studio')).toBeNull();
   });
 });
 
@@ -479,6 +496,24 @@ describe('Spend reachability through the impact studio', () => {
     );
 
     expect(screen.getByTestId('impact-studio').getAttribute('data-scope')).toBe('provider');
+    expect(screen.queryByTestId('settings-studio')).toBeNull();
+  });
+});
+
+describe('Linear connection routing', () => {
+  it('opens Tools settings focused on an unconnected Linear', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Linear' }));
+    expect(screen.getByTestId('settings-studio').getAttribute('data-scope')).toBe('tools');
+    expect(screen.getByTestId('settings-studio').getAttribute('data-tool')).toBe('linear');
+    expect(screen.queryByTestId('inbox-studio')).toBeNull();
+  });
+
+  it('opens the filtered inbox for connected Linear', () => {
+    state.workspaceIntegrations = { 'workspace-1': [{ provider: 'linear' }] };
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Linear' }));
+    expect(screen.getByTestId('inbox-studio').textContent).toBe('Workspace:linear');
     expect(screen.queryByTestId('settings-studio')).toBeNull();
   });
 });

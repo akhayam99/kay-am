@@ -117,6 +117,15 @@ export const App = () => {
     openWorkflows,
     overlays,
   } = useAppOverlays({
+    connected: {
+      github: githubConnection.isAuthenticated,
+      linear: hasLinear,
+      sentry: hasSentry,
+      jira: hasJira,
+      gitlab: hasGitlab,
+      bitbucket: hasBitbucket,
+      slack: hasSlack,
+    },
     currentSession,
     currentWorkspace,
     workspaceProjectRoot,

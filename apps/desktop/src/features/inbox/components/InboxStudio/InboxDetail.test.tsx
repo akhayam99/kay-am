@@ -185,7 +185,7 @@ describe('InboxDetail', () => {
     renderDetail(null);
 
     expect(screen.getByText('Inbox is empty')).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Open integrations' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Connect tools' })).toBeDefined();
     expect(screen.queryByTestId('panel')).toBeNull();
   });
 
@@ -193,7 +193,7 @@ describe('InboxDetail', () => {
     renderPane({ record: null, records: [], hasVisibleRecords: true });
 
     expect(screen.getByText('Nothing selected')).toBeDefined();
-    expect(screen.queryByRole('button', { name: 'Open integrations' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Connect tools' })).toBeNull();
     expect(screen.queryByTestId('panel')).toBeNull();
   });
 

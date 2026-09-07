@@ -333,6 +333,7 @@ describe('AppFooter', () => {
   });
 
   it('reaches every integration through the single link popover', () => {
+    const dispatch = vi.spyOn(window, 'dispatchEvent');
     const onOpenGitlab = vi.fn();
     render(<AppFooter {...footerProps({ overrides: { githubEnabled: true, onOpenGitlab } })} />);
 
@@ -346,7 +347,13 @@ describe('AppFooter', () => {
 
     fireEvent.click(within(panel).getByRole('button', { name: 'Connect GitLab' }));
 
-    expect(onOpenGitlab).toHaveBeenCalledOnce();
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'goodboy:open-settings',
+        detail: { scope: 'tools', tool: 'gitlab' },
+      }),
+    );
+    dispatch.mockRestore();
     expect(screen.queryByRole('dialog', { name: 'Integrations' })).toBeNull();
   });
 
@@ -386,21 +393,28 @@ describe('AppFooter', () => {
     });
   });
 
-  it('sends every popover row to its own studio and to no other', () => {
+  it('sends every unconnected popover row to its own Tools settings form', () => {
+    const dispatch = vi.spyOn(window, 'dispatchEvent');
     FOOTER_INTEGRATIONS.forEach((member) => {
+      dispatch.mockClear();
       const spies = openerSpies();
       render(<AppFooter {...routingProps({ spies, connected: false })} />);
-
       fireEvent.click(screen.getByRole('button', { name: 'Link your first integration' }));
       fireEvent.click(
         within(screen.getByRole('dialog', { name: 'Integrations' })).getByRole('button', {
           name: member.connectLabel,
         }),
       );
-
-      expectRoutedOnlyTo({ spies, provider: member.provider });
+      expect(dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'goodboy:open-settings',
+          detail: { scope: 'tools', tool: member.provider },
+        }),
+      );
+      expect(Object.values(spies).every((spy) => spy.mock.calls.length === 0)).toBe(true);
       cleanup();
     });
+    dispatch.mockRestore();
   });
 
   it('holds the active state on the link action for a disconnected open studio', () => {
@@ -438,6 +452,7 @@ describe('AppFooter', () => {
   });
 
   it('keeps Slack reachable whether or not it is connected', () => {
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
     const onOpenSlack = vi.fn();
     const { rerender } = render(<AppFooter {...footerProps({ overrides: { onOpenSlack } })} />);
 
@@ -447,12 +462,18 @@ describe('AppFooter', () => {
         name: 'Connect Slack',
       }),
     );
-    expect(onOpenSlack).toHaveBeenCalledOnce();
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'goodboy:open-settings',
+        detail: { scope: 'tools', tool: 'slack' },
+      }),
+    );
+    dispatchSpy.mockRestore();
 
     rerender(<AppFooter {...footerProps({ overrides: { slackEnabled: true, onOpenSlack } })} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Slack' }));
 
-    expect(onOpenSlack).toHaveBeenCalledTimes(2);
+    expect(onOpenSlack).toHaveBeenCalledOnce();
   });
 });

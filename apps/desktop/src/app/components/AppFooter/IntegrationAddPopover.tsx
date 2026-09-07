@@ -1,3 +1,4 @@
+import { openToolSettings } from '../../../features/integrations/openToolSettings';
 import { AnchoredPopover, cn, ScrollFade, Tooltip, useDropdown } from '@goodboy/ui';
 import { Plus } from 'lucide-react';
 import type { IntegrationGlyphProvider } from '../../../features/integrations/components/IntegrationGlyph';
@@ -13,6 +14,8 @@ type Props = {
   readonly active: boolean;
 };
 
+type SelectParams = { readonly provider: IntegrationGlyphProvider };
+
 const PANEL_WIDTH = 224;
 const PANEL_MAX_HEIGHT = 240;
 
@@ -24,8 +27,12 @@ export const IntegrationAddPopover = ({ members, enabled, openers, isEmpty, acti
     expectedHeight: PANEL_MAX_HEIGHT,
   });
 
-  const select = (provider: IntegrationGlyphProvider) => {
+  const select = ({ provider }: SelectParams) => {
     dropdown.close();
+    if (!enabled[provider]) {
+      openToolSettings({ tool: provider });
+      return;
+    }
     openers[provider]();
   };
 
@@ -66,7 +73,7 @@ export const IntegrationAddPopover = ({ members, enabled, openers, isEmpty, acti
               key={member.provider}
               member={member}
               connected={enabled[member.provider]}
-              onSelect={() => select(member.provider)}
+              onSelect={() => select({ provider: member.provider })}
             />
           ))}
         </ul>

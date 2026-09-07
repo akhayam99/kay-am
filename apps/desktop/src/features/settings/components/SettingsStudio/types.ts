@@ -1,10 +1,13 @@
 import type { ProviderId, ProviderLifecycleAction } from '@goodboy/types';
 
-export type SettingsScope = 'app' | 'workspace' | 'providers';
+import type { IntegrationGlyphProvider } from '../../../integrations/components/IntegrationGlyph';
+
+export type SettingsScope = 'app' | 'workspace' | 'providers' | 'tools';
 
 export type SettingsFocus = {
   readonly scope: SettingsScope;
   readonly section?: string;
+  readonly tool?: IntegrationGlyphProvider;
   readonly provider?: ProviderId;
   readonly action?: ProviderLifecycleAction;
 };

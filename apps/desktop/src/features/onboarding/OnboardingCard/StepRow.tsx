@@ -1,3 +1,4 @@
+import { openToolSettings } from '../../integrations/openToolSettings';
 import { Check } from 'lucide-react';
 import { cn } from '@goodboy/ui';
 import type { OnboardingStepId } from '../onboarding-store';
@@ -11,27 +12,15 @@ type Props = {
 };
 
 export const StepRow = ({ id, title, why, done }: Props) => {
-  const actionByStep: Readonly<
-    Partial<
-      Record<
-        OnboardingStepId,
-        { readonly event: string; readonly detail?: { readonly provider: 'github' | 'linear' } }
-      >
-    >
-  > = {
-    workspace: { event: 'goodboy:add-workspace' },
-    codeHost: { event: 'goodboy:open-inbox', detail: { provider: 'github' } },
-    tools: { event: 'goodboy:open-inbox', detail: { provider: 'linear' } },
-    session: { event: 'goodboy:new-session' },
-    palette: { event: OPEN_COMMAND_PALETTE_EVENT },
+  const actionByStep: Partial<Record<OnboardingStepId, () => void>> = {
+    workspace: () => window.dispatchEvent(new CustomEvent('goodboy:add-workspace')),
+    codeHost: () => openToolSettings({ tool: 'github' }),
+    tools: () => openToolSettings({ tool: 'linear' }),
+    session: () => window.dispatchEvent(new CustomEvent('goodboy:new-session')),
+    palette: () => window.dispatchEvent(new CustomEvent(OPEN_COMMAND_PALETTE_EVENT)),
   };
   const action = actionByStep[id];
-  const activate = () => {
-    if (action === undefined) {
-      return;
-    }
-    window.dispatchEvent(new CustomEvent(action.event, { detail: action.detail }));
-  };
+  const activate = () => action?.();
 
   return (
     <li title={why} className="rounded-md">

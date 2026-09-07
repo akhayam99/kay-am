@@ -54,6 +54,9 @@ export const useGithubConnection = ({ workspaceId }: Params) => {
   }, []);
 
   return {
+    status: connection.status,
+    user: connection.status?.user ?? null,
+    mode: connection.status?.mode ?? 'absent',
     isAuthenticated: connection.status?.mode !== 'absent' && connection.status != null,
     isResolved: connection.isResolved,
     isScoped: connection.status?.scoped === true,

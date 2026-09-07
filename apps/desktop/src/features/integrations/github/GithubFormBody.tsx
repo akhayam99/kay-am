@@ -4,10 +4,11 @@ import type { GhTokenStatus, WorkspaceId } from '@goodboy/types';
 import { ghClearToken, ghSetToken, ghStatus } from '../../github/github';
 import { ConnectForm } from '../components/ConnectForm';
 import { IntegrationConnectedRow } from '../components/IntegrationConnectedRow';
-import { notifyGithubConnectionChanged } from './useGithubConnection';
+import { notifyGithubConnectionChanged, type useGithubConnection } from './useGithubConnection';
 
 type Props = {
   workspaceId: WorkspaceId;
+  connection?: ReturnType<typeof useGithubConnection>;
   onConnected?: () => void;
   shouldAutoFocus?: boolean;
 };
@@ -15,16 +16,27 @@ type Props = {
 const TOKEN_CREATE_URL = 'https://github.com/settings/tokens/new?scopes=repo&description=Goodboy';
 const TOKEN_LIST_URL = 'https://github.com/settings/tokens';
 
-export const GithubFormBody = ({ workspaceId, onConnected, shouldAutoFocus = false }: Props) => {
-  const [status, setStatus] = useState<GhTokenStatus | null>(null);
+export const GithubFormBody = ({
+  workspaceId,
+  onConnected,
+  shouldAutoFocus = false,
+  connection,
+}: Props) => {
+  const [localStatus, setStatus] = useState<GhTokenStatus | null>(null);
+
+  const status = connection === undefined ? localStatus : connection.status;
+  const refreshConnection = connection?.refresh;
 
   const refresh = useCallback(async () => {
+    if (refreshConnection !== undefined) {
+      return;
+    }
     try {
       setStatus(await ghStatus(workspaceId));
     } catch {
       setStatus(null);
     }
-  }, [workspaceId]);
+  }, [workspaceId, refreshConnection]);
 
   useEffect(() => {
     void refresh();

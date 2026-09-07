@@ -169,9 +169,8 @@ describe('ConvertWorkspaceDialog', () => {
 
   it('keeps the draft when the user leaves to connect the host', () => {
     const onClose = vi.fn();
-    const dispatched: string[] = [];
-    const onOpenInbox = () => dispatched.push('github');
-    window.addEventListener('goodboy:open-inbox', onOpenInbox);
+    const onOpenSettings = vi.fn();
+    window.addEventListener('goodboy:open-settings', onOpenSettings);
     state.githubStatus = { available: false };
     render(<ConvertWorkspaceDialog open workspace={workspace} onClose={onClose} />);
 
@@ -180,10 +179,12 @@ describe('ConvertWorkspaceDialog', () => {
       target: { value: 'https://github.com/acme/widgets.git' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Connect GitHub' }));
-    window.removeEventListener('goodboy:open-inbox', onOpenInbox);
+    window.removeEventListener('goodboy:open-settings', onOpenSettings);
 
     expect(onClose).toHaveBeenCalledOnce();
-    expect(dispatched).toEqual(['github']);
+    expect(onOpenSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ detail: { scope: 'tools', tool: 'github' } }),
+    );
     expect(
       (screen.getByPlaceholderText('https://github.com/owner/repo.git') as HTMLInputElement).value,
     ).toBe('https://github.com/acme/widgets.git');

@@ -1,3 +1,4 @@
+import { openToolSettings } from '../../openToolSettings';
 import { Tooltip } from '@goodboy/ui';
 import { IntegrationGlyph } from '../IntegrationGlyph';
 
@@ -25,13 +26,12 @@ const INBOX_KIND: Record<TrackerProvider, 'issue' | 'error'> = {
   sentry: 'error',
 };
 
-const openTrackerStudio = ({
-  provider,
-  issueExternalId,
-}: {
+type OpenTrackerStudioParams = {
   readonly provider: TrackerProvider;
   readonly issueExternalId?: string;
-}): void => {
+};
+
+const openTrackerStudio = ({ provider, issueExternalId }: OpenTrackerStudioParams): void => {
   window.dispatchEvent(
     new CustomEvent('goodboy:open-inbox', {
       detail: {
@@ -47,24 +47,39 @@ const openTrackerStudio = ({
 };
 
 type Props = {
+  readonly connected: Readonly<Record<TrackerProvider, boolean>>;
   readonly links: ReadonlyArray<TrackerStudioLink>;
 };
 
-export const TrackerStudioLinks = ({ links }: Props) => (
-  <div className="flex items-center gap-1">
-    {links.map((link) => (
-      <Tooltip key={link.provider} content={`Open the ${link.label} studio`}>
-        <button
-          type="button"
-          aria-label={`Open the ${link.label} studio`}
-          className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground motion-safe:transition-colors hover:bg-muted/60"
-          onClick={() =>
-            openTrackerStudio({ provider: link.provider, issueExternalId: link.issueExternalId })
-          }
-        >
-          <IntegrationGlyph provider={link.provider} size="xs" />
-        </button>
-      </Tooltip>
-    ))}
-  </div>
-);
+export const TrackerStudioLinks = ({ links, connected }: Props) => {
+  return (
+    <div className="flex items-center gap-1">
+      {links.map((link) => {
+        const label = connected[link.provider]
+          ? `Open ${link.label} in the inbox`
+          : `Connect ${link.label}`;
+        return (
+          <Tooltip key={link.provider} content={label}>
+            <button
+              type="button"
+              aria-label={label}
+              className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground motion-safe:transition-colors hover:bg-muted/60"
+              onClick={() => {
+                if (!connected[link.provider]) {
+                  openToolSettings({ tool: link.provider });
+                  return;
+                }
+                openTrackerStudio({
+                  provider: link.provider,
+                  issueExternalId: link.issueExternalId,
+                });
+              }}
+            >
+              <IntegrationGlyph provider={link.provider} size="xs" />
+            </button>
+          </Tooltip>
+        );
+      })}
+    </div>
+  );
+};
