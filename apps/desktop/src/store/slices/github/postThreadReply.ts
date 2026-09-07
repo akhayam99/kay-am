@@ -1,81 +1,59 @@
 import { addReviewThreadReply } from '@goodboy/core';
-import type { SessionId } from '@goodboy/types';
+import { markPendingResolutionReplyPosted, upsertResolvePublicationThread } from '@goodboy/db';
+import type { ResolvePublicationThread, SessionId } from '@goodboy/types';
 import { tauriGhRunner } from '../../../features/github/github';
-import { isSessionAttributionEnabled } from '../../sessionAttribution';
-import { threadOutcome } from '../resolve/threadOutcome';
-import { buildResolutionReplyBody } from './buildResolutionReplyBody';
-import { resolverReplyForThread } from './resolverReplyForThread';
+import { tauriDatabase } from '../../../shared/lib/db';
 import { sessionThreadGhOptions } from './sessionThreadGhOptions';
 import type { GetFn } from './types';
-
-type Closure = { commitSha?: string; reason?: string; reply?: string };
 
 type Params = {
   readonly get: GetFn;
   readonly sessionId: SessionId;
   readonly threadId: string;
-  readonly closure?: Closure;
+  readonly replyBody: string | null;
+  readonly frozen: ResolvePublicationThread;
 };
 
-const firstFilled = ({
-  candidates,
-}: {
-  readonly candidates: ReadonlyArray<string | null | undefined>;
-}): string | null => {
-  for (const candidate of candidates) {
-    const text = candidate?.trim() ?? '';
-    if (text !== '') {
-      return text;
-    }
-  }
-  return null;
-};
+export type PostedReply = { readonly posted: boolean; readonly replyId: string | null };
 
 export const postThreadReply = async ({
   get,
   sessionId,
   threadId,
-  closure,
-}: Params): Promise<boolean> => {
+  replyBody,
+  frozen,
+}: Params): Promise<PostedReply> => {
   const receipt = get().sessionResolveThreads[sessionId]?.find((row) => row.threadId === threadId);
-  if (receipt?.replyPostedAt !== null && receipt?.replyPostedAt !== undefined) {
-    return false;
+  if (receipt?.replyPostedAt != null || frozen.replyPhase === 'posted') {
+    return { posted: false, replyId: frozen.replyId };
   }
-  const savedOutcome = receipt === undefined ? null : threadOutcome({ row: receipt });
-  const pendingReply = get().sessionPendingResolutions[sessionId]?.find(
-    (resolution) => resolution.threadId === threadId,
-  )?.reply;
-  const reply = firstFilled({
-    candidates: [
-      closure?.reply,
-      savedOutcome?.reply ?? (receipt?.disposition === null ? receipt.replyDraft : undefined),
-      pendingReply,
-      resolverReplyForThread(get().resolverThreadOutcomes, threadId),
-    ],
+  if (replyBody === null) {
+    return { posted: false, replyId: null };
+  }
+  await upsertResolvePublicationThread({
+    db: tauriDatabase,
+    thread: { ...frozen, replyPhase: 'sending' },
   });
   const pr = get().sessionGithub[sessionId]?.pr ?? null;
-  const replyBody = buildResolutionReplyBody({
-    closure: reply === null ? closure : { ...closure, reply },
-    prUrl: pr?.url ?? null,
-    isAttributed: isSessionAttributionEnabled({ get, sessionId }),
-  });
-  if (replyBody === null) {
-    return false;
-  }
   const posted = await addReviewThreadReply(
     tauriGhRunner,
     threadId,
     replyBody,
     sessionThreadGhOptions({ get, sessionId }),
   );
+  const postedAt = Date.now();
   await get().updateResolveThread({
     sessionId,
     threadId,
     prNumber: pr?.number,
-    patch: {
-      replyPostedAt: Date.now(),
-      replyId: posted.id,
-    },
+    patch: { replyPostedAt: postedAt, replyId: posted.id },
   });
-  return true;
+  await markPendingResolutionReplyPosted({ db: tauriDatabase, sessionId, threadId }).catch(
+    () => undefined,
+  );
+  await upsertResolvePublicationThread({
+    db: tauriDatabase,
+    thread: { ...frozen, replyPhase: 'posted', replyId: posted.id, replyPostedAt: postedAt },
+  });
+  return { posted: true, replyId: posted.id };
 };

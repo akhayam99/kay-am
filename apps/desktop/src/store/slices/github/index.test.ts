@@ -289,6 +289,37 @@ vi.mock('../../../features/worktree/worktree', () => ({
   removeWorktree: removeWorktreeSpy,
   changeWorktreeBranch: changeWorktreeBranchSpy,
   worktreeChangedFiles: vi.fn(async () => []),
+  worktreeStatus: vi.fn(async () => null),
+  listBranchCommits: vi.fn(async () => []),
+  worktreeIsAncestor: vi.fn(async () => true),
+  worktreeRemoteHead: vi.fn(async () => null),
+  worktreeWriterStatus: vi.fn(async ({ path }: { readonly path: string }) => ({
+    path,
+    holder: null,
+    token: null,
+    runId: null,
+    isGranted: false,
+    hasExited: false,
+    waiting: [],
+  })),
+  acquireWorktreeWriter: vi.fn(async ({ path }: { readonly path: string }) => ({
+    path,
+    holder: 'publisher',
+    token: 'token',
+    runId: null,
+    isGranted: true,
+    hasExited: false,
+    waiting: [],
+  })),
+  releaseWorktreeWriter: vi.fn(async ({ path }: { readonly path: string }) => ({
+    path,
+    holder: null,
+    token: null,
+    runId: null,
+    isGranted: false,
+    hasExited: false,
+    waiting: [],
+  })),
 }));
 
 vi.mock('../../../shared/lib/repo', () => ({
@@ -2012,7 +2043,7 @@ describe('store contract', () => {
       );
     });
 
-    it('pushAllResolutions fails only the fixes when the push is rejected', async () => {
+    it('pushAllResolutions posts nothing at all when the required push is rejected', async () => {
       const store = await getStore();
       const fix = {
         id: 'pending-fix',
@@ -2056,19 +2087,23 @@ describe('store contract', () => {
 
       const result = await store.getState().pushAllResolutions(SESSION_ID);
 
-      expect(result).toEqual({ pushed: false, resolved: 1, failed: 1 });
-      expect(resolveThreadSpy).toHaveBeenCalledTimes(1);
-      expect(resolveThreadSpy).toHaveBeenCalledWith(
-        expect.anything(),
-        wontfix.threadId,
-        expect.anything(),
-      );
+      expect(result).toEqual({ pushed: false, resolved: 0, failed: 2 });
+      expect(addReplySpy).not.toHaveBeenCalled();
+      expect(resolveThreadSpy).not.toHaveBeenCalled();
       expect(
         store
           .getState()
           .sessionResolveThreads[SESSION_ID]?.find((row) => row.threadId === fix.threadId),
       ).toMatchObject({
         state: 'fixed',
+        stateReason: expect.stringContaining('non-fast-forward'),
+      });
+      expect(
+        store
+          .getState()
+          .sessionResolveThreads[SESSION_ID]?.find((row) => row.threadId === wontfix.threadId),
+      ).toMatchObject({
+        state: 'answered',
         stateReason: expect.stringContaining('non-fast-forward'),
       });
     });

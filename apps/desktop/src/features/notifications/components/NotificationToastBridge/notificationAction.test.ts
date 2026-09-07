@@ -9,7 +9,26 @@ import { mapNotificationAction } from './';
 
 const retrySummarizerSpy = vi.fn();
 const retryStepSummarySpy = vi.fn(async () => undefined);
-const pushAllResolutionsSpy = vi.fn(async () => ({ pushed: true, resolved: 0, failed: 0 }));
+const retryPublicationSpy = vi.fn(async () => ({
+  publicationId: 'pub-1',
+  repo: 'acme/web',
+  prNumber: 248,
+  branch: 'feature/retry',
+  localHead: 'abc',
+  remoteHead: null,
+  requiresPush: false,
+  commits: [],
+  replies: [],
+  excluded: [],
+  blocker: null,
+}));
+const publishConversationsSpy = vi.fn(async () => ({
+  kind: 'done' as const,
+  pushed: false,
+  resolved: 1,
+  commented: 0,
+  failed: 0,
+}));
 const setCurrentSessionSpy = vi.fn(async () => undefined);
 const setActiveLensSpy = vi.fn();
 const selectAgentSpy = vi.fn(async () => undefined);
@@ -21,7 +40,8 @@ type FakeStore = {
   >;
   retrySummarizer: typeof retrySummarizerSpy;
   retryStepSummary: typeof retryStepSummarySpy;
-  pushAllResolutions: typeof pushAllResolutionsSpy;
+  retryPublication: typeof retryPublicationSpy;
+  publishConversations: typeof publishConversationsSpy;
   setCurrentSession: typeof setCurrentSessionSpy;
   setActiveLens: typeof setActiveLensSpy;
   selectAgent: typeof selectAgentSpy;
@@ -32,7 +52,8 @@ function buildStore(overrides: Partial<FakeStore> = {}): FakeStore {
     summarizerStatus: {},
     retrySummarizer: retrySummarizerSpy,
     retryStepSummary: retryStepSummarySpy,
-    pushAllResolutions: pushAllResolutionsSpy,
+    retryPublication: retryPublicationSpy,
+    publishConversations: publishConversationsSpy,
     setCurrentSession: setCurrentSessionSpy,
     setActiveLens: setActiveLensSpy,
     selectAgent: selectAgentSpy,
@@ -130,11 +151,17 @@ describe('mapNotificationAction', () => {
     expect(toastAction?.label).toBe('Retry');
   });
 
-  it('retry-push-resolutions: onClick calls pushAllResolutions with sessionId', () => {
+  it('retry-push-resolutions: onClick reconciles a failed publication and publishes the fresh preview', async () => {
     const action: NotificationAction = { kind: 'retry-push-resolutions', sessionId: SESSION_ID };
     const store = buildStore();
     const toastAction = mapNotificationAction(action, store as never);
     toastAction?.onClick();
-    expect(pushAllResolutionsSpy).toHaveBeenCalledWith(SESSION_ID);
+    await vi.waitFor(() =>
+      expect(publishConversationsSpy).toHaveBeenCalledWith({
+        sessionId: SESSION_ID,
+        publicationId: 'pub-1',
+      }),
+    );
+    expect(retryPublicationSpy).toHaveBeenCalledWith({ sessionId: SESSION_ID });
   });
 });

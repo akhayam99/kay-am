@@ -1,5 +1,6 @@
 import { m140ResolveOutcomes } from './m140-resolve-outcomes';
 import { m141AttributionFooter } from './m141-attribution-footer';
+import { m142ResolvePublications } from './m142-resolve-publications';
 import { m001Initial } from './m001-initial';
 import { m002TelemetryKind } from './m002-telemetry-kind';
 import { m003SessionProvider } from './m003-session-provider';
@@ -287,4 +288,5 @@ export const migrations: ReadonlyArray<Migration> = [
   { version: 139, sql: m139SessionEventRebaseRequested },
   { version: 140, sql: m140ResolveOutcomes },
   { version: 141, sql: m141AttributionFooter },
+  { version: 142, sql: m142ResolvePublications },
 ];

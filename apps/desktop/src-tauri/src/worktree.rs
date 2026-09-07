@@ -1095,6 +1095,62 @@ fn worktree_commits_blocking(worktree_path: String) -> Result<Vec<BranchCommit>,
     Ok(commits)
 }
 
+#[tauri::command]
+pub async fn worktree_is_ancestor(
+    worktree_path: String,
+    sha: String,
+    head: String,
+) -> Result<bool, WorktreeError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        worktree_is_ancestor_blocking(worktree_path, sha, head)
+    })
+    .await
+    .map_err(|e| WorktreeError::Io(std::io::Error::other(e.to_string())))?
+}
+
+fn worktree_is_ancestor_blocking(
+    worktree_path: String,
+    sha: String,
+    head: String,
+) -> Result<bool, WorktreeError> {
+    let p = Path::new(&worktree_path);
+    if !p.exists() {
+        return Err(WorktreeError::RepoNotFound(worktree_path));
+    }
+    let output = crate::path_env::command("git")
+        .args(["merge-base", "--is-ancestor", &sha, &head])
+        .current_dir(p)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .output()?;
+    Ok(output.status.success())
+}
+
+#[tauri::command]
+pub async fn worktree_remote_head(
+    worktree_path: String,
+    branch: String,
+) -> Result<Option<String>, WorktreeError> {
+    tauri::async_runtime::spawn_blocking(move || worktree_remote_head_blocking(worktree_path, branch))
+        .await
+        .map_err(|e| WorktreeError::Io(std::io::Error::other(e.to_string())))?
+}
+
+fn worktree_remote_head_blocking(
+    worktree_path: String,
+    branch: String,
+) -> Result<Option<String>, WorktreeError> {
+    let p = Path::new(&worktree_path);
+    if !p.exists() {
+        return Err(WorktreeError::RepoNotFound(worktree_path));
+    }
+    let reference = format!("refs/heads/{branch}");
+    let raw = git(p, &["ls-remote", "origin", &reference])?;
+    Ok(raw
+        .lines()
+        .find_map(|line| line.split_whitespace().next())
+        .map(|sha| sha.to_string()))
+}
+
 #[derive(Debug, Deserialize)]
 pub struct RewriteArgs {
     #[serde(rename = "worktreePath")]

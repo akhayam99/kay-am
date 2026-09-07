@@ -103,7 +103,15 @@ export const mapNotificationAction = (
     return {
       label: 'Retry',
       onClick: () => {
-        void store.pushAllResolutions(sessionId);
+        void store.retryPublication({ sessionId }).then((preview) => {
+          if (preview.publicationId === null) {
+            return undefined;
+          }
+          return store.publishConversations({
+            sessionId,
+            publicationId: preview.publicationId,
+          });
+        });
       },
     };
   }

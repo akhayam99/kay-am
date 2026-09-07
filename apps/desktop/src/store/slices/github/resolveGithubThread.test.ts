@@ -6,6 +6,7 @@ import type {
   SessionId,
   WorkspaceId,
 } from '@goodboy/types';
+import { createResolveSlice } from '../resolve';
 import type { GetFn, SetFn } from './types';
 
 type GhRun = (
@@ -18,8 +19,8 @@ const h = vi.hoisted(() => ({
   run: vi.fn<GhRun>(),
 }));
 
-vi.mock('@goodboy/db', () => ({
-  listResolveThreads: vi.fn(async () => []),
+vi.mock('@goodboy/db', async () => ({
+  ...(await import('../resolve/testing/createResolveQueryMocks')).createResolveQueryMocks(),
   listPendingResolutionsForSession: vi.fn(async ({ sessionId }: { sessionId: SessionId }) =>
     h.rows.filter((r) => r.sessionId === sessionId),
   ),
@@ -61,13 +62,17 @@ const resolveThreadFailed = JSON.stringify({ errors: [{ message: 'graphql boom' 
 
 type State = {
   sessionResolveThreads: Record<string, ReadonlyArray<never>>;
-  updateResolveThread: ReturnType<typeof vi.fn>;
+  sessionResolveAttempts: Record<string, ReadonlyArray<never>>;
+  sessionResolvePublications: Record<string, ReadonlyArray<never>>;
+  activePublicationPreview: Record<string, unknown>;
   sessions: ReadonlyArray<{ id: SessionId; workspaceId: WorkspaceId }>;
   workspaces: ReadonlyArray<{ id: WorkspaceId }>;
   workspaceOverrides: Record<string, OverrideSettings>;
   sessionGithub: Record<string, { pr: { number: number } | null }>;
   sessionResolvedThreads: Record<string, ReadonlyArray<string>>;
   resolverThreadOutcomes: Record<string, Record<string, unknown>>;
+  resolverState: Record<string, unknown>;
+  sessionPhaseRuns: Record<string, ReadonlyArray<unknown>>;
   sessionPendingResolutions: Record<string, ReadonlyArray<PendingResolution>>;
   sessionProjectMounts: Record<string, ReadonlyArray<unknown>>;
   sessionActiveProject: Record<string, string>;
@@ -80,13 +85,17 @@ type State = {
 const makeStore = () => {
   const state: State = {
     sessionResolveThreads: {},
-    updateResolveThread: vi.fn(async () => true),
+    sessionResolveAttempts: {},
+    sessionResolvePublications: {},
+    activePublicationPreview: {},
     sessions: [{ id: SESSION_ID, workspaceId: WORKSPACE_ID }],
     workspaces: [{ id: WORKSPACE_ID }],
     workspaceOverrides: {},
     sessionGithub: { [SESSION_ID]: { pr: { number: 42 } } },
     sessionResolvedThreads: {},
     resolverThreadOutcomes: {},
+    resolverState: {},
+    sessionPhaseRuns: {},
     sessionPendingResolutions: {},
     sessionProjectMounts: {},
     sessionActiveProject: {},
@@ -103,6 +112,7 @@ const makeStore = () => {
         : (update as Partial<State>);
     Object.assign(state, patch);
   }) as unknown as SetFn;
+  Object.assign(state, createResolveSlice({ set, get }));
   return { state, get, set };
 };
 
