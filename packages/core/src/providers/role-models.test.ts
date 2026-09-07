@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ProviderId, RoleModelPreferences } from '@goodboy/types';
 import { ROLE_DEFAULTS } from '../roles';
 import { resolveRoleRouting } from './role-models';
@@ -272,5 +272,35 @@ describe('resolveRoleRouting', () => {
       effort: 'high',
       isOverride: true,
     });
+  });
+
+  it('preserves an explicit codex variant', () => {
+    const prefs: RoleModelPreferences = {
+      planner: { providerId: 'codex', model: 'gpt-5.6-luna', effort: 'high' },
+    };
+
+    expect(resolveRoleRouting({ role: 'planner', prefs })).toEqual({
+      provider: 'codex',
+      model: 'gpt-5.6-luna',
+      effort: 'high',
+      isOverride: true,
+    });
+  });
+
+  it('warns instead of silently dropping an invalid role preference', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const prefs: RoleModelPreferences = {
+      reviewer: { providerId: 'anthropic', model: 'claude-opus-99', effort: 'high' },
+    };
+
+    const resolved = resolveRoleRouting({ role: 'reviewer', prefs });
+
+    expect(resolved).toMatchObject({
+      provider: ROLE_DEFAULTS.reviewer.provider,
+      model: ROLE_DEFAULTS.reviewer.model,
+      isOverride: false,
+    });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('invalid reviewer model'));
+    warn.mockRestore();
   });
 });
