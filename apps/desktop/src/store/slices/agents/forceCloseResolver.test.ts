@@ -38,6 +38,7 @@ const makeStore = () => {
   const sendTurn = vi.fn(async () => undefined);
   const selectAgent = vi.fn(async () => undefined);
   const state: Record<string, unknown> = {
+    recordResolvePhase: vi.fn(async () => undefined),
     sessionPhaseRuns: {
       [SID]: [
         resolver({ id: STUCK, status: 'running', ordinal: 0 }),

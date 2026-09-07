@@ -26,6 +26,24 @@ export const markThreadResolvedNoPush = async ({
   replyAlreadyPosted,
   closure,
 }: Params): Promise<void> => {
+  await get().updateResolveThread({
+    sessionId,
+    threadId,
+    prNumber: get().sessionGithub[sessionId]?.pr?.number,
+    patch: {
+      state: 'publishing',
+      ...(closure?.reply !== undefined && { replyDraft: closure.reply }),
+      ...(closure?.reason !== undefined && {
+        disposition: 'no_change',
+        stateReason: `wontfix:${closure.reason}`,
+        replyDraft: closure.reply ?? closure.reason,
+      }),
+      ...(closure?.commitSha !== undefined && {
+        disposition: 'fix',
+        commitShas: [closure.commitSha],
+      }),
+    },
+  });
   if (!replyAlreadyPosted) {
     const posted = await postThreadReply({ get, sessionId, threadId, closure });
     if (posted) {
@@ -33,6 +51,11 @@ export const markThreadResolvedNoPush = async ({
     }
   }
   await resolveReviewThread(tauriGhRunner, threadId, sessionThreadGhOptions({ get, sessionId }));
+  await get().updateResolveThread({
+    sessionId,
+    threadId,
+    patch: { state: 'closed', githubResolved: true, closedAt: Date.now(), closedSource: 'goodboy' },
+  });
   set((state) => {
     const known = state.sessionResolvedThreads[sessionId] ?? [];
     if (known.includes(threadId)) {

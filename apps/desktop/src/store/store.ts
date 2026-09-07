@@ -1,3 +1,5 @@
+import { createResolveSlice } from './slices/resolve';
+import { resolveInitialState } from './slices/resolve/state';
 import { create } from 'zustand';
 import { type SlotKey } from '@goodboy/core';
 import {
@@ -598,7 +600,6 @@ type AppActions = {
   activateNextResolver(sessionId: SessionId): Promise<void>;
   forceCloseResolver(sessionId: SessionId, agentId: AgentId): Promise<void>;
   setResolverThreadReply(params: { agentId: AgentId; threadId: string; reply: string }): void;
-  hydrateResolverOutcomes(sessionId: SessionId): Promise<void>;
   renameAgent(sessionId: SessionId, agentId: AgentId, name: string): Promise<void>;
   setAgentKind(agentId: AgentId, kind: AgentKind): void;
   setAgentEffortOverride(agentId: AgentId, effort: string): void;
@@ -890,7 +891,7 @@ type AppActions = {
   }): Promise<void>;
 };
 
-export type AppStore = AppState & AppActions;
+export type AppStore = AppState & AppActions & ReturnType<typeof createResolveSlice>;
 
 export const initialState: AppState = {
   ...initialUpdaterState,
@@ -996,6 +997,7 @@ export const initialState: AppState = {
   agentEffortOverride: {},
   agentKindOverride: {},
   pendingResolverKickoff: {},
+  ...resolveInitialState,
   resolverState: {},
   resolverThreadOutcomes: {},
   agentDraft: {},
@@ -1056,6 +1058,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   ...createPermissionsSlice(set, get),
   ...createProvidersSlice(set, get),
   ...createAgentsSlice(set, get),
+  ...createResolveSlice({ set, get }),
   ...createWorkflowDraftsSlice(set, get),
   ...createWorkflowStudioSlice(set, get),
   ...createSlotsSlice(set, get),

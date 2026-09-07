@@ -13,6 +13,7 @@ export const forceCloseResolver = (set: SetFn, get: GetFn) => {
       cancelledRunIds.add(turnState.runId);
       await cancelTurn(turnState.runId).catch(() => undefined);
     }
+    await get().recordResolvePhase({ sessionId, agentId, phase: 'cancelled' });
     const now = new Date().toISOString() as IsoDateTime;
     await invokeAgentUpdateStatus(agentId, { status: 'skipped', completedAt: now }).catch(
       () => undefined,

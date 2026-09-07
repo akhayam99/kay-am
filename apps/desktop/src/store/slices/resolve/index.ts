@@ -1,0 +1,40 @@
+import { loadResolveSession } from './loadResolveSession';
+import { persistResolveTurn } from './persistResolveTurn';
+import { recordResolveAttempt } from './recordResolveAttempt';
+import { recordResolvePhase } from './recordResolvePhase';
+import { updateResolveThreads } from './updateResolveThreads';
+import { updateResolveThread } from './updateResolveThread';
+import type {
+  ResolveActions,
+  BatchUpdateParams,
+  AttemptParams,
+  PhaseParams,
+  SessionParams,
+  SliceParams,
+  TurnParams,
+  UpdateParams,
+} from './types';
+
+export const createResolveSlice = ({ set, get }: SliceParams): ResolveActions => {
+  let writes: Promise<unknown> = Promise.resolve();
+  type WriteParams<T> = { readonly run: () => Promise<T> };
+  const serialize = <T>({ run }: WriteParams<T>): Promise<T> => {
+    const next = writes.then(run, run);
+    writes = next;
+    return next;
+  };
+  return {
+    updateResolveThreads: (params: BatchUpdateParams) =>
+      serialize({ run: () => updateResolveThreads({ set, get, ...params }) }),
+    loadResolveSession: (params: SessionParams) =>
+      serialize({ run: () => loadResolveSession({ set, get, ...params }) }),
+    persistResolveTurn: (params: TurnParams) =>
+      serialize({ run: () => persistResolveTurn({ set, get, ...params }) }),
+    recordResolveAttempt: (params: AttemptParams) =>
+      serialize({ run: () => recordResolveAttempt({ set, get, ...params }) }),
+    recordResolvePhase: (params: PhaseParams) =>
+      serialize({ run: () => recordResolvePhase({ set, get, ...params }) }),
+    updateResolveThread: (params: UpdateParams) =>
+      serialize({ run: () => updateResolveThread({ set, get, ...params }) }),
+  };
+};

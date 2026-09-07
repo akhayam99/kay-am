@@ -96,6 +96,7 @@ import {
 } from '../../turn-helpers';
 import { applyHeuristicTitle } from './applyHeuristicTitle';
 import { clusterBoundaryMarker, composeClusterBoundary } from '../workflows/clusterImplementation';
+import { createResolveCandidateWriter } from './createResolveCandidateWriter';
 import { completeResolvedAgent } from './completeResolvedAgent';
 import { resolvePhaseAgent } from './resolvePhaseAgent';
 import { resolveSkillPrompt } from './resolveSkillPrompt';
@@ -704,7 +705,33 @@ export const sendTurn = (set: SetFn, get: GetFn) => {
       }
     }
 
+    const resolveAttemptId =
+      earlyAgentKind === 'resolver' && agentRowEarly !== null
+        ? await get().recordResolveAttempt({
+            sessionId,
+            agent: agentRowEarly,
+            provider,
+            model,
+            effort: rawEffort,
+            instructions: resolvedPrompt,
+            phase: 'running',
+          })
+        : undefined;
     let assistantText = '';
+    const resolveCandidateWriter = createResolveCandidateWriter({
+      persist: async () => {
+        if (resolveAttemptId === undefined || agentRowEarly === null) {
+          return;
+        }
+        await get().persistResolveTurn({
+          sessionId,
+          agent: agentRowEarly,
+          assistantText,
+          isCandidate: true,
+          attemptId: resolveAttemptId,
+        });
+      },
+    });
     let receivedProviderError = false;
     let lastError: unknown = null;
     let turnWasCancelled = false;
@@ -879,6 +906,7 @@ export const sendTurn = (set: SetFn, get: GetFn) => {
         }
         if (event.kind === 'assistant_text') {
           assistantText += event.delta;
+          resolveCandidateWriter.append({ delta: event.delta });
         }
         if (event.kind === 'file_edit') {
           filesTouchedThisTurn.add(toRelPath(event.path, workingDir));
@@ -914,6 +942,7 @@ export const sendTurn = (set: SetFn, get: GetFn) => {
           }
         }
       }
+      await resolveCandidateWriter.flush();
       const afterAgentState = get().agentTurnState[activeAgentId];
       if (afterAgentState?.kind === 'running') {
         const idleState: TurnState = { kind: 'idle', lastActivityAt: now() };
@@ -957,6 +986,7 @@ export const sendTurn = (set: SetFn, get: GetFn) => {
           sessionId,
           resolvedAgentId,
           assistantText,
+          resolveAttemptId,
           now,
         });
         if (shouldAutoAdvance !== null) {
@@ -1041,6 +1071,14 @@ export const sendTurn = (set: SetFn, get: GetFn) => {
         }
         if (result.openQuestionsChanged) {
           await get().loadSessionOpenQuestions(sessionId);
+          if (resolveAttemptId !== undefined && agentRowEarly !== null && !wasCancelled) {
+            await get().persistResolveTurn({
+              sessionId,
+              agent: agentRowEarly,
+              assistantText,
+              attemptId: resolveAttemptId,
+            });
+          }
         }
         // Mirror the session's git file-change numstat into a context slot so the
         // mobile client gets BOTH the changed-file list and per-file +/- counts
@@ -1326,6 +1364,15 @@ export const sendTurn = (set: SetFn, get: GetFn) => {
       void get().maybeAutoAdvanceWorkflow(sessionId);
     }
 
+    if (resolveAttemptId !== undefined && (lastError !== null || turnWasCancelled)) {
+      await get().recordResolvePhase({
+        sessionId,
+        agentId: activeAgentId,
+        attemptId: resolveAttemptId,
+        phase: turnWasCancelled ? 'cancelled' : 'failed',
+        error: lastError === null ? null : formatError(lastError),
+      });
+    }
     if (lastError) {
       throw lastError;
     }

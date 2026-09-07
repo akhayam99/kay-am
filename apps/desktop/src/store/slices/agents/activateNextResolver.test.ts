@@ -26,6 +26,7 @@ const makeStore = ({
   const sendTurn = vi.fn(async () => undefined);
   const selectAgent = vi.fn(async () => undefined);
   const state: Record<string, unknown> = {
+    recordResolvePhase: vi.fn(async () => undefined),
     sessionPhaseRuns: { [SID]: agents },
     agentKindOverride: {},
     pendingResolverKickoff,
@@ -112,6 +113,7 @@ describe('activateNextResolver', () => {
     );
     const selectAgent = vi.fn(async () => undefined);
     const state: Record<string, unknown> = {
+      recordResolvePhase: vi.fn(async () => undefined),
       sessionPhaseRuns: {
         [SID]: [resolver({ id: FIRST, ordinal: 1 }), resolver({ id: SECOND, ordinal: 2 })],
       },
@@ -145,6 +147,7 @@ describe('activateNextResolver', () => {
   it('lets the chain hand off to the next resolver from inside the finishing turn', async () => {
     const started: AgentId[] = [];
     const state: Record<string, unknown> = {
+      recordResolvePhase: vi.fn(async () => undefined),
       sessionPhaseRuns: {
         [SID]: [resolver({ id: FIRST, ordinal: 1 }), resolver({ id: SECOND, ordinal: 2 })],
       },
@@ -208,6 +211,7 @@ describe('activateNextResolver', () => {
     });
     const emitNotification = vi.fn(async () => undefined);
     const state: Record<string, unknown> = {
+      recordResolvePhase: vi.fn(async () => undefined),
       sessionPhaseRuns: { [SID]: [resolver({ id: FIRST, ordinal: 1 })] },
       agentKindOverride: {},
       pendingResolverKickoff: { [FIRST]: 'fix comment one' },

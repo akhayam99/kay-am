@@ -13,6 +13,7 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock('@goodboy/db', () => ({
+  listResolveThreads: vi.fn(async () => []),
   listPendingResolutionsForSession: vi.fn(async ({ sessionId }: { sessionId: SessionId }) =>
     h.rows.filter((r) => r.sessionId === sessionId),
   ),
@@ -53,6 +54,8 @@ const resolveThreadOk = JSON.stringify({
 const resolveThreadFailed = JSON.stringify({ errors: [{ message: 'graphql boom' }] });
 
 type State = {
+  sessionResolveThreads: Record<string, ReadonlyArray<never>>;
+  updateResolveThread: ReturnType<typeof vi.fn>;
   sessions: ReadonlyArray<{ id: SessionId; workspaceId: WorkspaceId }>;
   workspaces: ReadonlyArray<{ id: WorkspaceId }>;
   sessionGithub: Record<string, { pr: { number: number } | null }>;
@@ -69,6 +72,8 @@ type State = {
 
 const makeStore = () => {
   const state: State = {
+    sessionResolveThreads: {},
+    updateResolveThread: vi.fn(async () => true),
     sessions: [{ id: SESSION_ID, workspaceId: WORKSPACE_ID }],
     workspaces: [{ id: WORKSPACE_ID }],
     sessionGithub: { [SESSION_ID]: { pr: { number: 42 } } },

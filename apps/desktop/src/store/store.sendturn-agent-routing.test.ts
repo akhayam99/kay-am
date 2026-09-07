@@ -118,51 +118,62 @@ vi.mock('../shared/lib/db', () => ({
   tauriDatabase: { execute: vi.fn(), select: vi.fn() },
 }));
 
-vi.mock('@goodboy/db', () => ({
-  getSetting: vi.fn(),
-  insertMessage: vi.fn(),
-  insertProviderRun: vi.fn(async () => undefined),
-  insertSession: vi.fn(),
-  insertSessionWorktree: vi.fn(),
-  insertTelemetry: vi.fn(),
-  insertWorkspace: vi.fn(),
-  listContextSlotsForSession: vi.fn(async () => []),
-  listMessagesForSession: vi.fn(async () => []),
-  listSessionsForWorkspace: vi.fn(async () => []),
-  listTelemetryForSession: vi.fn(async () => []),
-  listWorkspaces: vi.fn(async () => []),
-  listWorktreesForTask: vi.fn(async () => []),
-  deleteWorktreesForSession: vi.fn(),
-  setSetting: vi.fn(),
-  summarizeSessionTelemetry: vi.fn(async () => null),
-  summarizeWorkspaceTelemetry: vi.fn(async () => null),
-  summarizeWorkspaceProviderTelemetry: vi.fn(async () => []),
-  updateProviderRunStatus: vi.fn(),
-  updateSessionState: vi.fn(),
-  upsertContextSlot: vi.fn(),
-  insertFileVersion: insertFileVersionSpy,
-  pruneFileVersionsForPath: pruneFileVersionsForPathSpy,
-  insertOpenQuestion: vi.fn(async () => undefined),
-  markOpenQuestionsResolvedByText: vi.fn(async () => 0),
-  listResolvedQuestionTextsForSession: vi.fn(async () => []),
-  insertTurnEvent: vi.fn(async () => undefined),
-  insertTurnEventsBatch: vi.fn(async () => undefined),
-  listWorktreesForSessions: vi.fn(async () => new Map()),
-  listAgentsForSessions: vi.fn(async () => new Map()),
-  listTurnEventsForAgent: vi.fn(async () => []),
-  listTurnEventsForTask: vi.fn(async () => []),
-  listMessagesForAgent: vi.fn(async () => []),
-  insertNotification: vi.fn(async () => undefined),
-  listNotifications: vi.fn(async () => []),
-  countNotifications: vi.fn(async () => ({ total: 0, unread: 0 })),
-  NOTIFICATION_LIST_LIMIT: 200,
-  markAllNotificationsRead: vi.fn(async () => undefined),
-  clearAllNotifications: vi.fn(async () => undefined),
-  updateSessionWorkflowStep: vi.fn(),
-  attachWorkflowToSession: vi.fn(),
-  detachWorkflowFromSession: vi.fn(),
-  updateWorkflowOrder: vi.fn(),
-}));
+const resolveMockState = vi.hoisted(() => ({ reset: (): void => {} }));
+beforeEach(() => resolveMockState.reset());
+
+vi.mock('@goodboy/db', async () => {
+  const queries = (
+    await import('./slices/resolve/testing/createResolveQueryMocks')
+  ).createResolveQueryMocks();
+  resolveMockState.reset = queries.resetResolveQueryMocks;
+  return {
+    ...queries,
+    listOpenQuestionsForSession: vi.fn(async () => []),
+    getSetting: vi.fn(),
+    insertMessage: vi.fn(),
+    insertProviderRun: vi.fn(async () => undefined),
+    insertSession: vi.fn(),
+    insertSessionWorktree: vi.fn(),
+    insertTelemetry: vi.fn(),
+    insertWorkspace: vi.fn(),
+    listContextSlotsForSession: vi.fn(async () => []),
+    listMessagesForSession: vi.fn(async () => []),
+    listSessionsForWorkspace: vi.fn(async () => []),
+    listTelemetryForSession: vi.fn(async () => []),
+    listWorkspaces: vi.fn(async () => []),
+    listWorktreesForTask: vi.fn(async () => []),
+    deleteWorktreesForSession: vi.fn(),
+    setSetting: vi.fn(),
+    summarizeSessionTelemetry: vi.fn(async () => null),
+    summarizeWorkspaceTelemetry: vi.fn(async () => null),
+    summarizeWorkspaceProviderTelemetry: vi.fn(async () => []),
+    updateProviderRunStatus: vi.fn(),
+    updateSessionState: vi.fn(),
+    upsertContextSlot: vi.fn(),
+    insertFileVersion: insertFileVersionSpy,
+    pruneFileVersionsForPath: pruneFileVersionsForPathSpy,
+    insertOpenQuestion: vi.fn(async () => undefined),
+    markOpenQuestionsResolvedByText: vi.fn(async () => 0),
+    listResolvedQuestionTextsForSession: vi.fn(async () => []),
+    insertTurnEvent: vi.fn(async () => undefined),
+    insertTurnEventsBatch: vi.fn(async () => undefined),
+    listWorktreesForSessions: vi.fn(async () => new Map()),
+    listAgentsForSessions: vi.fn(async () => new Map()),
+    listTurnEventsForAgent: vi.fn(async () => []),
+    listTurnEventsForTask: vi.fn(async () => []),
+    listMessagesForAgent: vi.fn(async () => []),
+    insertNotification: vi.fn(async () => undefined),
+    listNotifications: vi.fn(async () => []),
+    countNotifications: vi.fn(async () => ({ total: 0, unread: 0 })),
+    NOTIFICATION_LIST_LIMIT: 200,
+    markAllNotificationsRead: vi.fn(async () => undefined),
+    clearAllNotifications: vi.fn(async () => undefined),
+    updateSessionWorkflowStep: vi.fn(),
+    attachWorkflowToSession: vi.fn(),
+    detachWorkflowFromSession: vi.fn(),
+    updateWorkflowOrder: vi.fn(),
+  };
+});
 
 vi.mock('../features/file-versions/fileVersions', () => ({
   fileVersionsBeginSnapshot: fileVersionsBeginSnapshotSpy,
@@ -1037,7 +1048,9 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
     useAppStore.setState({
       sessions: [buildSession()],
       sessionWorktrees: { [SESSION_ID]: ['/tmp/wt'] },
-      sessionPhaseRuns: { [SESSION_ID]: [buildAgent(AGENT_A, 0)] },
+      sessionPhaseRuns: {
+        [SESSION_ID]: [{ ...buildAgent(AGENT_A, 0), sourceThreadIds: ['PRRT_1'] }],
+      },
       selectedAgentId: { [SESSION_ID]: AGENT_A },
       agentEffortOverride: {},
       agentProviderOverride: {},
@@ -1110,6 +1123,7 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
         [SESSION_ID]: [
           {
             ...buildAgent(AGENT_A, 0),
+            sourceThreadIds: ['PRRT_1'],
             doneAt: '2026-07-26T12:00:00.000Z' as IsoDateTime,
           },
         ],
@@ -1229,7 +1243,7 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
     const useAppStore = await importStore();
     const workflowsMod = await import('../features/workflows/workflows');
     (workflowsMod.invokeAgentList as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { ...buildAgent(AGENT_A, 0), status: 'completed' },
+      { ...buildAgent(AGENT_A, 0), sourceThreadIds: ['PRRT_1'], status: 'completed' },
       buildAgent(AGENT_B, 1),
     ]);
     useAppStore.setState({
@@ -1246,7 +1260,12 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
           },
         ],
       },
-      sessionPhaseRuns: { [SESSION_ID]: [buildAgent(AGENT_A, 0), buildAgent(AGENT_B, 1)] },
+      sessionPhaseRuns: {
+        [SESSION_ID]: [
+          { ...buildAgent(AGENT_A, 0), sourceThreadIds: ['PRRT_1'] },
+          buildAgent(AGENT_B, 1),
+        ],
+      },
       selectedAgentId: { [SESSION_ID]: AGENT_A },
       transcripts: { [AGENT_A]: [], [AGENT_B]: [] },
       agentKindOverride: { [AGENT_A]: 'resolver', [AGENT_B]: 'resolver' },
@@ -1314,12 +1333,20 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
     const useAppStore = await importStore();
     const workflowsMod = await import('../features/workflows/workflows');
     (workflowsMod.invokeAgentList as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { ...buildAgent(AGENT_A, 0), status: 'completed' },
+      {
+        ...buildAgent(AGENT_A, 0),
+        sourceThreadIds: ['PRRT_1', 'PRRT_2', 'PRRT_3'],
+        status: 'completed',
+      },
     ]);
     useAppStore.setState({
       sessions: [buildSession()],
       sessionWorktrees: { [SESSION_ID]: ['/tmp/wt'] },
-      sessionPhaseRuns: { [SESSION_ID]: [buildAgent(AGENT_A, 0)] },
+      sessionPhaseRuns: {
+        [SESSION_ID]: [
+          { ...buildAgent(AGENT_A, 0), sourceThreadIds: ['PRRT_1', 'PRRT_2', 'PRRT_3'] },
+        ],
+      },
       selectedAgentId: { [SESSION_ID]: AGENT_A },
       transcripts: { [AGENT_A]: [] },
       agentKindOverride: { [AGENT_A]: 'resolver' },
@@ -1393,7 +1420,7 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
     const useAppStore = await importStore();
     const workflowsMod = await import('../features/workflows/workflows');
     (workflowsMod.invokeAgentList as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { ...buildAgent(AGENT_A, 0), status: 'completed' },
+      { ...buildAgent(AGENT_A, 0), sourceThreadIds: ['PRRT_1'], status: 'completed' },
       buildAgent(AGENT_B, 1),
     ]);
     useAppStore.setState({
@@ -1410,7 +1437,12 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
           },
         ],
       },
-      sessionPhaseRuns: { [SESSION_ID]: [buildAgent(AGENT_A, 0), buildAgent(AGENT_B, 1)] },
+      sessionPhaseRuns: {
+        [SESSION_ID]: [
+          { ...buildAgent(AGENT_A, 0), sourceThreadIds: ['PRRT_1'] },
+          buildAgent(AGENT_B, 1),
+        ],
+      },
       selectedAgentId: { [SESSION_ID]: AGENT_A },
       transcripts: { [AGENT_A]: [], [AGENT_B]: [] },
       agentKindOverride: { [AGENT_A]: 'resolver', [AGENT_B]: 'resolver' },
@@ -1477,7 +1509,7 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
     const useAppStore = await importStore();
     const workflowsMod = await import('../features/workflows/workflows');
     (workflowsMod.invokeAgentList as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { ...buildAgent(AGENT_A, 0), status: 'completed' },
+      { ...buildAgent(AGENT_A, 0), sourceThreadIds: ['PRRT_1'], status: 'completed' },
       buildAgent(AGENT_B, 1),
     ]);
     useAppStore.setState({
@@ -1494,7 +1526,12 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
           },
         ],
       },
-      sessionPhaseRuns: { [SESSION_ID]: [buildAgent(AGENT_A, 0), buildAgent(AGENT_B, 1)] },
+      sessionPhaseRuns: {
+        [SESSION_ID]: [
+          { ...buildAgent(AGENT_A, 0), sourceThreadIds: ['PRRT_1'] },
+          buildAgent(AGENT_B, 1),
+        ],
+      },
       selectedAgentId: { [SESSION_ID]: AGENT_A },
       transcripts: { [AGENT_A]: [], [AGENT_B]: [] },
       agentKindOverride: { [AGENT_A]: 'resolver', [AGENT_B]: 'resolver' },
@@ -1671,6 +1708,7 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
     const stepId = 'step-1' as never;
     const agent = {
       ...buildAgent(AGENT_A, 0),
+      sourceThreadIds: ['PRRT_1'],
       stepId,
       workflowRunId,
     };
@@ -1891,7 +1929,10 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
       sessions: [buildSession()],
       sessionWorktrees: { [SESSION_ID]: ['/tmp/wt'] },
       sessionPhaseRuns: {
-        [SESSION_ID]: [buildAgent(AGENT_A, 0), buildAgent(AGENT_B, 1)],
+        [SESSION_ID]: [
+          { ...buildAgent(AGENT_A, 0), sourceThreadIds: ['PRRT_1'] },
+          buildAgent(AGENT_B, 1),
+        ],
       },
       selectedAgentId: {},
       transcripts: { [AGENT_A]: [], [AGENT_B]: [] },

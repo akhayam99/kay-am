@@ -35,6 +35,12 @@ export const activateNextResolver = (set: SetFn, get: GetFn) => {
       return;
     }
     resolverStartsPending.set(sessionId, next.id);
+    try {
+      await get().recordResolvePhase({ sessionId, agentId: next.id, phase: 'running' });
+    } catch (error) {
+      resolverStartsPending.delete(sessionId);
+      throw error;
+    }
     set((s) => {
       const nextPending = { ...s.pendingResolverKickoff };
       delete nextPending[next.id];
@@ -42,7 +48,13 @@ export const activateNextResolver = (set: SetFn, get: GetFn) => {
     });
     void get()
       .sendTurn({ sessionId, agentId: next.id, content: kickoff })
-      .catch((error: unknown) => {
+      .catch(async (error: unknown) => {
+        await get().recordResolvePhase({
+          sessionId,
+          agentId: next.id,
+          phase: 'failed',
+          error: formatError(error),
+        });
         void get().emitNotification(
           'error',
           'error',

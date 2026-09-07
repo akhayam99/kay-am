@@ -15,6 +15,7 @@ export type ResolverTurnOutcomes = {
   readonly outcomes: Readonly<Record<string, ResolverThreadOutcome>>;
   readonly turnOutcomes: Readonly<Record<string, ResolverThreadOutcome>>;
   readonly markerCount: number;
+  readonly analysisVerdicts: Readonly<Record<string, 'fix' | 'wontfix'>>;
 };
 
 export const resolverTurnOutcomes = ({
@@ -38,7 +39,11 @@ export const resolverTurnOutcomes = ({
     if (turnOutcomes[marker.threadId]?.kind === 'resolved') {
       continue;
     }
-    turnOutcomes[marker.threadId] = { kind: 'analyzed', reply: marker.summary };
+    turnOutcomes[marker.threadId] = {
+      kind: 'analyzed',
+      reply: marker.summary,
+      ...(marker.verdict === 'fix' && { verdict: 'fix' }),
+    };
   }
   let reworkedReplies = 0;
   for (const marker of extractAllCommentReplies(assistantText)) {
@@ -57,5 +62,8 @@ export const resolverTurnOutcomes = ({
     outcomes: markerCount === 0 ? previousOutcomes : { ...previousOutcomes, ...turnOutcomes },
     turnOutcomes,
     markerCount,
+    analysisVerdicts: Object.fromEntries(
+      analysisMarkers.map((marker) => [marker.threadId, marker.verdict]),
+    ),
   };
 };

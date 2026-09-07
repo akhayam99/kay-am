@@ -1,3 +1,4 @@
+import type { ResolveState } from './slices/resolve/state';
 import type { OrphanWorktree } from '../features/worktree/worktree';
 import type { StorageStats } from './slices/storage';
 import type { Notification, NotificationCounts, TelemetrySummary } from '@goodboy/db';
@@ -93,7 +94,7 @@ import type { WorkflowGeneration, WorkflowStudioDraft } from './slices/workflowS
 export type ResolverThreadOutcome =
   | { readonly kind: 'resolved'; readonly commitSha: string; readonly reply?: string }
   | { readonly kind: 'wontfix'; readonly reason: string; readonly reply?: string }
-  | { readonly kind: 'analyzed'; readonly reply?: string };
+  | { readonly kind: 'analyzed'; readonly reply?: string; readonly verdict?: 'fix' | 'wontfix' };
 
 export type BootPhase =
   | 'pending'
@@ -175,7 +176,11 @@ export type PendingOrchestration = {
   readonly routing?: OrchestratorRouting;
 };
 
-type AppSliceState = UpdaterState & ChangelogState & SlackThreadsSliceState & BugReportDraftState;
+type AppSliceState = ResolveState &
+  UpdaterState &
+  ChangelogState &
+  SlackThreadsSliceState &
+  BugReportDraftState;
 
 export type AppState = AppSliceState & {
   readonly selectedProjectIds: Readonly<Record<WorkspaceId, ReadonlyArray<string>>>;
