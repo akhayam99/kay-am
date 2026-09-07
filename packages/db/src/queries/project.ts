@@ -67,8 +67,8 @@ export const insertProject = async ({ db, project }: InsertProjectParams): Promi
        id, workspace_id, name, root_path, default_provider_id, default_workflow_id,
        default_branch_prefix, parallel_enabled, created_at, updated_at, disconnected_at,
        default_verbosity, last_accessed_at, provider_bindings, parallel_agents, kind,
-       task_models, role_models, provider_pool, base_branch
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       task_models, role_models, provider_pool, base_branch, attribution_footer
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       project.id,
       project.workspaceId,
@@ -90,6 +90,11 @@ export const insertProject = async ({ db, project }: InsertProjectParams): Promi
       serializeObject({ value: project.overrides.roleModels }),
       serializeProviderPool({ providerPool: project.overrides.providerPool }),
       project.baseBranch,
+      project.overrides.attributionFooter === null
+        ? null
+        : project.overrides.attributionFooter
+          ? 1
+          : 0,
     ],
   );
 };

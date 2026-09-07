@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { formatError } from '@goodboy/ui';
 import type { ProjectId, WorkspaceId } from '@goodboy/types';
 import { linearCreateComment, linearFetchIssueComments, type LinearIssueComment } from './client';
+import { useAppStore } from '../../../store';
+import { appendAttribution, isAttributionEnabled } from '../../../shared/utils/attribution';
 
 type Params = {
   readonly workspaceId: WorkspaceId;
@@ -20,6 +22,9 @@ export const useLinearIssueComments = ({ workspaceId, issueId, projectId }: Para
   const [comments, setComments] = useState<ReadonlyArray<LinearIssueComment>>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isAttributed = useAppStore((state) =>
+    isAttributionEnabled({ overrides: state.workspaceOverrides[workspaceId] }),
+  );
 
   useEffect(() => {
     setComments([]);
@@ -61,10 +66,15 @@ export const useLinearIssueComments = ({ workspaceId, issueId, projectId }: Para
       if (issueId == null) {
         return;
       }
-      const created = await linearCreateComment({ workspaceId, issueId, body, projectId });
+      const created = await linearCreateComment({
+        workspaceId,
+        issueId,
+        body: appendAttribution({ body, isEnabled: isAttributed }),
+        projectId,
+      });
       setComments((current) => [...current, created]);
     },
-    [issueId, workspaceId, projectId],
+    [issueId, workspaceId, projectId, isAttributed],
   );
 
   return { comments, isLoading, error, post: issueId != null ? post : null };

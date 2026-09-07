@@ -24,6 +24,7 @@ import { primaryProjectRoot } from '../../../../features/workspace/primaryProjec
 import { useToast } from '../../../../app/components/Toast';
 import { useSectionAnchors } from '../../hooks/useSectionAnchors';
 import { ICON_SIZE } from '../../../../shared/components/conceptIcons';
+import { isAttributionEnabled } from '../../../../shared/utils/attribution';
 
 type Props = {
   readonly workspaceId: WorkspaceId;
@@ -52,6 +53,7 @@ export const WorkspaceScopePanel = ({ workspaceId, initialSection, requestClose 
 
   const verbosity = wsOverrides?.defaultVerbosity ?? 'normal';
   const parallelAgents = wsOverrides?.parallelAgents ?? false;
+  const attributionFooter = isAttributionEnabled({ overrides: wsOverrides });
 
   useEffect(() => {
     const value = wsOverrides?.defaultBranchPrefix ?? DEFAULT_BRANCH_PREFIX;
@@ -67,6 +69,7 @@ export const WorkspaceScopePanel = ({ workspaceId, initialSection, requestClose 
     partial: Partial<{
       defaultVerbosity: VerbosityLevel;
       parallelAgents: boolean;
+      attributionFooter: boolean;
       defaultBranchPrefix: string;
     }>,
     successMessage: string,
@@ -84,6 +87,7 @@ export const WorkspaceScopePanel = ({ workspaceId, initialSection, requestClose 
         roleModels: wsOverrides?.roleModels ?? null,
         parallelAgents,
         providerPool: wsOverrides?.providerPool ?? null,
+        attributionFooter,
         ...partial,
       });
       showToast('success', successMessage);
@@ -131,6 +135,7 @@ export const WorkspaceScopePanel = ({ workspaceId, initialSection, requestClose 
         roleModels: wsOverrides?.roleModels ?? null,
         parallelAgents,
         providerPool: wsOverrides?.providerPool ?? null,
+        attributionFooter,
       });
       setBranchPrefix(next);
       setSavedBranchPrefix(next);
@@ -284,6 +289,23 @@ export const WorkspaceScopePanel = ({ workspaceId, initialSection, requestClose 
                     void persistOverrides(
                       { parallelAgents: next },
                       next ? 'parallel agents on' : 'parallel agents off',
+                    )
+                  }
+                />
+              </FieldRow>
+
+              <FieldRow
+                label="Attribution line"
+                help="Signs every comment Goodboy posts to GitHub, GitLab, Bitbucket, Jira, Linear and Slack."
+              >
+                <Switch
+                  label={attributionFooter ? 'On' : 'Off'}
+                  checked={attributionFooter}
+                  disabled={busy}
+                  onChange={(next) =>
+                    void persistOverrides(
+                      { attributionFooter: next },
+                      next ? 'attribution line on' : 'attribution line off',
                     )
                   }
                 />

@@ -37,6 +37,9 @@ vi.mock('../client', async (importOriginal) => ({
   jiraListAssignableUsers: vi.fn(async () => []),
 }));
 
+import { overridesWithAttribution } from '../../../../__tests__/helpers/attributionOverrides';
+import { ATTRIBUTION_FOOTER } from '../../../../shared/utils/attribution';
+import { useAppStore } from '../../../../store';
 import { JiraIssueDetail } from './index';
 
 const listComments = vi.mocked(jiraListComments);
@@ -98,6 +101,7 @@ beforeEach(() => {
   setAssignee.mockResolvedValue(undefined);
   transitionIssue.mockResolvedValue(undefined);
   getIssue.mockResolvedValue(ISSUE);
+  useAppStore.setState({ workspaceOverrides: {} });
 });
 afterEach(cleanup);
 
@@ -160,11 +164,42 @@ describe('JiraIssueDetail', () => {
 
     await waitFor(() =>
       expect(createComment).toHaveBeenCalledWith(
-        expect.objectContaining({ issueKey: 'ENG-142', body: 'Moving this to review' }),
+        expect.objectContaining({
+          issueKey: 'ENG-142',
+          body: `Moving this to review\n\n${ATTRIBUTION_FOOTER}`,
+        }),
       ),
     );
     expect(await screen.findByText('Moving this to review')).toBeDefined();
     expect(listComments).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops the attribution line when the workspace switched it off', async () => {
+    useAppStore.setState({
+      workspaceOverrides: {
+        [WORKSPACE]: overridesWithAttribution({ attributionFooter: false }),
+      },
+    });
+    createComment.mockResolvedValue({
+      id: 'c9',
+      author: GRACE,
+      body: 'Moving this to review',
+      created: '2026-07-03T10:00:00.000Z',
+      updated: '2026-07-03T10:00:00.000Z',
+    });
+    mount();
+    fireEvent.click(screen.getByRole('tab', { name: 'Conversation' }));
+
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Write a comment' }), {
+      target: { value: 'Moving this to review' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
+
+    await waitFor(() =>
+      expect(createComment).toHaveBeenCalledWith(
+        expect.objectContaining({ issueKey: 'ENG-142', body: 'Moving this to review' }),
+      ),
+    );
   });
 
   it('moves the issue through a transition read from Jira and shows the new status', async () => {

@@ -148,7 +148,9 @@ describe('completeResolvedAgent', () => {
 
     const outcome = state.resolverThreadOutcomes[AGENT_ID]?.PRRT_1;
     expect(outcome).toEqual({ kind: 'analyzed', reply: summary, verdict: 'wontfix' });
-    expect(buildResolutionReplyBody(outcome, null)).toBe(summary);
+    expect(buildResolutionReplyBody({ closure: outcome, prUrl: null, isAttributed: false })).toBe(
+      summary,
+    );
   });
 
   it('keeps an agent that fixed two threads and asked about a third in needs-you', async () => {

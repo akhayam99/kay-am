@@ -23,6 +23,7 @@ const NULL_OVERRIDE: OverrideSettings = {
   roleModels: null,
   parallelAgents: null,
   providerPool: null,
+  attributionFooter: null,
 };
 
 describe('resolveSettings', () => {
@@ -46,6 +47,7 @@ describe('resolveSettings', () => {
       roleModels: null,
       parallelAgents: null,
       providerPool: null,
+      attributionFooter: null,
     };
     const result = resolveSettings({ global: GLOBAL, workspaceOverride: wsOverride });
     expect(result.defaultProviderId).toBe('cursor');
@@ -67,6 +69,7 @@ describe('resolveSettings', () => {
       roleModels: null,
       parallelAgents: null,
       providerPool: null,
+      attributionFooter: null,
     };
     const result = resolveSettings({ global: GLOBAL, sessionOverride: sessOverride });
     expect(result.defaultProviderId).toBe('codex');
@@ -88,6 +91,7 @@ describe('resolveSettings', () => {
       roleModels: null,
       parallelAgents: null,
       providerPool: null,
+      attributionFooter: null,
     };
     const sessOverride: OverrideSettings = {
       defaultProviderId: 'codex' as ProviderId,
@@ -100,6 +104,7 @@ describe('resolveSettings', () => {
       roleModels: null,
       parallelAgents: null,
       providerPool: null,
+      attributionFooter: null,
     };
     const result = resolveSettings({
       global: GLOBAL,
@@ -142,6 +147,7 @@ describe('resolveSettings', () => {
       roleModels: null,
       parallelAgents: null,
       providerPool: null,
+      attributionFooter: null,
     };
     const sessOverride: OverrideSettings = {
       defaultProviderId: null,
@@ -154,6 +160,7 @@ describe('resolveSettings', () => {
       roleModels: null,
       parallelAgents: null,
       providerPool: null,
+      attributionFooter: null,
     };
     const result = resolveSettings({
       global: GLOBAL,

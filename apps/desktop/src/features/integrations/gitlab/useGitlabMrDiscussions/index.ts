@@ -8,6 +8,8 @@ import {
   gitlabResolveMrDiscussion,
   type GitlabMrDiscussion,
 } from '../client';
+import { useAppStore } from '../../../../store';
+import { appendAttribution, isAttributionEnabled } from '../../../../shared/utils/attribution';
 
 type Params = {
   readonly workspaceId: WorkspaceId | null;
@@ -58,6 +60,11 @@ export const useGitlabMrDiscussions = ({
   const [resolveError, setResolveError] = useState<ResolveFailure | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const isReady = workspaceId != null && host != null && projectPath != null && mrIid != null;
+  const isAttributed = useAppStore((state) =>
+    isAttributionEnabled({
+      overrides: workspaceId == null ? null : state.workspaceOverrides[workspaceId],
+    }),
+  );
 
   useEffect(() => {
     setResolveError(null);
@@ -107,10 +114,16 @@ export const useGitlabMrDiscussions = ({
       if (workspaceId == null || host == null || projectPath == null || mrIid == null) {
         return;
       }
-      await gitlabCreateMrNote(workspaceId, host, projectPath, mrIid, body);
+      await gitlabCreateMrNote(
+        workspaceId,
+        host,
+        projectPath,
+        mrIid,
+        appendAttribution({ body, isEnabled: isAttributed }),
+      );
       setReloadToken((token) => token + 1);
     },
-    [workspaceId, host, projectPath, mrIid],
+    [workspaceId, host, projectPath, mrIid, isAttributed],
   );
 
   const reply = useCallback(
@@ -124,11 +137,11 @@ export const useGitlabMrDiscussions = ({
         projectPath,
         mrIid,
         discussionId,
-        body,
+        body: appendAttribution({ body, isEnabled: isAttributed }),
       });
       setReloadToken((token) => token + 1);
     },
-    [workspaceId, host, projectPath, mrIid],
+    [workspaceId, host, projectPath, mrIid, isAttributed],
   );
 
   const resolve = useCallback(

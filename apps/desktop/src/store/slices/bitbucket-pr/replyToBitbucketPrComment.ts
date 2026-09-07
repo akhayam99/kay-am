@@ -1,4 +1,6 @@
 import { bitbucketReplyToPullRequestComment } from '../../../features/integrations/bitbucket/client';
+import { appendAttribution } from '../../../shared/utils/attribution';
+import { isSessionAttributionEnabled } from '../../sessionAttribution';
 import { runBitbucketPrWrite } from './runBitbucketPrWrite';
 import type { BitbucketPrReplyParams, GetFn, SetFn } from './types';
 
@@ -10,6 +12,10 @@ export const replyToBitbucketPrComment = (set: SetFn, get: GetFn) => {
     parentCommentId,
     body,
   }: BitbucketPrReplyParams) => {
+    const attributedBody = appendAttribution({
+      body,
+      isEnabled: isSessionAttributionEnabled({ get, sessionId }),
+    });
     await runBitbucketPrWrite({
       set,
       get,
@@ -20,7 +26,7 @@ export const replyToBitbucketPrComment = (set: SetFn, get: GetFn) => {
           ...repo,
           pullRequestId,
           parentCommentId,
-          body,
+          body: attributedBody,
         });
       },
     });

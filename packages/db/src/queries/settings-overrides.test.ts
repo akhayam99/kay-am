@@ -18,6 +18,7 @@ const EMPTY: OverrideSettings = {
   roleModels: null,
   parallelAgents: null,
   providerPool: null,
+  attributionFooter: null,
 };
 
 async function makeDb() {
@@ -56,6 +57,21 @@ describe('workspace overrides', () => {
       reviewer: { providerId: 'anthropic', model: 'claude-opus-5', effort: 'max' },
     });
     expect(stored?.providerPool).toEqual(['anthropic', 'codex']);
+  });
+
+  it('round-trips the attribution footer switch', async () => {
+    const db = await makeDb();
+
+    expect((await getWorkspaceOverrides(db, WS_ID))?.attributionFooter).toBeNull();
+
+    await setWorkspaceOverrides(db, WS_ID, { ...EMPTY, attributionFooter: false });
+    expect((await getWorkspaceOverrides(db, WS_ID))?.attributionFooter).toBe(false);
+
+    await setWorkspaceOverrides(db, WS_ID, { ...EMPTY, attributionFooter: true });
+    expect((await getWorkspaceOverrides(db, WS_ID))?.attributionFooter).toBe(true);
+
+    await setWorkspaceOverrides(db, WS_ID, { ...EMPTY, attributionFooter: null });
+    expect((await getWorkspaceOverrides(db, WS_ID))?.attributionFooter).toBeNull();
   });
 
   it('stores no row value for an empty preference map', async () => {

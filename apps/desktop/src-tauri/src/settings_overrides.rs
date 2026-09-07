@@ -25,6 +25,8 @@ pub struct SettingsOverrides {
     pub parallel_agents: Option<bool>,
     #[serde(rename = "enabledProviders")]
     pub enabled_providers: Option<Vec<String>>,
+    #[serde(rename = "attributionFooter")]
+    pub attribution_footer: Option<bool>,
 }
 
 fn json_to_text(value: &Option<serde_json::Value>) -> Option<String> {
@@ -55,12 +57,13 @@ pub async fn get_workspace_overrides(
 ) -> Result<Option<SettingsOverrides>, DbError> {
     let conn = state.0.lock().map_err(|_| DbError::Poisoned)?;
     let mut stmt = conn.prepare(
-        "SELECT default_provider_id, default_workflow_id, default_branch_prefix, parallel_enabled, default_verbosity, provider_bindings, task_models, role_models, parallel_agents, provider_pool
+        "SELECT default_provider_id, default_workflow_id, default_branch_prefix, parallel_enabled, default_verbosity, provider_bindings, task_models, role_models, parallel_agents, provider_pool, attribution_footer
          FROM workspaces WHERE id = ?1",
     )?;
     let mut rows = stmt.query_map(rusqlite::params![workspace_id], |row| {
         let parallel_raw: Option<i64> = row.get(3)?;
         let parallel_agents_raw: Option<i64> = row.get(8)?;
+        let attribution_footer_raw: Option<i64> = row.get(10)?;
         Ok(SettingsOverrides {
             default_provider_id: row.get(0)?,
             default_workflow_id: row.get(1)?,
@@ -72,6 +75,7 @@ pub async fn get_workspace_overrides(
             role_models: json_from_text(row.get(7)?),
             parallel_agents: parallel_agents_raw.map(|v| v != 0),
             enabled_providers: string_array_from_text(row.get(9)?),
+            attribution_footer: attribution_footer_raw.map(|v| v != 0),
         })
     })?;
     match rows.next() {
@@ -89,6 +93,8 @@ pub async fn set_workspace_overrides(
     let conn = state.0.lock().map_err(|_| DbError::Poisoned)?;
     let parallel_val: Option<i64> = overrides.parallel_enabled.map(|v| if v { 1 } else { 0 });
     let parallel_agents_val: Option<i64> = overrides.parallel_agents.map(|v| if v { 1 } else { 0 });
+    let attribution_footer_val: Option<i64> =
+        overrides.attribution_footer.map(|v| if v { 1 } else { 0 });
     let now = crate::util::now_ms();
     conn.execute(
         "UPDATE workspaces
@@ -102,8 +108,9 @@ pub async fn set_workspace_overrides(
              role_models = ?8,
              parallel_agents = ?9,
              provider_pool = ?10,
-             updated_at = ?11
-         WHERE id = ?12",
+             attribution_footer = ?11,
+             updated_at = ?12
+         WHERE id = ?13",
         rusqlite::params![
             overrides.default_provider_id,
             overrides.default_workflow_id,
@@ -115,6 +122,7 @@ pub async fn set_workspace_overrides(
             json_to_text(&overrides.role_models),
             parallel_agents_val,
             string_array_to_text(&overrides.enabled_providers),
+            attribution_footer_val,
             now,
             workspace_id,
         ],
@@ -145,6 +153,7 @@ pub async fn get_session_overrides(
             role_models: None,
             parallel_agents: None,
             enabled_providers: None,
+            attribution_footer: None,
         })
     })?;
     match rows.next() {

@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SessionId, WorkspaceId } from '@goodboy/types';
+import type { OverrideSettings, SessionId, WorkspaceId } from '@goodboy/types';
 import type { AppStore } from '../../store';
+import { overridesWithAttribution } from '../../../__tests__/helpers/attributionOverrides';
+import { ATTRIBUTION_FOOTER } from '../../../shared/utils/attribution';
 import type { BitbucketPullRequest } from '../../../features/integrations/bitbucket/client';
 
 const pullRequestForBranchSpy = vi.fn();
@@ -76,9 +78,14 @@ const buildPr = (id: number): BitbucketPullRequest => ({
 
 type TestState = Record<string, unknown>;
 
-const buildStore = () => {
+type BuildStoreParams = {
+  readonly workspaceOverrides?: Record<string, OverrideSettings>;
+};
+
+const buildStore = ({ workspaceOverrides = {} }: BuildStoreParams = {}) => {
   let state: TestState = {
     ...initialBitbucketPrState,
+    workspaceOverrides,
     sessions: [{ id: SESSION_ID, workspaceId: WORKSPACE_ID, goal: 'ship it' }],
     workspaceIntegrations: {
       [WORKSPACE_ID]: [
@@ -244,11 +251,32 @@ describe('bitbucket-pr write verbs', () => {
     });
 
     expect(writeSpies.comment).toHaveBeenCalledWith(
-      expect.objectContaining({ pullRequestId: 12, body: 'looks good' }),
+      expect.objectContaining({
+        pullRequestId: 12,
+        body: `looks good\n\n${ATTRIBUTION_FOOTER}`,
+      }),
     );
     expect(writeSpies.comment.mock.calls[0]?.[0]).not.toHaveProperty('parentCommentId');
     expect(writeSpies.reply).toHaveBeenCalledWith(
-      expect.objectContaining({ pullRequestId: 12, parentCommentId: 5, body: 'agreed' }),
+      expect.objectContaining({
+        pullRequestId: 12,
+        parentCommentId: 5,
+        body: `agreed\n\n${ATTRIBUTION_FOOTER}`,
+      }),
+    );
+  });
+
+  it('drops the attribution line when the workspace switched it off', async () => {
+    const store = buildStore({
+      workspaceOverrides: {
+        [WORKSPACE_ID]: overridesWithAttribution({ attributionFooter: false }),
+      },
+    });
+
+    await store.slice.commentOnBitbucketPr({ ...TARGET, body: 'looks good' });
+
+    expect(writeSpies.comment).toHaveBeenLastCalledWith(
+      expect.objectContaining({ pullRequestId: 12, body: 'looks good' }),
     );
   });
 

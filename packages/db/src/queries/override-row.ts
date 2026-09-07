@@ -20,6 +20,7 @@ export type OverrideRow = {
   readonly role_models: string | null;
   readonly parallel_agents: number | null;
   readonly provider_pool: string | null;
+  readonly attribution_footer: number | null;
 };
 
 type ParseJsonParams = {
@@ -69,4 +70,5 @@ export const overridesFromRow = ({ row }: Params): OverrideSettings => ({
   roleModels: parseJson<RoleModelPreferences>({ raw: row.role_models }),
   parallelAgents: row.parallel_agents === null ? null : row.parallel_agents !== 0,
   providerPool: parseProviderPool({ raw: row.provider_pool }),
+  attributionFooter: row.attribution_footer == null ? null : row.attribution_footer !== 0,
 });

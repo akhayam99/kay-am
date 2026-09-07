@@ -98,6 +98,7 @@ export type OverrideSettings = Readonly<{
   roleModels: RoleModelPreferences | null;
   parallelAgents: boolean | null;
   providerPool: ReadonlyArray<ProviderId> | null;
+  attributionFooter: boolean | null;
 }>;
 
 export type ResolvedSettings = Readonly<{

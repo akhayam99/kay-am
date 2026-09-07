@@ -47,6 +47,7 @@ describe.skipIf(!shouldSeed)('qa seed', () => {
         roleModels: null,
         parallelAgents: null,
         providerPool: null,
+        attributionFooter: null,
       },
       createdAt: now,
       updatedAt: now,

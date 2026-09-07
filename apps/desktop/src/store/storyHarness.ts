@@ -259,6 +259,7 @@ export const emptyOverrides: OverrideSettings = {
   roleModels: null,
   parallelAgents: null,
   providerPool: null,
+  attributionFooter: null,
 };
 
 type WorkspaceOverridesInput = Partial<Workspace> & { readonly id: WorkspaceId };

@@ -17,6 +17,9 @@ vi.mock('../client', () => ({
   gitlabResolveMrDiscussion: h.resolve,
 }));
 
+import { overridesWithAttribution } from '../../../../__tests__/helpers/attributionOverrides';
+import { ATTRIBUTION_FOOTER } from '../../../../shared/utils/attribution';
+import { useAppStore } from '../../../../store';
 import { useGitlabMrDiscussions } from './index';
 
 const TARGET = {
@@ -39,6 +42,7 @@ beforeEach(() => {
   h.reply.mockClear();
   h.resolve.mockReset();
   h.resolve.mockResolvedValue({ ...discussion, notes: [] });
+  useAppStore.setState({ workspaceOverrides: {} });
 });
 
 afterEach(cleanup);
@@ -80,9 +84,29 @@ describe('useGitlabMrDiscussions', () => {
       TARGET.host,
       TARGET.projectPath,
       TARGET.mrIid,
-      'looks good',
+      `looks good\n\n${ATTRIBUTION_FOOTER}`,
     );
     await waitFor(() => expect(h.list).toHaveBeenCalledTimes(2));
+  });
+
+  it('drops the attribution line from a note when the workspace switched it off', async () => {
+    useAppStore.setState({
+      workspaceOverrides: {
+        [TARGET.workspaceId]: overridesWithAttribution({ attributionFooter: false }),
+      },
+    });
+    const { result } = renderHook(() => useGitlabMrDiscussions(TARGET));
+    await waitFor(() => expect(h.list).toHaveBeenCalledOnce());
+
+    await result.current.post?.({ body: 'looks good' });
+
+    expect(h.createNote).toHaveBeenCalledWith(
+      TARGET.workspaceId,
+      TARGET.host,
+      TARGET.projectPath,
+      TARGET.mrIid,
+      'looks good',
+    );
   });
 
   it('reloads after replying in a thread', async () => {
@@ -91,7 +115,11 @@ describe('useGitlabMrDiscussions', () => {
 
     await result.current.reply?.({ discussionId: 'disc-1', body: 'fixed' });
 
-    expect(h.reply).toHaveBeenCalledWith({ ...TARGET, discussionId: 'disc-1', body: 'fixed' });
+    expect(h.reply).toHaveBeenCalledWith({
+      ...TARGET,
+      discussionId: 'disc-1',
+      body: `fixed\n\n${ATTRIBUTION_FOOTER}`,
+    });
     await waitFor(() => expect(h.list).toHaveBeenCalledTimes(2));
   });
 
