@@ -15,7 +15,7 @@ describe('withProviderCooldown', () => {
     const next = withProviderCooldown({
       cooldowns: { anthropic: NOW + 3_600_000 },
       provider: 'anthropic',
-      resetAtMs: NOW + 60_000,
+      cooldownUntilMs: NOW + 60_000,
     });
 
     expect(next.anthropic).toBe(NOW + 3_600_000);
@@ -25,7 +25,7 @@ describe('withProviderCooldown', () => {
     const next = withProviderCooldown({
       cooldowns: { anthropic: NOW + 60_000 },
       provider: 'anthropic',
-      resetAtMs: NOW + 3_600_000,
+      cooldownUntilMs: NOW + 3_600_000,
     });
 
     expect(next.anthropic).toBe(NOW + 3_600_000);
@@ -35,7 +35,7 @@ describe('withProviderCooldown', () => {
     const next = withProviderCooldown({
       cooldowns: { anthropic: Date.now() - 1_000 },
       provider: 'anthropic',
-      resetAtMs: null,
+      cooldownUntilMs: null,
     });
 
     expect(next.anthropic).toBeGreaterThan(Date.now());

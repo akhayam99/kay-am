@@ -1143,7 +1143,7 @@ export const sendTurn = (set: SetFn, get: GetFn) => {
           providerCooldowns: withProviderCooldown({
             cooldowns: state.providerCooldowns,
             provider,
-            resetAtMs: usageLimitResetAtMs,
+            cooldownUntilMs: usageLimitResetAtMs,
           }),
         }));
       }

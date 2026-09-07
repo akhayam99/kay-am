@@ -15,7 +15,7 @@ type CoolingDownParams = {
 type CooldownUpdateParams = {
   readonly cooldowns: ProviderCooldowns;
   readonly provider: ProviderId;
-  readonly resetAtMs: number | null;
+  readonly cooldownUntilMs: number | null;
 };
 
 type FailureCooldownParams = {
@@ -62,9 +62,9 @@ export const cooldownWindowEnd = ({ cooldowns, nowMs }: CoolingDownParams): numb
 export const withProviderCooldown = ({
   cooldowns,
   provider,
-  resetAtMs,
+  cooldownUntilMs,
 }: CooldownUpdateParams): ProviderCooldowns => {
-  const next = resetAtMs ?? Date.now() + USAGE_LIMIT_COOLDOWN_MS;
+  const next = cooldownUntilMs ?? Date.now() + USAGE_LIMIT_COOLDOWN_MS;
   const current = cooldowns[provider] ?? 0;
   return { ...cooldowns, [provider]: Math.max(current, next) };
 };
@@ -92,7 +92,7 @@ export const withFailureCooldown = ({
   if (until == null) {
     return cooldowns;
   }
-  return withProviderCooldown({ cooldowns, provider, resetAtMs: until });
+  return withProviderCooldown({ cooldowns, provider, cooldownUntilMs: until });
 };
 
 export const routeTaskModel = ({

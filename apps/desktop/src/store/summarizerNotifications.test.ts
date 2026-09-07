@@ -667,6 +667,27 @@ describe('summarizer provider fallback', () => {
     ]);
   });
 
+  it('does not write providerCooldowns for a non-cooldown failure kind', async () => {
+    summarizeSpy.mockRejectedValue(new Error('the model produced nonsense'));
+
+    const useAppStore = await seedSummarizerState({ connected: ['anthropic'] });
+    const setStateSpy = vi.spyOn(useAppStore, 'setState');
+    await enqueue();
+
+    await vi.waitFor(
+      () => expect(useAppStore.getState().summarizerStatus[SESSION_ID]?.status).toBe('error'),
+      { timeout: 5000 },
+    );
+
+    const cooldownWrites = setStateSpy.mock.calls.filter((call) => {
+      const updater = call[0];
+      const patch = typeof updater === 'function' ? updater(useAppStore.getState()) : updater;
+      return patch != null && 'providerCooldowns' in patch;
+    });
+    expect(cooldownWrites).toHaveLength(0);
+    expect(useAppStore.getState().providerCooldowns).toEqual({});
+  });
+
   it('reuses one coalesce key while the same cooldown window holds', async () => {
     summarizeSpy.mockRejectedValue(new Error('Claude usage limit reached'));
 

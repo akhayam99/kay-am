@@ -500,7 +500,12 @@ const runSummarizer = async ({ set, get, sessionId, entry }: Params): Promise<vo
     }
     const willRetryParse = err instanceof SummarizerParseError && entry.parseRetried !== true;
     const failure = willRetryParse ? null : classifyProviderError({ message });
-    if (failure !== null) {
+    if (
+      failure !== null &&
+      (failure.kind === 'usage_limit' ||
+        failure.kind === 'authentication' ||
+        failure.kind === 'rate_limit')
+    ) {
       set((state) => ({
         providerCooldowns: withFailureCooldown({
           cooldowns: state.providerCooldowns,

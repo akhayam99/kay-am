@@ -168,6 +168,15 @@ describe('summarizeWorkflowAgentOutput', () => {
     expect(state.providerCooldowns).toEqual({});
   });
 
+  it('does not write to the store for a non-cooldown failure kind', async () => {
+    summarizeStepOutputSpy.mockRejectedValue(new Error('the model produced nonsense'));
+    const { call, set } = buildHarness({ connected: ['anthropic', 'codex'] });
+
+    await call();
+
+    expect(set).not.toHaveBeenCalled();
+  });
+
   it('notifies when every provider is cooling down before the first call', async () => {
     const { call, emitNotification } = buildHarness({
       connected: ['anthropic'],

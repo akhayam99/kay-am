@@ -107,11 +107,19 @@ export const summarizeWorkflowAgentOutput = async ({
       ...(expectedOutput !== '' && { expectedOutput }),
     });
   const recordCooldown = (model: TaskModelPreference, message: string): void => {
+    const failure = classifyProviderError({ message });
+    const isCooldownEligible =
+      failure.kind === 'usage_limit' ||
+      failure.kind === 'authentication' ||
+      failure.kind === 'rate_limit';
+    if (!isCooldownEligible) {
+      return;
+    }
     set((state) => ({
       providerCooldowns: withFailureCooldown({
         cooldowns: state.providerCooldowns,
         provider: model.providerId,
-        failure: classifyProviderError({ message }),
+        failure,
         nowMs: Date.now(),
       }),
     }));
