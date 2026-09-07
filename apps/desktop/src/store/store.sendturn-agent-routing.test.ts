@@ -2173,6 +2173,7 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
             roleModels: null,
             parallelAgents: null,
             providerPool: null,
+            attributionFooter: null,
           },
           createdAt: NOW,
           updatedAt: NOW,
