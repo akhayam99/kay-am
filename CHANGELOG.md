@@ -7,6 +7,67 @@ version in the same PR that bumps the version numbers (see
 `docs/release-command.md`), before the tag is pushed: the release build fails
 if it can't find a matching `## Goodboy vX.Y.Z` heading.
 
+## Goodboy v0.2.18
+
+Settings gains a Tools scope for connecting Linear, Jira, GitLab,
+Bitbucket, Sentry, Slack and GitHub, resolve turns now take a lease on
+the session worktree so only one runs at a time, consecutive project
+mounts and detaches group into one timeline row, the provider pool
+override survives a reload, and the Goodboy signature on outbound
+comments renders in italics.
+
+### [#1685] Tools connect from a settings scope
+
+The unified inbox in 0.2.16 removed the studios that used to hold each
+integration's connect form, so from 0.2.16 to 0.2.17 a workspace could
+not connect Linear, Jira, GitLab, Bitbucket, Sentry, Slack or a GitHub
+key from inside the app. Settings now has a Tools scope next to
+Providers and models: a list of tools with their connection status, and
+a detail pane that holds the setup form or the connected identity with
+a disconnect control. The footer, onboarding, the convert flow and the
+inbox summary now send an unconnected tool there and a connected one to
+the inbox.
+
+### [#1682] Resolve turns take a lease on the worktree
+
+Resolver turns used to queue inside the app window; a turn now asks the
+backend for a lease on the session worktree first, so only one writer
+runs at a time and waiting turns run in order. A turn whose window
+closed before it started used to wedge the worktree; its lease is now
+reclaimed after two minutes instead. A resolve attempt left marked
+running is closed once its process actually exits.
+
+### [#1687] A dirty worktree block survives a reload
+
+Reloading the app used to clear the block that keeps resolve turns off
+a worktree with uncommitted changes, so a turn could start on a dirty
+tree. The block now holds until the tree is clean, and a database
+error while checking the resolver agent is reported as an error rather
+than as a missing agent.
+
+### [#1681] Consecutive mounts and detaches group into one row
+
+Mounting or detaching several projects back to back used to add one row
+per project to the timeline. Consecutive mount and detach events now
+fold into a single row listing what was mounted and what was detached,
+so a busy stretch reads as one entry instead of a wall of
+near-identical ones.
+
+### [#1680] The provider pool override round-trips
+
+The workspace provider pool setting was written under one key and read
+back under another, so a pool chosen when a workspace was created got
+overwritten by the next unrelated settings save and never came back
+after a reload. The two sides now agree on the same key, and the pool
+persists the way every other workspace override already does.
+
+### [#1679] The Goodboy signature is now in italics
+
+The Goodboy signature on outbound comments shipped as plain text. It
+now renders in italics using the syntax each destination understands:
+markdown emphasis for GitHub, GitLab, Bitbucket, Jira and Linear, and
+Slack's own mrkdwn emphasis for Slack.
+
 ## Goodboy v0.2.17
 
 Images an agent writes into the worktree now render in place, every
