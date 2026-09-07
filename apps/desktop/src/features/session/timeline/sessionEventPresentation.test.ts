@@ -4,9 +4,12 @@ import { SESSION_EVENT_KINDS } from '@goodboy/types';
 import { CONCEPT_ICONS, CONCEPT_TONE } from '../../../shared/components/conceptIcons';
 import { PULL_REQUEST_PRESENTATION } from '../../../shared/pullRequestPresentation';
 import {
+  TIMELINE_PROJECT_NAME_LIMIT,
+  segmentsToText,
   sessionEventEmphasis,
   sessionEventGlyph,
   sessionEventLabel,
+  sessionEventProjectRunLabel,
   sessionEventSecondary,
   sessionEventTitle,
 } from './sessionEventPresentation';
@@ -290,5 +293,96 @@ describe('sessionEventGlyph', () => {
       expect(glyph.icon).toBe(presentation.icon);
       expect(glyph.tone).toBe(presentation.tone);
     }
+  });
+});
+
+describe('sessionEventProjectRunLabel', () => {
+  it('reads a run of detachments as one sentence with a serial list', () => {
+    expect(
+      segmentsToText({
+        segments: sessionEventProjectRunLabel({
+          mounted: [],
+          detached: ['api', 'app-web', 'infra'],
+        }),
+      }),
+    ).toBe('Detached api, app-web and infra');
+  });
+
+  it('says both verbs in one sentence, mounted first', () => {
+    expect(
+      segmentsToText({
+        segments: sessionEventProjectRunLabel({
+          mounted: ['api'],
+          detached: ['app-web', 'infra'],
+        }),
+      }),
+    ).toBe('Mounted api, detached app-web and infra');
+  });
+
+  it('keeps each list readable when both verbs name more than one project', () => {
+    expect(
+      segmentsToText({
+        segments: sessionEventProjectRunLabel({
+          mounted: ['api', 'app-web'],
+          detached: ['infra'],
+        }),
+      }),
+    ).toBe('Mounted api and app-web, detached infra');
+  });
+
+  it('keeps every project name a chip, never prose', () => {
+    expect(sessionEventProjectRunLabel({ mounted: ['api'], detached: ['app-web'] })).toEqual([
+      { kind: 'text', text: 'Mounted ' },
+      { kind: 'value', text: 'api', variant: 'project' },
+      { kind: 'text', text: ', detached ' },
+      { kind: 'value', text: 'app-web', variant: 'project' },
+    ]);
+  });
+
+  it(`names ${TIMELINE_PROJECT_NAME_LIMIT} projects and counts the rest`, () => {
+    expect(
+      segmentsToText({
+        segments: sessionEventProjectRunLabel({
+          mounted: [],
+          detached: ['api', 'app-web', 'infra', 'db', 'edge', 'docs', 'cli'],
+        }),
+      }),
+    ).toBe('Detached api, app-web, infra and 4 more');
+  });
+
+  it('names the last project rather than counting one hidden name', () => {
+    expect(
+      segmentsToText({
+        segments: sessionEventProjectRunLabel({
+          mounted: [],
+          detached: ['api', 'app-web', 'infra', 'db'],
+        }),
+      }),
+    ).toBe('Detached api, app-web, infra and db');
+  });
+
+  it('truncates each verb on its own so neither disappears', () => {
+    expect(
+      segmentsToText({
+        segments: sessionEventProjectRunLabel({
+          mounted: ['api', 'app-web', 'infra', 'db', 'edge'],
+          detached: ['docs', 'cli', 'agents', 'ui', 'core'],
+        }),
+      }),
+    ).toBe('Mounted api, app-web, infra and 2 more, detached docs, cli, agents and 2 more');
+  });
+
+  it('names every project when the caller lifts the limit, as a tooltip does', () => {
+    const names = ['api', 'app-web', 'infra', 'db', 'edge'];
+
+    expect(
+      segmentsToText({
+        segments: sessionEventProjectRunLabel({
+          mounted: [],
+          detached: names,
+          limit: names.length,
+        }),
+      }),
+    ).toBe('Detached api, app-web, infra, db and edge');
   });
 });

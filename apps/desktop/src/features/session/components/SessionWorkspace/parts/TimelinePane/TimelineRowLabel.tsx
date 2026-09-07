@@ -7,6 +7,7 @@ import {
   segmentsToText,
   sessionEventEmphasis,
   sessionEventLabel,
+  sessionEventProjectRunLabel,
   sessionEventSecondary,
   type TimelineLabelSegment,
 } from '../../../../timeline/sessionEventPresentation';
@@ -59,6 +60,13 @@ const segmentsOf = ({ entry }: EntryParams): ReadonlyArray<TimelineLabelSegment>
     ];
   }
   if (entry.kind === 'event') {
+    const { projectRun } = entry;
+    if (projectRun != null) {
+      return sessionEventProjectRunLabel({
+        mounted: projectRun.mounted,
+        detached: projectRun.detached,
+      });
+    }
     return sessionEventLabel({ event: entry.event });
   }
   const isOpen = entry.questions.every((question) => question.status === 'open');
@@ -75,6 +83,24 @@ const segmentsOf = ({ entry }: EntryParams): ReadonlyArray<TimelineLabelSegment>
   const noun = count === 1 ? 'question' : 'questions';
   const verb = allDismissed ? 'dismissed' : allAnswered ? 'answered' : 'resolved';
   return [{ kind: 'text', text: `${count} ${noun} ${verb}` }];
+};
+
+type TitleParams = EntryParams & {
+  readonly segments: ReadonlyArray<TimelineLabelSegment>;
+};
+
+const titleOf = ({ entry, segments }: TitleParams): string => {
+  if (entry.kind === 'event' && entry.projectRun != null) {
+    const { mounted, detached } = entry.projectRun;
+    return segmentsToText({
+      segments: sessionEventProjectRunLabel({
+        mounted,
+        detached,
+        limit: mounted.length + detached.length,
+      }),
+    });
+  }
+  return segmentsToText({ segments });
 };
 
 type ChipParams = EntryParams & {
@@ -112,7 +138,10 @@ export const TimelineRowLabel = ({ item, diffStat = null }: Props) => {
   const isStep = grade === 'step';
   const emphasis =
     entry.kind === 'event' ? sessionEventEmphasis({ kind: entry.event.kind }) : 'plain';
-  const secondary = entry.kind === 'event' ? sessionEventSecondary({ event: entry.event }) : null;
+  const secondary =
+    entry.kind === 'event' && entry.projectRun == null
+      ? sessionEventSecondary({ event: entry.event })
+      : null;
   const segments = segmentsOf({ entry });
   return (
     <>
@@ -123,7 +152,7 @@ export const TimelineRowLabel = ({ item, diffStat = null }: Props) => {
         </span>
       ) : null}
       <span
-        title={segmentsToText({ segments })}
+        title={titleOf({ entry, segments })}
         className={cn(
           'flex min-w-0 items-center overflow-hidden',
           isStep ? 'text-xs leading-4' : 'text-sm leading-5',

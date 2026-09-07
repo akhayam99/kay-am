@@ -233,6 +233,99 @@ const mergeConsecutiveDecisionRows = ({
   return merged;
 };
 
+type ProjectRunPart = {
+  readonly verb: 'mounted' | 'detached';
+  readonly name: string;
+};
+
+const projectRunPartOf = ({ draft }: { readonly draft: DraftRow }): ProjectRunPart | null => {
+  if (draft.groupId != null || draft.entry.kind !== 'event') {
+    return null;
+  }
+  const { event } = draft.entry;
+  const name = event.payload?.projectName ?? null;
+  if (name == null) {
+    return null;
+  }
+  if (event.kind === 'project_materialized') {
+    return { verb: 'mounted', name };
+  }
+  if (event.kind === 'project_detached') {
+    return { verb: 'detached', name };
+  }
+  return null;
+};
+
+type MergeProjectRowsParams = {
+  readonly drafts: ReadonlyArray<DraftRow>;
+};
+
+const mergeConsecutiveProjectRows = ({
+  drafts,
+}: MergeProjectRowsParams): ReadonlyArray<DraftRow> => {
+  const merged: DraftRow[] = [];
+  let index = 0;
+
+  while (index < drafts.length) {
+    const newest = drafts[index];
+    if (newest === undefined) {
+      break;
+    }
+    if (projectRunPartOf({ draft: newest }) == null || newest.entry.kind !== 'event') {
+      merged.push(newest);
+      index += 1;
+      continue;
+    }
+
+    const mounted: string[] = [];
+    const detached: string[] = [];
+    let runIndex = index;
+    const newestDayKey = newest.at === null ? null : dayKeyOf({ at: newest.at });
+    while (runIndex < drafts.length) {
+      const draft = drafts[runIndex];
+      if (draft === undefined) {
+        break;
+      }
+      const part = projectRunPartOf({ draft });
+      if (part == null) {
+        break;
+      }
+      const draftDayKey = draft.at === null ? null : dayKeyOf({ at: draft.at });
+      if (runIndex > index && draftDayKey !== newestDayKey) {
+        break;
+      }
+      if (part.verb === 'mounted') {
+        mounted.push(part.name);
+      }
+      if (part.verb === 'detached') {
+        detached.push(part.name);
+      }
+      runIndex += 1;
+    }
+
+    if (runIndex === index + 1) {
+      merged.push(newest);
+      index = runIndex;
+      continue;
+    }
+
+    merged.push({
+      ...newest,
+      entry: {
+        ...newest.entry,
+        event: {
+          ...newest.entry.event,
+          kind: mounted.length > 0 ? 'project_materialized' : 'project_detached',
+        },
+        projectRun: { mounted, detached },
+      },
+    });
+    index = runIndex;
+  }
+
+  return merged;
+};
+
 const questionBucketOf = ({
   entry,
 }: {
@@ -723,7 +816,9 @@ export const buildTimelineStream = ({
 
   const sorted = [...rows].sort((first, second) => compareNewestFirst({ first, second }));
   const merged = mergeConsecutiveQuestionRows({
-    drafts: mergeConsecutiveDecisionRows({ drafts: sorted }),
+    drafts: mergeConsecutiveProjectRows({
+      drafts: mergeConsecutiveDecisionRows({ drafts: sorted }),
+    }),
   });
   const withDays = withDayBreaks({
     drafts: withPendingClusters({ drafts: withPendingAtFamilyHead({ drafts: merged }) }),

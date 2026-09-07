@@ -59,11 +59,17 @@ export type TimelineBranchEntry = {
   readonly worktree: SessionWorktree;
 };
 
+export type TimelineProjectRun = {
+  readonly mounted: ReadonlyArray<string>;
+  readonly detached: ReadonlyArray<string>;
+};
+
 export type TimelineEventEntry = {
   readonly kind: 'event';
   readonly id: string;
   readonly at: string;
   readonly event: SessionEvent;
+  readonly projectRun?: TimelineProjectRun;
 };
 
 export type TimelineAnswerEntry = {
