@@ -40,6 +40,7 @@ type Props = {
   readonly error: string | null;
   readonly onRefresh: () => void;
   readonly onClose: () => void;
+  readonly headerActions?: ReactNode;
   readonly dock?: ReactNode;
 };
 
@@ -61,6 +62,7 @@ export const PrDetailPanel = ({
   isLoading,
   error,
   onRefresh,
+  headerActions,
   dock,
 }: Props) => {
   const [section, setSection] = useState<PrSection>('overview');
@@ -130,6 +132,7 @@ export const PrDetailPanel = ({
                     onRefresh();
                   }}
                 />
+                {headerActions}
               </>
             }
             externalRef={{ url: webUrl, label: 'pull request' }}

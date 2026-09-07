@@ -20,6 +20,7 @@ type Props = {
   readonly fallbackMessage: SlackMessage | null;
   readonly fallbackUrl?: string | null;
   readonly fit?: Fit;
+  readonly headerActions?: ReactNode;
   readonly dock?: ReactNode;
 };
 
@@ -31,6 +32,7 @@ export const SlackThreadDetail = ({
   fallbackMessage,
   fallbackUrl = null,
   fit = 'fill',
+  headerActions,
   dock,
 }: Props) => {
   const [permalink, setPermalink] = useState<string | null>(fallbackUrl);
@@ -84,6 +86,7 @@ export const SlackThreadDetail = ({
           subtitle={
             <span className="font-mono text-2xs text-muted-foreground">#{channelName}</span>
           }
+          actions={headerActions}
           externalRef={
             permalink != null && permalink !== '' ? { url: permalink, label: 'thread' } : null
           }

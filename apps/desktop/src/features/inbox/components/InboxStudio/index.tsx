@@ -16,7 +16,6 @@ import {
   writeInboxKindFilter,
   writeInboxProviders,
 } from '../../kindFilterStorage';
-import { groupRecordsByAge } from '../../ageSections';
 import { InboxDetail } from './InboxDetail';
 import { InboxRail } from './InboxRail';
 
@@ -117,20 +116,6 @@ export const InboxStudio = ({
     [scopedRecords, query, kindFilter, selectedProviders],
   );
 
-  const visibleRecords = useMemo(
-    () => groupRecordsByAge({ records: filteredRecords }).flatMap((section) => section.records),
-    [filteredRecords],
-  );
-
-  useEffect(() => {
-    const isSelectedInScope = scopedRecords.some((record) => record.key === selectedKey);
-    if (selectedKey != null && isSelectedInScope) {
-      return;
-    }
-    const firstVisibleRecord = visibleRecords[0];
-    setSelectedKey(firstVisibleRecord == null ? null : firstVisibleRecord.key);
-  }, [scopedRecords, visibleRecords, selectedKey]);
-
   const selectedRecord = useMemo(
     () => scopedRecords.find((record) => record.key === selectedKey) ?? null,
     [scopedRecords, selectedKey],
@@ -140,6 +125,10 @@ export const InboxStudio = ({
 
   const onSelect = (record: InboxRecord): void => {
     setSelectedKey(record.key);
+  };
+
+  const onDeselect = (): void => {
+    setSelectedKey(null);
   };
 
   const onActivate = (record: InboxRecord): void => {
@@ -232,6 +221,7 @@ export const InboxStudio = ({
             <InboxDetail
               record={selectedRecord}
               records={scopedRecords}
+              hasVisibleRecords={filteredRecords.length > 0}
               hasFiltersActive={hasFiltersActive}
               workspaceId={workspaceId}
               rootPath={rootPath}
@@ -239,6 +229,7 @@ export const InboxStudio = ({
               errors={errors}
               onRefresh={refetch}
               onClose={requestClose}
+              onDeselect={onDeselect}
               onClearFilters={onClearFilters}
               onOpenIntegrations={onOpenIntegrations}
               launchFocusRequest={launchFocusRequest}
