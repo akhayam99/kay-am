@@ -87,7 +87,7 @@ export const WorkspaceScopePanel = ({ workspaceId, initialSection, requestClose 
         roleModels: wsOverrides?.roleModels ?? null,
         parallelAgents,
         providerPool: wsOverrides?.providerPool ?? null,
-        attributionFooter,
+        attributionFooter: wsOverrides?.attributionFooter ?? null,
         ...partial,
       });
       showToast('success', successMessage);
@@ -135,7 +135,7 @@ export const WorkspaceScopePanel = ({ workspaceId, initialSection, requestClose 
         roleModels: wsOverrides?.roleModels ?? null,
         parallelAgents,
         providerPool: wsOverrides?.providerPool ?? null,
-        attributionFooter,
+        attributionFooter: wsOverrides?.attributionFooter ?? null,
       });
       setBranchPrefix(next);
       setSavedBranchPrefix(next);

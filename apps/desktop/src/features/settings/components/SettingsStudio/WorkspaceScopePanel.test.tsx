@@ -141,6 +141,19 @@ describe('WorkspaceScopePanel', () => {
     );
   });
 
+  it('leaves attribution footer null when saving an unrelated override', () => {
+    render(<WorkspaceScopePanel workspaceId={'ws-1' as never} requestClose={vi.fn()} />);
+
+    const input = screen.getByLabelText(/branch prefix/i);
+    fireEvent.change(input, { target: { value: 'feature' } });
+    fireEvent.blur(input);
+
+    expect(state.setWorkspaceOverrides).toHaveBeenCalledWith(
+      'ws-1',
+      expect.objectContaining({ attributionFooter: null }),
+    );
+  });
+
   it('renames the workspace on blur while keeping the folder name as the hint', () => {
     render(<WorkspaceScopePanel workspaceId={'ws-1' as never} requestClose={vi.fn()} />);
 
