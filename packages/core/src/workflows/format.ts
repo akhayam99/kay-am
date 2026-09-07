@@ -1,7 +1,7 @@
-import type { AgentRole, ProviderId } from '@goodboy/types';
+import type { AgentRole, TaskModelPreference } from '@goodboy/types';
 import { extractAuxOutput } from '../providers/aux-output';
 import { runAuxOneShot } from '../providers/aux-spawn';
-import { getCheapModel, getDefaultBinary } from '../providers/cli-defaults';
+import { getDefaultBinary } from '../providers/cli-defaults';
 import { isAgentRole } from '../roles';
 
 const WORKFLOW_FORMAT_SYSTEM_PROMPT = `You design multi-step AI coding workflows. Each step runs as its own dedicated agent, in order, left to right.
@@ -48,11 +48,15 @@ export type WorkflowFormatInput = {
   readonly currentStepNames?: ReadonlyArray<string>;
 };
 
-export type WorkflowFormatDeps = {
-  readonly providerId: ProviderId;
+export type WorkflowFormatDeps = TaskModelPreference & {
   readonly binary?: string;
   readonly workingDir?: string;
   readonly invokeFn: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+};
+
+type FormatParams = {
+  readonly deps: WorkflowFormatDeps;
+  readonly input: WorkflowFormatInput;
 };
 
 export const buildWorkflowFormatUserPrompt = (input: WorkflowFormatInput): string => {
@@ -80,10 +84,10 @@ export const buildWorkflowFormatUserPrompt = (input: WorkflowFormatInput): strin
   return lines.join('\n');
 };
 
-export const formatWorkflowFromNL = async (
-  deps: WorkflowFormatDeps,
-  input: WorkflowFormatInput,
-): Promise<FormattedWorkflow | null> => {
+export const formatWorkflowFromNL = async ({
+  deps,
+  input,
+}: FormatParams): Promise<FormattedWorkflow | null> => {
   const description = input.description.trim();
   if (description.length === 0) {
     return null;
@@ -91,7 +95,8 @@ export const formatWorkflowFromNL = async (
 
   const result = await runAuxOneShot({
     providerId: deps.providerId,
-    model: getCheapModel(deps.providerId),
+    model: deps.model,
+    ...(deps.effort != null && { effort: deps.effort }),
     binary: deps.binary ?? getDefaultBinary(deps.providerId),
     userMessage: buildWorkflowFormatUserPrompt(input),
     systemPrompt: WORKFLOW_FORMAT_SYSTEM_PROMPT,
