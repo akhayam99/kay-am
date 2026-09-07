@@ -160,7 +160,7 @@ export const PrActionBar = ({
             emphasis="outline"
             size="sm"
             onClick={onCreateNew}
-            disabled={canCreateNew === false}
+            disabled={canCreateNew === false || busy !== null}
             title={
               canCreateNew
                 ? 'Open a new pull request for this branch'

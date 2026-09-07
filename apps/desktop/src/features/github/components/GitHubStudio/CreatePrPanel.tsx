@@ -136,7 +136,7 @@ export const CreatePrPanel = ({
   }, [projectId, projectRoot, workspaceId]);
 
   const onCreate = async () => {
-    if (busy || isDraftAgentRunning || title.trim().length === 0) {
+    if (busy !== null || isDraftAgentRunning || title.trim().length === 0) {
       return;
     }
     setBusy('create');
@@ -152,7 +152,7 @@ export const CreatePrPanel = ({
   };
 
   const onCreateWithAi = async () => {
-    if (busy || isDraftAgentRunning) {
+    if (busy !== null || isDraftAgentRunning) {
       return;
     }
     setBusy('ai');
