@@ -10,9 +10,7 @@ import {
   type BranchRailRowInput,
   type RailGroupInput,
   type RailGroupShape,
-  type RailJoin,
   type RailRowInput,
-  type RailSegment,
 } from './railGeometry';
 
 type RowParams = {
@@ -20,7 +18,6 @@ type RowParams = {
   readonly groupId?: string | null;
   readonly isPending?: boolean;
   readonly markerY?: number | null;
-  readonly topAnchorY?: number | null;
   readonly height?: number;
   readonly topY?: number;
 };
@@ -30,10 +27,11 @@ const row = ({
   groupId = null,
   isPending = false,
   markerY = 18,
-  topAnchorY = null,
   height = 36,
   topY = 0,
-}: RowParams): RailRowInput => ({ id, groupId, isPending, markerY, topAnchorY, height, topY });
+}: RowParams): RailRowInput => ({ id, groupId, isPending, markerY, height, topY });
+
+const nowRow = (): RailRowInput => row({ id: 'now', markerY: null, height: 48, topY: 12 });
 
 type GroupParams = {
   readonly id: string;
@@ -71,40 +69,11 @@ const railRow = (layout: ReturnType<typeof layoutTimelineRail>, id: string) => {
 const lanesOf = (layout: ReturnType<typeof layoutTimelineRail>, id: string) =>
   railRow(layout, id).segments.filter((segment) => segment.column > 0);
 
-const spineOf = (layout: ReturnType<typeof layoutTimelineRail>, id: string) =>
-  railRow(layout, id).segments.filter((segment) => segment.column === 0);
-
-type CubicCoordinates = {
-  readonly startX: number;
-  readonly startY: number;
-  readonly firstControlX: number;
-  readonly secondControlX: number;
-  readonly endX: number;
-  readonly endY: number;
-};
-
-type CubicCoordinatesParams = {
-  readonly join: RailJoin;
-};
-
-const cubicCoordinatesOf = ({ join }: CubicCoordinatesParams): CubicCoordinates => {
-  const [startX, startY, firstControlX, , secondControlX, , endX, endY] =
-    join.path.match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
-  if (
-    startX === undefined ||
-    startY === undefined ||
-    firstControlX === undefined ||
-    secondControlX === undefined ||
-    endX === undefined ||
-    endY === undefined
-  ) {
-    throw new Error(`invalid rail cubic ${join.path}`);
-  }
-  return { startX, startY, firstControlX, secondControlX, endX, endY };
-};
+const spanOf = (layout: ReturnType<typeof layoutTimelineRail>, id: string) =>
+  lanesOf(layout, id).map((segment) => `${segment.column}:${segment.fromY}-${segment.toY}`);
 
 describe('layoutTimelineRail', () => {
-  it('departs the spine at the origin row and travels upward to the newest step', () => {
+  it('branches a run out of its origin marker and climbs to the newest step', () => {
     const layout = layoutTimelineRail({
       rows: [
         row({ id: 'step-2', groupId: 'lane' }),
@@ -116,236 +85,43 @@ describe('layoutTimelineRail', () => {
 
     expect(railRow(layout, 'origin').joins).toEqual([
       {
-        kind: 'depart',
+        kind: 'branch',
         spineColumn: 0,
         laneColumn: 1,
         identityIndex: 0,
         isMuted: false,
         dash: 'solid',
         anchorY: 18,
-        path: 'M 8 18 C 16.84 18, 24 9.9414, 24 0',
+        path: 'M 24 0 C 24 8.84, 16.84 18, 8 18',
       },
     ]);
+    expect(spanOf(layout, 'step-1')).toEqual(['1:18-36', '1:0-18']);
+    expect(spanOf(layout, 'step-2')).toEqual(['1:18-36']);
+    expect(lanesOf(layout, 'step-2').every((segment) => segment.dash === 'solid')).toBe(true);
+  });
+
+  it('keeps every marker of a run on the column the run owns', () => {
+    const layout = layoutTimelineRail({
+      rows: [
+        row({ id: 'child', groupId: 'stub' }),
+        row({ id: 'step-1', groupId: 'lane' }),
+        row({ id: 'origin' }),
+      ],
+      groups: [
+        group({ id: 'lane', originRowId: 'origin' }),
+        group({ id: 'stub', originRowId: 'step-1', parentGroupId: 'lane' }),
+      ],
+    });
+
     expect(railRow(layout, 'origin').markerColumn).toBe(0);
     expect(railRow(layout, 'step-1').markerColumn).toBe(1);
-    expect(railRow(layout, 'step-2').markerColumn).toBe(0);
+    expect(railRow(layout, 'child').markerColumn).toBe(2);
   });
 
-  it('carries a muted lane onto every stroke it draws, spine excluded', () => {
+  it('indents a nested fan-out one column past the branch it hangs off', () => {
     const layout = layoutTimelineRail({
       rows: [
-        row({ id: 'step-2', groupId: 'lane' }),
-        row({ id: 'step-1', groupId: 'lane' }),
-        row({ id: 'origin' }),
-      ],
-      groups: [group({ id: 'lane', originRowId: 'origin', isMuted: true })],
-    });
-    const lanes = lanesOf(layout, 'step-1');
-
-    expect(lanes.length).toBeGreaterThan(0);
-    expect(lanes.every((segment) => segment.isMuted)).toBe(true);
-    expect(railRow(layout, 'origin').joins.every((join) => join.isMuted)).toBe(true);
-    expect(
-      railRow(layout, 'origin')
-        .segments.filter((segment) => segment.column === 0)
-        .every((segment) => segment.isMuted),
-    ).toBe(false);
-  });
-
-  it('builds a departure from the marker to a vertical lane edge with the reviewed quarter arc', () => {
-    const layout = layoutTimelineRail({
-      rows: [
-        row({ id: 'step-1', groupId: 'lane', height: 32, markerY: 16 }),
-        row({ id: 'origin', height: 32, markerY: 16 }),
-      ],
-      groups: [group({ id: 'lane', originRowId: 'origin' })],
-    });
-
-    expect(railRow(layout, 'origin').joins[0]?.path).toBe('M 8 16 C 16.84 16, 24 8.8368, 24 0');
-  });
-
-  it('merges a finished run back into the spine at its newest row', () => {
-    const layout = layoutTimelineRail({
-      rows: [row({ id: 'step-1', groupId: 'lane' }), row({ id: 'origin' })],
-      groups: [group({ id: 'lane', originRowId: 'origin', shape: 'merged' })],
-    });
-
-    expect(railRow(layout, 'step-1').joins.map((join) => join.kind)).toEqual(['merge']);
-    expect(lanesOf(layout, 'step-1')).toEqual([]);
-  });
-
-  it('builds a merge from the vertical lane edge into a marker moved onto the spine', () => {
-    const layout = layoutTimelineRail({
-      rows: [
-        row({ id: 'step-1', groupId: 'lane', height: 32, markerY: 16 }),
-        row({ id: 'origin', height: 32, markerY: 16 }),
-      ],
-      groups: [group({ id: 'lane', originRowId: 'origin' })],
-    });
-    const merged = railRow(layout, 'step-1');
-
-    expect(merged.joins[0]?.path).toBe('M 24 32 C 24 23.16, 16.84 16, 8 16');
-    expect(merged.markerColumn).toBe(0);
-    expect(lanesOf(layout, 'step-1')).toEqual([]);
-  });
-
-  it('crosses row edges only at integer columns with a vertical tangent', () => {
-    const layout = layoutTimelineRail({
-      rows: [
-        row({ id: 'child', groupId: 'stub', height: 32, markerY: 16 }),
-        row({ id: 'step', groupId: 'lane', height: 32, markerY: 16 }),
-        row({ id: 'origin', height: 32, markerY: 16 }),
-      ],
-      groups: [
-        group({ id: 'lane', originRowId: 'origin' }),
-        group({ id: 'stub', originRowId: 'step', parentGroupId: 'lane' }),
-      ],
-    });
-
-    for (const rail of layout.rows) {
-      for (const join of rail.joins) {
-        const coordinates = cubicCoordinatesOf({ join });
-        const edgeX = join.kind === 'depart' ? coordinates.endX : coordinates.startX;
-        const tangentX =
-          join.kind === 'depart' ? coordinates.secondControlX : coordinates.firstControlX;
-        const edgeY = join.kind === 'depart' ? coordinates.endY : coordinates.startY;
-        expect(Number.isInteger(edgeX)).toBe(true);
-        expect(tangentX).toBe(edgeX);
-        expect(edgeY).toBe(join.kind === 'depart' ? 0 : rail.height);
-      }
-    }
-  });
-
-  it('terminates every junction under its row marker', () => {
-    const layout = layoutTimelineRail({
-      rows: [
-        row({ id: 'child', groupId: 'stub', height: 32, markerY: 16 }),
-        row({ id: 'step', groupId: 'lane', height: 32, markerY: 16 }),
-        row({ id: 'origin', height: 32, markerY: 16 }),
-      ],
-      groups: [
-        group({ id: 'lane', originRowId: 'origin' }),
-        group({ id: 'stub', originRowId: 'step', parentGroupId: 'lane' }),
-      ],
-    });
-
-    for (const rail of layout.rows) {
-      for (const join of rail.joins) {
-        const coordinates = cubicCoordinatesOf({ join });
-        const terminalX = join.kind === 'depart' ? coordinates.startX : coordinates.endX;
-        const terminalY = join.kind === 'depart' ? coordinates.startY : coordinates.endY;
-        expect(terminalX).toBe(railColumnX({ column: rail.markerColumn }));
-        expect(terminalY).toBe(join.anchorY);
-      }
-    }
-  });
-
-  it('dangles an unfinished run toward NOW instead of merging', () => {
-    const layout = layoutTimelineRail({
-      rows: [
-        row({ id: 'now', markerY: null, height: 48, topY: 12 }),
-        row({ id: 'newer-entry' }),
-        row({ id: 'step-1', groupId: 'lane' }),
-        row({ id: 'origin' }),
-      ],
-      groups: [group({ id: 'lane', originRowId: 'origin', shape: 'open' })],
-    });
-
-    expect(railRow(layout, 'step-1').joins).toEqual([]);
-    expect(lanesOf(layout, 'newer-entry')).toEqual([
-      { column: 1, identityIndex: 0, isMuted: false, dash: 'dashed', fromY: 0, toY: 36 },
-    ]);
-    expect(lanesOf(layout, 'now')).toEqual([
-      { column: 1, identityIndex: 0, isMuted: false, dash: 'dashed', fromY: 12, toY: 48 },
-    ]);
-  });
-
-  it('ends an open lane at its topmost pending row instead of dangling past it', () => {
-    const layout = layoutTimelineRail({
-      rows: [
-        row({ id: 'now', markerY: null, height: 48, topY: 12 }),
-        row({ id: 'pending', groupId: 'lane', isPending: true }),
-        row({ id: 'done', groupId: 'lane' }),
-        row({ id: 'origin' }),
-      ],
-      groups: [group({ id: 'lane', originRowId: 'origin', shape: 'open' })],
-    });
-
-    expect(railRow(layout, 'pending').joins).toEqual([
-      {
-        kind: 'merge',
-        spineColumn: 0,
-        laneColumn: 1,
-        identityIndex: 0,
-        isMuted: false,
-        dash: 'dashed',
-        anchorY: 18,
-        path: 'M 24 36 C 24 27.16, 16.84 18, 8 18',
-      },
-    ]);
-    expect(lanesOf(layout, 'pending')).toEqual([]);
-    expect(lanesOf(layout, 'now')).toEqual([]);
-  });
-
-  it('anchors the merge under the marker of a compressed pending stretch', () => {
-    const layout = layoutTimelineRail({
-      rows: [
-        row({
-          id: 'cluster',
-          groupId: 'lane',
-          isPending: true,
-          markerY: 24,
-          topAnchorY: 8,
-          height: 48,
-        }),
-        row({ id: 'origin' }),
-      ],
-      groups: [group({ id: 'lane', originRowId: 'origin', shape: 'open' })],
-    });
-
-    expect(railRow(layout, 'cluster').joins.map((join) => join.anchorY)).toEqual([24]);
-    expect(lanesOf(layout, 'cluster')).toEqual([]);
-    expect(railRow(layout, 'cluster').markerY).toBe(24);
-  });
-
-  it('draws the lane through a standalone row that interleaves with the run', () => {
-    const layout = layoutTimelineRail({
-      rows: [
-        row({ id: 'step-2', groupId: 'lane' }),
-        row({ id: 'standalone' }),
-        row({ id: 'step-1', groupId: 'lane' }),
-        row({ id: 'origin' }),
-      ],
-      groups: [group({ id: 'lane', originRowId: 'origin' })],
-    });
-
-    expect(railRow(layout, 'standalone').markerColumn).toBe(0);
-    expect(lanesOf(layout, 'standalone')).toEqual([
-      { column: 1, identityIndex: 0, isMuted: false, dash: 'solid', fromY: 0, toY: 36 },
-    ]);
-  });
-
-  it('keeps the spine and the lane continuous through a day boundary', () => {
-    const layout = layoutTimelineRail({
-      rows: [
-        row({ id: 'step-2', groupId: 'lane' }),
-        row({ id: 'day', markerY: 24, height: 48 }),
-        row({ id: 'step-1', groupId: 'lane' }),
-        row({ id: 'origin' }),
-      ],
-      groups: [group({ id: 'lane', originRowId: 'origin' })],
-    });
-    const dayRail = railRow(layout, 'day');
-
-    expect(dayRail.segments).toEqual([
-      { column: 0, identityIndex: null, isMuted: false, dash: 'solid', fromY: 0, toY: 48 },
-      { column: 1, identityIndex: 0, isMuted: false, dash: 'solid', fromY: 0, toY: 48 },
-    ]);
-  });
-
-  it('puts a fan-out stub one offset past the lane it hangs off', () => {
-    const layout = layoutTimelineRail({
-      rows: [
+        row({ id: 'child-2', groupId: 'stub' }),
         row({ id: 'child-1', groupId: 'stub' }),
         row({ id: 'step-1', groupId: 'lane' }),
         row({ id: 'origin' }),
@@ -358,150 +134,14 @@ describe('layoutTimelineRail', () => {
 
     expect(layout.columnByGroupId.get('lane')).toBe(1);
     expect(layout.columnByGroupId.get('stub')).toBe(2);
-    expect(
-      railRow(layout, 'step-1').joins.map((join) => `${join.kind}:${join.laneColumn}`),
-    ).toEqual(['merge:1', 'depart:2']);
-    expect(railRow(layout, 'step-1').markerColumn).toBe(0);
-    expect(railRow(layout, 'child-1').markerColumn).toBe(1);
-    expect(layout.width).toBe(RAIL_SPINE_X + 2 * RAIL_LANE_OFFSET + 8);
+    expect(railRow(layout, 'step-1').joins.map((join) => join.laneColumn)).toEqual([2]);
+    expect(railRow(layout, 'step-1').joins[0]?.spineColumn).toBe(1);
+    expect(railRow(layout, 'step-1').joins[0]?.path).toBe('M 40 0 C 40 8.84, 32.84 18, 24 18');
+    expect(spanOf(layout, 'child-1')).toEqual(['2:18-36', '2:0-18']);
+    expect(spanOf(layout, 'child-2')).toEqual(['2:18-36']);
   });
 
-  it('gives the run met first from the top the leftmost slot so lanes never cross', () => {
-    const layout = layoutTimelineRail({
-      rows: [
-        row({ id: 'b-step', groupId: 'lane-b' }),
-        row({ id: 'a-step', groupId: 'lane-a' }),
-        row({ id: 'b-origin' }),
-        row({ id: 'a-origin' }),
-      ],
-      groups: [
-        group({ id: 'lane-a', originRowId: 'a-origin', identityIndex: 0 }),
-        group({ id: 'lane-b', originRowId: 'b-origin', identityIndex: 3 }),
-      ],
-    });
-
-    expect(layout.columnByGroupId.get('lane-b')).toBe(1);
-    expect(layout.columnByGroupId.get('lane-a')).toBe(2);
-  });
-
-  it('reuses a slot once the earlier run has merged back', () => {
-    const layout = layoutTimelineRail({
-      rows: [
-        row({ id: 'b-step', groupId: 'lane-b' }),
-        row({ id: 'b-origin' }),
-        row({ id: 'a-step', groupId: 'lane-a' }),
-        row({ id: 'a-origin' }),
-      ],
-      groups: [
-        group({ id: 'lane-a', originRowId: 'a-origin' }),
-        group({ id: 'lane-b', originRowId: 'b-origin' }),
-      ],
-    });
-
-    expect(layout.columnByGroupId.get('lane-b')).toBe(1);
-    expect(layout.width).toBe(RAIL_SPINE_X + RAIL_LANE_OFFSET + 8);
-  });
-
-  it('turns dashed above the running step and stays solid below it', () => {
-    const layout = layoutTimelineRail({
-      rows: [
-        row({ id: 'pending-2', groupId: 'lane', isPending: true }),
-        row({ id: 'running', groupId: 'lane' }),
-        row({ id: 'done-1', groupId: 'lane' }),
-        row({ id: 'origin' }),
-      ],
-      groups: [group({ id: 'lane', originRowId: 'origin', shape: 'open' })],
-    });
-
-    expect(railRow(layout, 'pending-2').joins.map((join) => join.dash)).toEqual(['dashed']);
-    expect(lanesOf(layout, 'pending-2')).toEqual([]);
-    expect(lanesOf(layout, 'running')).toEqual([
-      { column: 1, identityIndex: 0, isMuted: false, dash: 'solid', fromY: 18, toY: 36 },
-      { column: 1, identityIndex: 0, isMuted: false, dash: 'dashed', fromY: 0, toY: 18 },
-    ]);
-    expect(lanesOf(layout, 'done-1').map((segment) => segment.dash)).toEqual(['solid']);
-  });
-
-  it('dashes the departure itself when nothing in the run has started', () => {
-    const layout = layoutTimelineRail({
-      rows: [row({ id: 'pending-1', groupId: 'lane', isPending: true }), row({ id: 'origin' })],
-      groups: [group({ id: 'lane', originRowId: 'origin', shape: 'open' })],
-    });
-
-    expect(railRow(layout, 'origin').joins.map((join) => join.dash)).toEqual(['dashed']);
-  });
-
-  it('leaves a run with no steps of its own on the spine and draws no lane', () => {
-    const layout = layoutTimelineRail({
-      rows: [row({ id: 'origin' })],
-      groups: [group({ id: 'lane', originRowId: 'origin' })],
-    });
-
-    expect(lanesOf(layout, 'origin')).toEqual([]);
-    expect(railRow(layout, 'origin').joins).toEqual([]);
-    expect(railRow(layout, 'origin').markerColumn).toBe(0);
-  });
-
-  it('keeps the spine unbroken and neutral on every row even where a branch is live', () => {
-    const layout = layoutTimelineRail({
-      rows: [
-        row({ id: 'newer' }),
-        row({ id: 'step-1', groupId: 'lane' }),
-        row({ id: 'origin' }),
-        row({ id: 'older' }),
-      ],
-      groups: [group({ id: 'lane', originRowId: 'origin' })],
-    });
-
-    for (const rail of layout.rows) {
-      const spine = rail.segments.filter((segment) => segment.column === 0);
-      expect(spine.length).toBeGreaterThan(0);
-      expect(spine.every((segment) => segment.identityIndex === null)).toBe(true);
-      expect(spine[0]?.fromY).toBe(0);
-      expect(spine[spine.length - 1]?.toY).toBe(rail.height);
-      expect(
-        spine.every((segment, index) => index === 0 || segment.fromY === spine[index - 1]?.toY),
-      ).toBe(true);
-    }
-  });
-
-  it('never dashes the spine, since dashed speaks about a line and not about a branch', () => {
-    const layout = layoutTimelineRail({
-      rows: [
-        row({ id: 'pending', groupId: 'lane', isPending: true }),
-        row({ id: 'standalone' }),
-        row({ id: 'step-1', groupId: 'lane' }),
-        row({ id: 'origin' }),
-      ],
-      groups: [group({ id: 'lane', originRowId: 'origin', shape: 'open' })],
-    });
-
-    for (const rail of layout.rows) {
-      const spine = rail.segments.filter((segment) => segment.column === 0);
-      expect(spine.every((segment) => segment.dash === 'solid')).toBe(true);
-    }
-  });
-
-  it('draws a lane dashed when its future is handed to a live child', () => {
-    const layout = layoutTimelineRail({
-      rows: [
-        row({ id: 'step-2', groupId: 'lane', isPending: true }),
-        row({ id: 'child-1', groupId: 'stub' }),
-        row({ id: 'step-1', groupId: 'lane' }),
-        row({ id: 'origin' }),
-      ],
-      groups: [
-        group({ id: 'lane', originRowId: 'origin', shape: 'open' }),
-        group({ id: 'stub', originRowId: 'step-1', parentGroupId: 'lane' }),
-      ],
-    });
-
-    expect(lanesOf(layout, 'child-1')).toEqual([
-      { column: 1, identityIndex: 0, isMuted: false, dash: 'dashed', fromY: 0, toY: 36 },
-    ]);
-  });
-
-  it('gives every nesting level its own lane so no marker falls back to the spine', () => {
+  it('gives every nesting level one more column of indent', () => {
     const layout = layoutTimelineRail({
       rows: [
         row({ id: 'great-grandchild', groupId: 'stub-3' }),
@@ -522,7 +162,210 @@ describe('layoutTimelineRail', () => {
     expect(layout.width).toBe(RAIL_SPINE_X + 4 * RAIL_LANE_OFFSET + 8);
   });
 
-  it('draws a standalone agent fan-out in the neutral spine ink, not a run colour', () => {
+  it('draws the run column through a standalone row that interleaves with it', () => {
+    const layout = layoutTimelineRail({
+      rows: [
+        row({ id: 'step-2', groupId: 'lane' }),
+        row({ id: 'standalone' }),
+        row({ id: 'step-1', groupId: 'lane' }),
+        row({ id: 'origin' }),
+      ],
+      groups: [group({ id: 'lane', originRowId: 'origin' })],
+    });
+
+    expect(railRow(layout, 'standalone').markerColumn).toBe(0);
+    expect(lanesOf(layout, 'standalone')).toEqual([
+      { column: 1, identityIndex: 0, isMuted: false, dash: 'solid', fromY: 0, toY: 36 },
+    ]);
+    expect(railRow(layout, 'standalone').joins).toEqual([]);
+  });
+
+  it('keeps the spine and the run column continuous through a day rule', () => {
+    const layout = layoutTimelineRail({
+      rows: [
+        row({ id: 'step-2', groupId: 'lane' }),
+        row({ id: 'day', markerY: 24, height: 48 }),
+        row({ id: 'step-1', groupId: 'lane' }),
+        row({ id: 'origin' }),
+      ],
+      groups: [group({ id: 'lane', originRowId: 'origin' })],
+    });
+
+    expect(railRow(layout, 'day').segments).toEqual([
+      { column: 0, identityIndex: null, isMuted: false, dash: 'solid', fromY: 0, toY: 48 },
+      { column: 1, identityIndex: 0, isMuted: false, dash: 'solid', fromY: 0, toY: 48 },
+    ]);
+  });
+
+  it('dashes an open run from its newest row up to the NOW rule', () => {
+    const layout = layoutTimelineRail({
+      rows: [
+        nowRow(),
+        row({ id: 'newer-entry' }),
+        row({ id: 'step-1', groupId: 'lane' }),
+        row({ id: 'origin' }),
+      ],
+      groups: [group({ id: 'lane', originRowId: 'origin', shape: 'open' })],
+    });
+
+    expect(lanesOf(layout, 'now')).toEqual([
+      { column: 1, identityIndex: 0, isMuted: false, dash: 'dashed', fromY: 12, toY: 48 },
+    ]);
+    expect(lanesOf(layout, 'newer-entry')).toEqual([
+      { column: 1, identityIndex: 0, isMuted: false, dash: 'dashed', fromY: 0, toY: 36 },
+    ]);
+    expect(spanOf(layout, 'step-1')).toEqual(['1:18-36', '1:0-18']);
+    expect(lanesOf(layout, 'step-1').map((segment) => segment.dash)).toEqual(['solid', 'dashed']);
+  });
+
+  it('stops a finished run at the marker of its newest row', () => {
+    const layout = layoutTimelineRail({
+      rows: [nowRow(), row({ id: 'step-1', groupId: 'lane' }), row({ id: 'origin' })],
+      groups: [group({ id: 'lane', originRowId: 'origin', shape: 'merged' })],
+    });
+
+    expect(lanesOf(layout, 'now')).toEqual([]);
+    expect(spanOf(layout, 'step-1')).toEqual(['1:18-36']);
+    expect(railRow(layout, 'step-1').joins).toEqual([]);
+  });
+
+  it('dashes the stretch that leads into a step still waiting to run', () => {
+    const layout = layoutTimelineRail({
+      rows: [
+        row({ id: 'pending', groupId: 'lane', isPending: true }),
+        row({ id: 'running', groupId: 'lane' }),
+        row({ id: 'origin' }),
+      ],
+      groups: [group({ id: 'lane', originRowId: 'origin', shape: 'merged' })],
+    });
+
+    expect(lanesOf(layout, 'pending').map((segment) => segment.dash)).toEqual(['dashed']);
+    expect(lanesOf(layout, 'running').map((segment) => segment.dash)).toEqual(['solid', 'dashed']);
+    expect(railRow(layout, 'origin').joins.map((join) => join.dash)).toEqual(['solid']);
+  });
+
+  it('dashes the elbow itself when nothing in the run has started', () => {
+    const layout = layoutTimelineRail({
+      rows: [row({ id: 'pending-1', groupId: 'lane', isPending: true }), row({ id: 'origin' })],
+      groups: [group({ id: 'lane', originRowId: 'origin', shape: 'open' })],
+    });
+
+    expect(railRow(layout, 'origin').joins.map((join) => join.dash)).toEqual(['dashed']);
+  });
+
+  it('gives two runs live at the same time a column each', () => {
+    const layout = layoutTimelineRail({
+      rows: [
+        row({ id: 'b-step', groupId: 'lane-b' }),
+        row({ id: 'a-step', groupId: 'lane-a' }),
+        row({ id: 'b-origin' }),
+        row({ id: 'a-origin' }),
+      ],
+      groups: [
+        group({ id: 'lane-a', originRowId: 'a-origin', shape: 'open', identityIndex: 0 }),
+        group({ id: 'lane-b', originRowId: 'b-origin', shape: 'open', identityIndex: 3 }),
+      ],
+    });
+    const columns = [layout.columnByGroupId.get('lane-a'), layout.columnByGroupId.get('lane-b')];
+
+    expect(new Set(columns).size).toBe(2);
+    expect(columns.every((column) => column !== undefined && column >= 1)).toBe(true);
+    expect(layout.width).toBe(RAIL_SPINE_X + 2 * RAIL_LANE_OFFSET + 8);
+  });
+
+  it('keeps a later run clear of every column an earlier fan-out already holds', () => {
+    const layout = layoutTimelineRail({
+      rows: [
+        row({ id: 'b-step', groupId: 'lane-b' }),
+        row({ id: 'a-grandchild', groupId: 'stub-a-2' }),
+        row({ id: 'a-child', groupId: 'stub-a-1' }),
+        row({ id: 'a-step', groupId: 'lane-a' }),
+        row({ id: 'b-origin' }),
+        row({ id: 'a-origin' }),
+      ],
+      groups: [
+        group({ id: 'lane-a', originRowId: 'a-origin', shape: 'open', identityIndex: 0 }),
+        group({ id: 'lane-b', originRowId: 'b-origin', shape: 'open', identityIndex: 1 }),
+        group({ id: 'stub-a-1', originRowId: 'a-step', parentGroupId: 'lane-a', identityIndex: 0 }),
+        group({
+          id: 'stub-a-2',
+          originRowId: 'a-child',
+          parentGroupId: 'stub-a-1',
+          identityIndex: 0,
+        }),
+      ],
+    });
+    const columns = [...layout.columnByGroupId.values()];
+
+    expect(new Set(columns).size).toBe(columns.length);
+    expect(layout.columnByGroupId.get('lane-a')).toBe(2);
+    expect(layout.columnByGroupId.get('lane-b')).toBe(1);
+    expect(layout.columnByGroupId.get('stub-a-1')).toBe(3);
+    expect(layout.columnByGroupId.get('stub-a-2')).toBe(4);
+  });
+
+  it('steps a nested group past a column another run holds over the same rows', () => {
+    const layout = layoutTimelineRail({
+      rows: [
+        row({ id: 'b-child', groupId: 'stub-b' }),
+        row({ id: 'b-step', groupId: 'lane-b' }),
+        row({ id: 'a-child', groupId: 'stub-a' }),
+        row({ id: 'a-step', groupId: 'lane-a' }),
+        row({ id: 'b-origin' }),
+        row({ id: 'a-origin' }),
+      ],
+      groups: [
+        group({ id: 'lane-a', originRowId: 'a-origin', shape: 'open', identityIndex: 0 }),
+        group({ id: 'lane-b', originRowId: 'b-origin', shape: 'open', identityIndex: 1 }),
+        group({ id: 'stub-a', originRowId: 'a-step', parentGroupId: 'lane-a', identityIndex: 0 }),
+        group({ id: 'stub-b', originRowId: 'b-step', parentGroupId: 'lane-b', identityIndex: 1 }),
+      ],
+    });
+
+    expect(layout.columnByGroupId.get('lane-b')).toBe(1);
+    expect(layout.columnByGroupId.get('lane-a')).toBe(2);
+    expect(layout.columnByGroupId.get('stub-b')).toBe(3);
+    expect(layout.columnByGroupId.get('stub-a')).toBe(3);
+  });
+
+  it('gives the run met first from the top the leftmost column', () => {
+    const layout = layoutTimelineRail({
+      rows: [
+        row({ id: 'b-step', groupId: 'lane-b' }),
+        row({ id: 'a-step', groupId: 'lane-a' }),
+        row({ id: 'b-origin' }),
+        row({ id: 'a-origin' }),
+      ],
+      groups: [
+        group({ id: 'lane-a', originRowId: 'a-origin' }),
+        group({ id: 'lane-b', originRowId: 'b-origin' }),
+      ],
+    });
+
+    expect(layout.columnByGroupId.get('lane-b')).toBe(1);
+    expect(layout.columnByGroupId.get('lane-a')).toBe(2);
+  });
+
+  it('reuses the first column once the run above it has closed', () => {
+    const layout = layoutTimelineRail({
+      rows: [
+        row({ id: 'b-step', groupId: 'lane-b' }),
+        row({ id: 'b-origin' }),
+        row({ id: 'a-step', groupId: 'lane-a' }),
+        row({ id: 'a-origin' }),
+      ],
+      groups: [
+        group({ id: 'lane-a', originRowId: 'a-origin' }),
+        group({ id: 'lane-b', originRowId: 'b-origin' }),
+      ],
+    });
+
+    expect(layout.columnByGroupId.get('lane-a')).toBe(1);
+    expect(layout.columnByGroupId.get('lane-b')).toBe(1);
+    expect(layout.width).toBe(RAIL_SPINE_X + RAIL_LANE_OFFSET + 8);
+  });
+
+  it('draws a standalone agent chain in the neutral spine ink', () => {
     const layout = layoutTimelineRail({
       rows: [
         row({ id: 'child', groupId: 'stub' }),
@@ -532,13 +375,76 @@ describe('layoutTimelineRail', () => {
       groups: [group({ id: 'stub', originRowId: 'standalone-agent', identityIndex: null })],
     });
 
-    expect(railRow(layout, 'child').joins.map((join) => join.identityIndex)).toEqual([null]);
     expect(railRow(layout, 'standalone-agent').joins.map((join) => join.identityIndex)).toEqual([
       null,
     ]);
+    expect(lanesOf(layout, 'child').map((segment) => segment.identityIndex)).toEqual([null]);
+    expect(layout.columnByGroupId.get('stub')).toBe(1);
   });
 
-  it('places lane columns one offset apart from the spine', () => {
+  it('paints a nested group with the identity of the run that owns it', () => {
+    const layout = layoutTimelineRail({
+      rows: [
+        row({ id: 'child', groupId: 'stub' }),
+        row({ id: 'step-1', groupId: 'lane' }),
+        row({ id: 'origin' }),
+      ],
+      groups: [
+        group({ id: 'lane', originRowId: 'origin', identityIndex: 4, isMuted: true }),
+        group({
+          id: 'stub',
+          originRowId: 'step-1',
+          parentGroupId: 'lane',
+          identityIndex: 9,
+          isMuted: false,
+        }),
+      ],
+    });
+
+    expect(lanesOf(layout, 'child')).toEqual([
+      { column: 2, identityIndex: 4, isMuted: true, dash: 'solid', fromY: 18, toY: 36 },
+    ]);
+    expect(railRow(layout, 'step-1').joins.map((join) => join.identityIndex)).toEqual([4]);
+    expect(railRow(layout, 'step-1').joins.every((join) => join.isMuted)).toBe(true);
+  });
+
+  it('leaves a run with no rows of its own on the spine and draws no column', () => {
+    const layout = layoutTimelineRail({
+      rows: [row({ id: 'origin' })],
+      groups: [group({ id: 'lane', originRowId: 'origin' })],
+    });
+
+    expect(lanesOf(layout, 'origin')).toEqual([]);
+    expect(railRow(layout, 'origin').joins).toEqual([]);
+    expect(railRow(layout, 'origin').markerColumn).toBe(0);
+    expect(layout.columnByGroupId.get('lane')).toBeUndefined();
+    expect(layout.width).toBe(RAIL_SPINE_X + 8);
+  });
+
+  it('keeps the spine unbroken, neutral and solid on every row', () => {
+    const layout = layoutTimelineRail({
+      rows: [
+        nowRow(),
+        row({ id: 'pending', groupId: 'lane', isPending: true }),
+        row({ id: 'standalone' }),
+        row({ id: 'step-1', groupId: 'lane' }),
+        row({ id: 'origin' }),
+        row({ id: 'older' }),
+      ],
+      groups: [group({ id: 'lane', originRowId: 'origin', shape: 'open' })],
+    });
+
+    for (const [index, rail] of layout.rows.entries()) {
+      const spine = rail.segments.filter((segment) => segment.column === 0);
+      expect(spine.length).toBe(1);
+      expect(spine[0]?.identityIndex).toBeNull();
+      expect(spine[0]?.dash).toBe('solid');
+      expect(spine[0]?.fromY).toBe(index === 0 ? 12 : 0);
+      expect(spine[0]?.toY).toBe(rail.height);
+    }
+  });
+
+  it('places columns one lane offset apart from the spine', () => {
     expect(railColumnX({ column: 0 })).toBe(RAIL_SPINE_X);
     expect(railColumnX({ column: 2 })).toBe(RAIL_SPINE_X + 2 * RAIL_LANE_OFFSET);
   });
@@ -550,30 +456,13 @@ describe('junction integrity', () => {
     readonly groups: ReadonlyArray<RailGroupInput>;
   };
 
-  const saturated: Fixture = {
-    rows: [
-      row({ id: 'c-step', groupId: 'lane-c', height: 28, markerY: 14 }),
-      row({ id: 'b-step', groupId: 'lane-b', height: 28, markerY: 14 }),
-      row({ id: 'a-child', groupId: 'stub-a', height: 28, markerY: 14 }),
-      row({ id: 'a-step', groupId: 'lane-a', height: 28, markerY: 14 }),
-      row({ id: 'a-header' }),
-      row({ id: 'b-header' }),
-      row({ id: 'c-header' }),
-    ],
-    groups: [
-      group({ id: 'lane-a', originRowId: 'a-header', shape: 'open', identityIndex: 0 }),
-      group({ id: 'lane-b', originRowId: 'b-header', shape: 'open', identityIndex: 1 }),
-      group({ id: 'lane-c', originRowId: 'c-header', shape: 'open', identityIndex: 2 }),
-      group({ id: 'stub-a', originRowId: 'a-step', parentGroupId: 'lane-a', identityIndex: 0 }),
-    ],
-  };
-
   const nested: Fixture = {
     rows: [
-      row({ id: 'now', markerY: null, height: 48, topY: 12 }),
+      nowRow(),
       row({ id: 'child-2', groupId: 'stub' }),
       row({ id: 'child-1', groupId: 'stub' }),
       row({ id: 'step-2', groupId: 'lane' }),
+      row({ id: 'day', markerY: 24, height: 48 }),
       row({ id: 'step-1', groupId: 'lane' }),
       row({ id: 'origin' }),
       row({ id: 'older' }),
@@ -586,15 +475,8 @@ describe('junction integrity', () => {
 
   const dangling: Fixture = {
     rows: [
-      row({ id: 'now', markerY: null, height: 48, topY: 12 }),
-      row({
-        id: 'cluster',
-        groupId: 'lane',
-        isPending: true,
-        markerY: 24,
-        topAnchorY: 8,
-        height: 48,
-      }),
+      nowRow(),
+      row({ id: 'cluster', groupId: 'lane', isPending: true, markerY: 24, height: 48 }),
       row({ id: 'running', groupId: 'lane' }),
       row({ id: 'done', groupId: 'lane' }),
       row({ id: 'origin' }),
@@ -602,41 +484,41 @@ describe('junction integrity', () => {
     groups: [group({ id: 'lane', originRowId: 'origin', shape: 'open' })],
   };
 
-  const fixtures: ReadonlyArray<Fixture> = [saturated, nested, dangling];
+  const concurrent: Fixture = {
+    rows: [
+      nowRow(),
+      row({ id: 'b-step', groupId: 'lane-b' }),
+      row({ id: 'a-step', groupId: 'lane-a' }),
+      row({ id: 'b-origin' }),
+      row({ id: 'a-origin' }),
+    ],
+    groups: [
+      group({ id: 'lane-a', originRowId: 'a-origin', shape: 'open', identityIndex: 0 }),
+      group({ id: 'lane-b', originRowId: 'b-origin', shape: 'open', identityIndex: 1 }),
+    ],
+  };
 
-  it('widens the rail rather than sharing a lane when many runs are live at once', () => {
-    const layout = layoutTimelineRail(saturated);
+  const fixtures: ReadonlyArray<Fixture> = [nested, dangling, concurrent];
 
-    expect(layout.columnByGroupId.get('lane-a')).toBe(1);
-    expect(layout.columnByGroupId.get('lane-b')).toBe(2);
-    expect(layout.columnByGroupId.get('lane-c')).toBe(3);
-    expect(layout.columnByGroupId.get('stub-a')).toBe(4);
-    expect(railRow(layout, 'a-child').markerColumn).toBe(1);
-    expect(railRow(layout, 'a-child').joins.map((join) => join.laneColumn)).toEqual([4]);
-  });
-
-  it('never overlaps two strokes in the same lane column of a row', () => {
+  it('keeps every stroke inside the box of its row', () => {
     for (const fixture of fixtures) {
       const layout = layoutTimelineRail(fixture);
-      for (const rail of layout.rows) {
-        const byColumn = new Map<number, RailSegment[]>();
+      for (const [index, rail] of layout.rows.entries()) {
+        const topY = fixture.rows[index]?.topY ?? 0;
         for (const segment of rail.segments) {
-          byColumn.set(segment.column, [...(byColumn.get(segment.column) ?? []), segment]);
+          expect(segment.fromY).toBeGreaterThanOrEqual(topY);
+          expect(segment.toY).toBeLessThanOrEqual(rail.height);
+          expect(segment.toY).toBeGreaterThan(segment.fromY);
         }
-        for (const segments of byColumn.values()) {
-          const sorted = [...segments].sort((first, second) => first.fromY - second.fromY);
-          for (const [index, segment] of sorted.entries()) {
-            const previous = sorted[index - 1];
-            if (previous !== undefined) {
-              expect(segment.fromY).toBeGreaterThanOrEqual(previous.toY);
-            }
-          }
+        for (const join of rail.joins) {
+          expect(join.anchorY).toBeGreaterThanOrEqual(topY);
+          expect(join.anchorY).toBeLessThanOrEqual(rail.height);
         }
       }
     }
   });
 
-  it('keeps a junction row free of straight runs in the lane the curve owns', () => {
+  it('leaves the elbow row free of a straight run in the column it turns into', () => {
     for (const fixture of fixtures) {
       const layout = layoutTimelineRail(fixture);
       for (const rail of layout.rows) {
@@ -647,9 +529,10 @@ describe('junction integrity', () => {
     }
   });
 
-  it('continues every lane that crosses a row edge into the neighbouring row', () => {
+  it('continues every column that crosses a row edge into the neighbouring row', () => {
     for (const fixture of fixtures) {
       const layout = layoutTimelineRail(fixture);
+      const widest = Math.max(0, ...layout.columnByGroupId.values());
       for (let index = 0; index < layout.rows.length - 1; index += 1) {
         const upper = layout.rows[index];
         const lower = layout.rows[index + 1];
@@ -657,39 +540,49 @@ describe('junction integrity', () => {
         if (upper === undefined || lower === undefined) {
           continue;
         }
-        const widest = Math.max(...layout.columnByGroupId.values());
         for (let column = 1; column <= widest; column += 1) {
-          const bottomTouch =
-            upper.segments.some(
-              (segment) => segment.column === column && segment.toY === upper.height,
-            ) || upper.joins.some((join) => join.kind === 'merge' && join.laneColumn === column);
+          const bottomTouch = upper.segments.some(
+            (segment) => segment.column === column && segment.toY === upper.height,
+          );
           const topTouch =
             lower.segments.some(
               (segment) => segment.column === column && segment.fromY === lowerTopY,
-            ) || lower.joins.some((join) => join.kind === 'depart' && join.laneColumn === column);
+            ) || lower.joins.some((join) => join.laneColumn === column);
           expect(bottomTouch).toBe(topTouch);
         }
       }
     }
   });
 
-  it('anchors every curve exactly on the marker and on the lane at the row edge', () => {
+  it('anchors every elbow on its own row marker and leaves it at the row top', () => {
     for (const fixture of fixtures) {
       const layout = layoutTimelineRail(fixture);
       for (const rail of layout.rows) {
         for (const join of rail.joins) {
-          const coordinates = cubicCoordinatesOf({ join });
-          if (join.kind === 'depart') {
-            expect(coordinates.startX).toBe(railColumnX({ column: join.spineColumn }));
-            expect(coordinates.startY).toBe(join.anchorY);
-            expect(coordinates.endX).toBe(railColumnX({ column: join.laneColumn }));
-            expect(coordinates.endY).toBe(0);
-            continue;
-          }
-          expect(coordinates.startX).toBe(railColumnX({ column: join.laneColumn }));
-          expect(coordinates.startY).toBe(rail.height);
-          expect(coordinates.endX).toBe(railColumnX({ column: join.spineColumn }));
-          expect(coordinates.endY).toBe(join.anchorY);
+          const laneX = railColumnX({ column: join.laneColumn });
+          const spineX = railColumnX({ column: join.spineColumn });
+
+          expect(join.path).toBe(
+            `M ${laneX} 0 C ${laneX} 8.84, ${spineX + 8.84} ${join.anchorY}, ${spineX} ${join.anchorY}`,
+          );
+          expect(railColumnX({ column: rail.markerColumn })).toBe(spineX);
+        }
+      }
+    }
+  });
+
+  it('never puts two identities on the same column of a row', () => {
+    for (const fixture of fixtures) {
+      const layout = layoutTimelineRail(fixture);
+      for (const rail of layout.rows) {
+        const inkByColumn = new Map<number, Set<number | null>>();
+        for (const segment of rail.segments) {
+          const inks = inkByColumn.get(segment.column) ?? new Set<number | null>();
+          inks.add(segment.identityIndex);
+          inkByColumn.set(segment.column, inks);
+        }
+        for (const inks of inkByColumn.values()) {
+          expect(inks.size).toBe(1);
         }
       }
     }
@@ -697,11 +590,11 @@ describe('junction integrity', () => {
 });
 
 describe('futureRailRow', () => {
-  it('draws one future spine segment on the same column as the stream rows', () => {
+  it('draws one dashed spine segment on the same column as the stream rows', () => {
     const rail = futureRailRow({ id: 'suggestion-1', height: 32 });
 
     expect(rail.segments).toEqual([
-      { column: 0, identityIndex: null, isMuted: false, dash: 'future', fromY: 0, toY: 32 },
+      { column: 0, identityIndex: null, isMuted: false, dash: 'dashed', fromY: 0, toY: 32 },
     ]);
     expect(rail.joins).toEqual([]);
     expect(railColumnX({ column: rail.markerColumn })).toBe(RAIL_SPINE_X);

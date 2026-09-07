@@ -233,10 +233,7 @@ const laneSpansOf = ({ items, layout }: LaneSpanParams): ReadonlyArray<LaneSpan>
       }
     }
     for (const join of rail?.joins ?? []) {
-      spans.push({
-        from: offset + (join.kind === 'merge' ? join.anchorY : 0),
-        to: offset + (join.kind === 'merge' ? item.height : join.anchorY),
-      });
+      spans.push({ from: offset, to: offset + join.anchorY });
     }
     offset += item.height;
   }
@@ -541,44 +538,48 @@ describe('buildTimelineStream', () => {
     ]);
   });
 
-  it('runs one unbroken lane from the run origin to the topmost pending step', () => {
+  it('runs one unbroken column from the run origin up to the NOW rule', () => {
     const { items, groups } = stream({
       workflows: [attachedWorkflow({ createdAt: localIso({ day: 18, hour: 8 }) })],
       agents: RUN_WITH_PENDING_AGENTS,
     });
     const layout = layoutTimelineRail({ rows: items, groups });
     const spans = laneSpansOf({ items, layout });
-    const clusterIndex = items.findIndex((item) => item.kind === 'cluster');
     const originIndex = items.findIndex((item) => item.id === 'run:run-1');
     const breaks = spans.filter((span, index) => {
       const previous = spans[index - 1];
       return previous !== undefined && span.from > previous.to;
     });
 
-    expect(spans[0]?.from).toBe(
-      topOfItem({ items, index: clusterIndex }) + (layout.rows[clusterIndex]?.markerY ?? 0),
-    );
+    expect(spans[0]?.from).toBe(items[0]?.topY);
     expect(spans.at(-1)?.to).toBe(
       topOfItem({ items, index: originIndex }) + (layout.rows[originIndex]?.markerY ?? 0),
     );
     expect(breaks).toEqual([]);
   });
 
-  it('merges the dashed stretch into the spine under the pending marker', () => {
+  it('dashes the pending stretch of a live run from its elbow up to NOW', () => {
     const { items, groups } = stream({
       workflows: [attachedWorkflow({ createdAt: localIso({ day: 18, hour: 8 }) })],
       agents: RUN_WITH_PENDING_AGENTS,
     });
     const layout = layoutTimelineRail({ rows: items, groups });
     const clusterIndex = items.findIndex((item) => item.kind === 'cluster');
+    const originIndex = items.findIndex((item) => item.id === 'run:run-1');
     const clusterRail = layout.rows[clusterIndex];
+    const originRail = layout.rows[originIndex];
     const nowRail = layout.rows[0];
 
-    expect(clusterRail?.joins.map((join) => `${join.kind}:${join.dash}`)).toEqual(['merge:dashed']);
-    expect(clusterRail?.segments.filter((segment) => segment.column > 0)).toEqual([]);
-    expect(clusterRail?.joins[0]?.path).toBe('M 24 60 C 24 51.16, 16.84 36, 8 36');
-    expect(clusterRail?.markerColumn).toBe(0);
-    expect(nowRail?.segments.filter((segment) => segment.column > 0)).toEqual([]);
+    expect(originRail?.joins.map((join) => `${join.kind}:${join.dash}`)).toEqual(['branch:solid']);
+    expect(originRail?.joins[0]?.path).toBe('M 24 0 C 24 8.84, 16.84 22, 8 22');
+    expect(clusterRail?.joins).toEqual([]);
+    expect(
+      clusterRail?.segments.filter((segment) => segment.column > 0).map((segment) => segment.dash),
+    ).toEqual(['dashed', 'dashed']);
+    expect(clusterRail?.markerColumn).toBe(1);
+    expect(
+      nowRail?.segments.filter((segment) => segment.column > 0).map((segment) => segment.dash),
+    ).toEqual(['dashed']);
   });
 
   it('keeps two concurrent runs on their own pending block and their own lane', () => {
@@ -632,15 +633,10 @@ describe('buildTimelineStream', () => {
       runIdentity({ laneIndex: 1, seed }).index,
       runIdentity({ laneIndex: 0, seed }).index,
     ]);
-    expect(clusters.every(({ rail }) => rail?.markerColumn === 0)).toBe(true);
-    expect(
-      new Set(clusters.flatMap(({ rail }) => rail?.joins.map((join) => join.laneColumn) ?? []))
-        .size,
-    ).toBe(2);
-    expect(clusters.map(({ rail }) => rail?.joins.map((join) => join.kind))).toEqual([
-      ['merge'],
-      ['merge'],
-    ]);
+    expect(clusters.map(({ rail }) => rail?.markerColumn)).toEqual([1, 2]);
+    expect(clusters.map(({ rail }) => rail?.joins)).toEqual([[], []]);
+    expect(layout.columnByGroupId.get('lane:run:run-2')).toBe(1);
+    expect(layout.columnByGroupId.get('lane:run:run-1')).toBe(2);
   });
 
   it('gives a lone pending step no borrowed clock and no day rule of its own', () => {

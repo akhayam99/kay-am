@@ -395,14 +395,14 @@ describe('TimelinePane suggestions', () => {
     expect(suggestionState.onDismiss).toHaveBeenCalledWith(MOUNT.id);
   });
 
-  it('draws the rail above NOW as a future segment', () => {
+  it('draws the rail above NOW as a dashed segment', () => {
     suggestionState.list = [ANSWER];
 
     const { container } = renderWithActivity();
 
     const row = screen.getByTestId(`timeline-suggestion-${ANSWER.id}`);
-    expect(row.querySelectorAll('line[stroke-dasharray="2 4"]').length).toBeGreaterThan(0);
-    expect(container.querySelectorAll('line[stroke-dasharray="2 4"]').length).toBe(1);
+    expect(row.querySelectorAll('line[stroke-dasharray="3 3"]').length).toBe(1);
+    expect(container.querySelectorAll('line[stroke-dasharray="3 3"]').length).toBe(1);
   });
 });
 

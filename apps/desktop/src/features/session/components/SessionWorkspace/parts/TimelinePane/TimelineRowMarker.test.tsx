@@ -45,7 +45,6 @@ const itemOf = ({ entry }: { readonly entry: TimelineStreamEntry }): TimelineRow
   height: TIMELINE_RHYTHM.grade.entry.height,
   topY: 0,
   markerY: 18,
-  topAnchorY: null,
   groupId: null,
   isPending: false,
   gap: 'entry',

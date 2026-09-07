@@ -22,7 +22,7 @@ const railOf = ({
 });
 
 const MUTED_JOIN: RailJoin = {
-  kind: 'depart',
+  kind: 'branch',
   spineColumn: 0,
   laneColumn: 1,
   identityIndex: 0,

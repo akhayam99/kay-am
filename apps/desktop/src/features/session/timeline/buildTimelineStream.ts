@@ -35,7 +35,6 @@ type StreamRail = {
   readonly height: number;
   readonly topY: number;
   readonly markerY: number | null;
-  readonly topAnchorY: number | null;
   readonly groupId: string | null;
   readonly isPending: boolean;
   readonly gap: TimelineGap;
@@ -833,7 +832,6 @@ export const buildTimelineStream = ({
       topY: TIMELINE_RHYTHM.now.ruleY,
       ruleY: TIMELINE_RHYTHM.now.ruleY,
       markerY: null,
-      topAnchorY: null,
       groupId: null,
       isPending: false,
       gap: 'none',
@@ -851,7 +849,6 @@ export const buildTimelineStream = ({
         topY: 0,
         ruleY: TIMELINE_RHYTHM.day.ruleY,
         markerY: TIMELINE_RHYTHM.day.ruleY,
-        topAnchorY: null,
         groupId: null,
         isPending: false,
         gap: 'none',
@@ -878,7 +875,6 @@ export const buildTimelineStream = ({
         height,
         topY: 0,
         markerY: (TIMELINE_RHYTHM.gap[gap] + height) / 2,
-        topAnchorY: TIMELINE_RHYTHM.gap[gap] + TIMELINE_RHYTHM.grade.pending.height / 2,
         groupId: draft.groupId,
         isPending: true,
         gap,
@@ -900,7 +896,6 @@ export const buildTimelineStream = ({
       height: rowBoxHeight({ grade: draft.grade, gap }),
       topY: 0,
       markerY: markerCenterY({ grade: draft.grade, gap }),
-      topAnchorY: null,
       groupId: draft.groupId,
       isPending: draft.isPending,
       gap,
