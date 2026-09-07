@@ -159,6 +159,7 @@ describe('StageBoardCard layout', () => {
     expect(metaRow?.className).toContain('col-start-1');
     expect(metaRow?.className).toContain('row-start-2');
     expect(metaRow?.className).toContain('h-5');
+    expect(metaRow?.className).not.toContain('self-center');
   });
 
   it('shows the reason under the goal without a title tooltip or status dot', () => {
@@ -493,7 +494,7 @@ describe('StageBoardCard footer', () => {
     const agents = screen.getByLabelText('2 agents');
     const task = screen.getByLabelText('GB-123 from Linear');
     const cost = document.querySelector('[title="Session spend: $1.25 (excludes summarizer)"]');
-    const auto = screen.getByText('Autorun');
+    const auto = screen.getByLabelText('Autorun');
     const metaRow = agents.closest('[data-tooltip]')?.parentElement?.parentElement;
     const left = metaRow?.firstElementChild;
     const right = metaRow?.lastElementChild;
@@ -504,9 +505,11 @@ describe('StageBoardCard footer', () => {
     expect(auto.className).toContain('text-primary');
     expect(auto.className).not.toContain('text-danger');
     expect(auto.className).not.toContain('ring-1');
+    expect(screen.queryByText('Autorun')).toBeNull();
+    expect(auto.closest('[data-tooltip]')?.getAttribute('data-tooltip')).toBe('Autorun');
     expect(Array.from(left?.children ?? [])).toEqual([
       agents.closest('[data-tooltip]'),
-      auto,
+      auto.closest('[data-tooltip]'),
       task,
     ]);
     expect(right?.firstElementChild).toBe(cost);
@@ -535,6 +538,7 @@ describe('StageBoardCard footer', () => {
     expect(group.className).toContain('col-start-2');
     expect(group.className).toContain('row-start-2');
     expect(group.className).toContain('justify-self-end');
+    expect(group.className).toContain('h-5');
     expect(card?.lastElementChild).toBe(group);
   });
 

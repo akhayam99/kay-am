@@ -236,7 +236,7 @@ export const StageBoardCard = memo(function StageBoardCard({
         />
       </span>
 
-      <span className="col-span-2 col-start-1 row-start-2 flex h-5 min-w-0 items-center gap-2 self-center">
+      <span className="col-span-2 col-start-1 row-start-2 flex h-5 min-w-0 items-center gap-2">
         <span className="flex min-w-0 items-center gap-2 overflow-hidden">
           {agentCount > 0 && (
             <Tooltip content={agentCountLabel} side="top">
@@ -266,14 +266,16 @@ export const StageBoardCard = memo(function StageBoardCard({
             />
           )}
           {isAutoMode && (
-            <Chip
-              tone={CONCEPT_TONE.autorun}
-              size="xs"
-              bordered={false}
-              icon={<CONCEPT_ICONS.autorun size={10} aria-hidden />}
-              label="Autorun"
-              className="shrink-0"
-            />
+            <Tooltip content="Autorun" side="top">
+              <Chip
+                tone={CONCEPT_TONE.autorun}
+                size="xs"
+                bordered={false}
+                ariaLabel="Autorun"
+                icon={<CONCEPT_ICONS.autorun size={ICON_SIZE.row} aria-hidden />}
+                className="shrink-0"
+              />
+            </Tooltip>
           )}
           {showProjectChips
             ? mounts.map((mount) => (
@@ -316,7 +318,7 @@ export const StageBoardCard = memo(function StageBoardCard({
 
       <CardActionSlot
         label="Session lifecycle actions"
-        className="col-start-2 row-start-2 self-center justify-self-end"
+        className="col-start-2 row-start-2 h-5 self-center justify-self-end"
       >
         {!archived && (
           <CardAction
