@@ -52,7 +52,6 @@ export const useSuggestionActions = ({
       state.sessionProjectMounts[sessionId] ?? (EMPTY_ARRAY as ReadonlyArray<SessionProjectMount>),
   );
   const projects = useAppStore((state) => state.projects);
-  const activateNextResolver = useAppStore((state) => state.activateNextResolver);
   const emitNotification = useAppStore((state) => state.emitNotification);
   const materializeProject = useAppStore((state) => state.materializeProject);
   const recordSessionEvent = useAppStore((state) => state.recordSessionEvent);
@@ -109,16 +108,11 @@ export const useSuggestionActions = ({
       effort: routing.effort,
     };
     void (async () => {
-      const isBatch = unresolvedThreads.length > 1;
       for (const thread of unresolvedThreads) {
         await spawnResolver({
           args: buildCommentAgentArgs(thread.head, pullRequest, choice, thread.replies),
           choice,
-          deferKickoff: isBatch,
         });
-      }
-      if (isBatch) {
-        await activateNextResolver(sessionId);
       }
     })().catch((error: unknown) => {
       reportError('resolver failed to start')(formatError(error));

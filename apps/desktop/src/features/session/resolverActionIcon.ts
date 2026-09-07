@@ -26,7 +26,6 @@ export const RESOLVER_ACTION_ICON: Record<ResolverActionKind, LucideIcon> = {
   proceed: Play,
   answer: ArrowRight,
   review: ListChecks,
-  run: Play,
   rerun: RotateCcw,
   fix: Hammer,
   rework: RefreshCw,

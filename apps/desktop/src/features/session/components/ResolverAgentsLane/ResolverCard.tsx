@@ -43,7 +43,6 @@ type Props = {
   readonly reportedCommitSha: string | null;
   readonly diffTarget: ResolverDiffTarget;
   readonly canOpenDiff: boolean;
-  readonly isQueueStalled: boolean;
   readonly hasOtherActiveResolvers: boolean;
   readonly isSelected: boolean;
   readonly isTaskActive: boolean;
@@ -72,7 +71,6 @@ export const ResolverCard = ({
   reportedCommitSha,
   diffTarget,
   canOpenDiff,
-  isQueueStalled,
   hasOtherActiveResolvers,
   isSelected,
   isTaskActive,
@@ -136,7 +134,6 @@ export const ResolverCard = ({
             sessionId={agent.sessionId}
             status={status}
             commitSha={reportedCommitSha}
-            isQueueStalled={isQueueStalled}
             hasOtherActiveResolvers={hasOtherActiveResolvers}
             onOpenPanel={onOpenBrief}
             onArmConfirm={({ action, run }) => setArmed({ kind: 'action', action, run })}

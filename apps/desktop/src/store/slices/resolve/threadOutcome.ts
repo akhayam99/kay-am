@@ -10,7 +10,7 @@ export const threadOutcome = ({
 }: Params): ResolverThreadOutcome | null => {
   const savedReason =
     resolveOutcomeReason({ stateReason: row.stateReason })?.replace(
-      /^(?:(?:missing_result|stopped|failed):)+/,
+      /^(?:(?:missing_result|stopped|failed|dirty_tree):)+/,
       '',
     ) ?? null;
   const isCandidate = savedReason?.startsWith('candidate:') === true;

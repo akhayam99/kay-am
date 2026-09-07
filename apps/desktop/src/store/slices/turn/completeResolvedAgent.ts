@@ -93,7 +93,7 @@ export const completeResolvedAgent = async ({
     return null;
   }
 
-  const { turnOutcomes, markerCount } = resolverTurnOutcomes({
+  const { turnOutcomes } = resolverTurnOutcomes({
     assistantText,
     previousOutcomes: get().resolverThreadOutcomes[resolvedAgentId] ?? {},
   });
@@ -126,9 +126,6 @@ export const completeResolvedAgent = async ({
       reply: outcome.reply ?? queued.reply,
       outcome: 'resolved',
     });
-  }
-  if (markerCount > 0) {
-    void get().activateNextResolver(sessionId);
   }
   return null;
 };

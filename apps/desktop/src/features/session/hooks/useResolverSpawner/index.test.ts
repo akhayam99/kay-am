@@ -57,7 +57,7 @@ describe('useResolverSpawner', () => {
     const { result } = renderHook(() => useResolverSpawner({ sessionId: SESSION_ID }));
 
     await act(async () => {
-      await result.current.spawnResolver({ args: ARGS, choice: {}, deferKickoff: false });
+      await result.current.spawnResolver({ args: ARGS, choice: {} });
     });
 
     expect(state.spawnAgent).toHaveBeenCalledWith(
@@ -83,7 +83,6 @@ describe('useResolverSpawner', () => {
       await result.current.spawnResolver({
         args: ARGS,
         choice: { provider: 'anthropic', model: 'claude-opus-5', effort: 'medium' },
-        deferKickoff: false,
       });
     });
 
@@ -111,7 +110,7 @@ describe('useResolverSpawner', () => {
     const { result } = renderHook(() => useResolverSpawner({ sessionId: SESSION_ID }));
 
     await act(async () => {
-      await result.current.spawnResolver({ args: ARGS, choice: {}, deferKickoff: false });
+      await result.current.spawnResolver({ args: ARGS, choice: {} });
     });
 
     expect(state.spawnAgent).toHaveBeenCalledWith(
@@ -128,12 +127,12 @@ describe('useResolverSpawner', () => {
     const { result } = renderHook(() => useResolverSpawner({ sessionId: SESSION_ID }));
 
     await act(async () => {
-      await result.current.spawnResolver({ args: ARGS, choice: {}, deferKickoff: true });
+      await result.current.spawnResolver({ args: ARGS, choice: {} });
     });
 
     expect(state.spawnAgent).toHaveBeenCalledWith(
       SESSION_ID,
-      expect.objectContaining({ deferKickoff: true, kindOverride: 'resolver' }),
+      expect.objectContaining({ kindOverride: 'resolver' }),
     );
     expect(result.current.spawnedResolverIds).toEqual(['agent-1']);
   });

@@ -35,7 +35,6 @@ type Params = {
   readonly status: ResolverStatus;
   readonly commitSha: string | null;
   readonly surface: ResolverActionSurface;
-  readonly isQueueStalled: boolean;
   readonly hasOtherActiveResolvers: boolean;
 };
 
@@ -91,14 +90,12 @@ export const useResolverActions = ({
   status,
   commitSha,
   surface,
-  isQueueStalled,
   hasOtherActiveResolvers,
 }: Params): ResolverActionsController => {
   const resolveGithubThread = useAppStore((state) => state.resolveGithubThread);
   const resolveAgentThreads = useAppStore((state) => state.resolveAgentThreads);
   const queueResolution = useAppStore((state) => state.queueResolution);
   const dequeueResolution = useAppStore((state) => state.dequeueResolution);
-  const activateNextResolver = useAppStore((state) => state.activateNextResolver);
   const forceCloseResolver = useAppStore((state) => state.forceCloseResolver);
   const sendTurn = useAppStore((state) => state.sendTurn);
   const selectAgent = useAppStore((state) => state.selectAgent);
@@ -134,7 +131,6 @@ export const useResolverActions = ({
     surface,
     queuedThreadIds,
     prNumber,
-    isQueueStalled,
     hasOtherActiveResolvers,
   });
 
@@ -321,10 +317,6 @@ export const useResolverActions = ({
       await selectAgent(sessionId, agent.id);
       window.dispatchEvent(new CustomEvent('goodboy:reveal-chat'));
       window.dispatchEvent(new CustomEvent('goodboy:focus-composer'));
-      return;
-    }
-    if (kind === 'run') {
-      await activateNextResolver(sessionId);
       return;
     }
     await forceCloseResolver(sessionId, agent.id);

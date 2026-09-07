@@ -181,7 +181,6 @@ beforeEach(() => {
     agentRunHistory: {},
     selectAgent: vi.fn(),
     openDiffLens: h.openDiffLens,
-    activateNextResolver: vi.fn(),
     resolveGithubThread: vi.fn(),
     resolveAgentThreads: vi.fn(),
     dequeueResolution: vi.fn(),

@@ -4,10 +4,13 @@ import {
   setResolveAttemptPhase,
   upsertResolveThread,
 } from '@goodboy/db';
+import type { ResolveThread } from '@goodboy/types';
 import { tauriDatabase } from '../../../shared/lib/db';
 import { agentThreadIds } from '../../../features/session/agentThreadIds';
 import { createResolveThread } from './createResolveThread';
+import { outcomePatch } from './outcomePatch';
 import { projectResolveRows } from './projectResolveRows';
+import { threadOutcome } from './threadOutcome';
 import type { PhaseParams, SliceParams } from './types';
 
 type Params = SliceParams & PhaseParams;
@@ -20,6 +23,7 @@ export const recordResolvePhase = async ({
   attemptId,
   phase,
   error = null,
+  isCleanExit = false,
 }: Params): Promise<void> => {
   const db = tauriDatabase;
   const attempts = await listResolveAttempts({ db, sessionId });
@@ -47,14 +51,20 @@ export const recordResolvePhase = async ({
       if ((attempt !== undefined && row.activeAttemptId !== attempt.id) || row.state === 'closed') {
         continue;
       }
+      const candidate =
+        phase === 'failed' && isCleanExit && threadOutcome({ row }) === null
+          ? threadOutcome({ row, shouldIncludeCandidate: true })
+          : null;
+      const patch: Partial<ResolveThread> =
+        candidate === null
+          ? {
+              state: 'failed',
+              stateReason: `${phase === 'cancelled' ? 'stopped' : 'failed'}:${row.disposition !== null && row.stateReason !== null ? row.stateReason : 'interrupted'}`,
+            }
+          : outcomePatch({ outcome: candidate });
       await upsertResolveThread({
         db,
-        row: {
-          ...row,
-          state: 'failed',
-          stateReason: `${phase === 'cancelled' ? 'stopped' : 'failed'}${row.disposition !== null && row.stateReason !== null ? `:${row.stateReason}` : ''}`,
-          updatedAt: Date.now(),
-        },
+        row: { ...row, ...patch, updatedAt: Date.now() },
         expectedRevision: previous?.revision ?? null,
       });
     }

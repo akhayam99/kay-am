@@ -8,7 +8,6 @@ export const RESOLVER_ACTION_BUSY_LABEL: Record<ResolverActionKind, string> = {
   proceed: 'Sending...',
   answer: 'Opening...',
   review: 'Opening...',
-  run: 'Starting...',
   rerun: 'Starting...',
   fix: 'Sending...',
   rework: 'Sending...',

@@ -669,14 +669,12 @@ async function dispatchMobile(cmd: BridgeCommand): Promise<unknown> {
           : null;
       await store.spawnAgent(sessionId, {
         kindOverride: 'resolver',
-        deferKickoff: true,
         initialPrompt: prompt,
         ...(sourceCommentUrl ? { sourceCommentUrl } : {}),
         ...(sourceThreadId ? { sourceThreadId } : {}),
         ...(sourceKind !== null && { sourceKind }),
         focus: 'agent',
       });
-      await store.activateNextResolver(sessionId);
       return undefined;
     }
 

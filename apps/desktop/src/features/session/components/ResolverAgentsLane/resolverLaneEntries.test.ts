@@ -4,7 +4,6 @@ import type { ResolverLink, ResolverStatus } from '../../resolver-linkage';
 import {
   activeResolverIds,
   hasOtherActiveResolver,
-  isResolverQueueStalled,
   resolverLaneEntries,
 } from './resolverLaneEntries';
 
@@ -91,20 +90,5 @@ describe('resolverLaneEntries', () => {
 
     expect(hasOtherActiveResolver({ activeIds, agentId: 'a' as AgentId })).toBe(false);
     expect(hasOtherActiveResolver({ activeIds, agentId: 'b' as AgentId })).toBe(true);
-  });
-
-  it('calls the queue stalled only when something waits and nothing runs', () => {
-    const queued = link('queued', 0, 'pending', undefined, 'pending');
-    const running = link('running', 1, 'running', undefined, 'running');
-
-    expect(isResolverQueueStalled({ links: [queued] })).toBe(true);
-    expect(isResolverQueueStalled({ links: [queued, running] })).toBe(false);
-    expect(isResolverQueueStalled({ links: [running] })).toBe(false);
-  });
-
-  it('does not call the queue stalled over a resolver the operator settled', () => {
-    const settled = link('settled', 0, 'pending', '2026-08-03T10:00:00.000Z', 'pending');
-
-    expect(isResolverQueueStalled({ links: [settled] })).toBe(false);
   });
 });

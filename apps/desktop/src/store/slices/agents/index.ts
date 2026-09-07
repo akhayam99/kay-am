@@ -1,4 +1,3 @@
-import { activateNextResolver } from './activateNextResolver';
 import { clearAgentAttachments } from './clearAgentAttachments';
 import { clearAgentDone } from './clearAgentDone';
 import { clearAgentDraft } from './clearAgentDraft';
@@ -41,7 +40,6 @@ export const createAgentsSlice = (set: SetFn, get: GetFn) => {
     renameAgent: renameAgent(set),
     spawnAgent: spawnAgent(set, get),
     deleteAgent: deleteAgent(set, get),
-    activateNextResolver: activateNextResolver(set, get),
     forceCloseResolver: forceCloseResolver(set, get),
     setResolverThreadReply: setResolverThreadReply({ set, get }),
   };

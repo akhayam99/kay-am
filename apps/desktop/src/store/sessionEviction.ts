@@ -84,7 +84,6 @@ export const SESSION_EVICTION = [
   { key: 'agentProviderOverride', keyedBy: 'agent', evictOn: 'delete' },
   { key: 'agentEffortOverride', keyedBy: 'agent', evictOn: 'delete' },
   { key: 'agentKindOverride', keyedBy: 'agent', evictOn: 'delete' },
-  { key: 'pendingResolverKickoff', keyedBy: 'agent', evictOn: 'delete' },
   { key: 'resolverState', keyedBy: 'agent', evictOn: 'delete' },
   { key: 'resolverThreadOutcomes', keyedBy: 'agent', evictOn: 'delete' },
   { key: 'workflowRunAttachments', keyedBy: 'workflowRun', evictOn: 'delete' },

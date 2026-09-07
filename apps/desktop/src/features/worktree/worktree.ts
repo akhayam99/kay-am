@@ -29,6 +29,111 @@ export const createWorktree = async (args: CreateWorktreeArgs): Promise<CreatedW
   return invoke<CreatedWorktree>('worktree_create', { args });
 };
 
+export type WorktreeWriterLease = {
+  readonly path: string;
+  readonly holder: string | null;
+  readonly token: string | null;
+  readonly runId: string | null;
+  readonly isGranted: boolean;
+  readonly hasExited: boolean;
+  readonly waiting: ReadonlyArray<string>;
+};
+
+export type WorktreeWriterParams = {
+  readonly path: string;
+  readonly holder: string;
+};
+
+const freeLease = ({ path }: { readonly path: string }): WorktreeWriterLease => ({
+  path,
+  holder: null,
+  token: null,
+  runId: null,
+  isGranted: false,
+  hasExited: false,
+  waiting: [],
+});
+
+const deniedLease = ({ path, holder }: WorktreeWriterParams): WorktreeWriterLease => ({
+  path,
+  holder,
+  token: null,
+  runId: null,
+  isGranted: false,
+  hasExited: false,
+  waiting: [],
+});
+
+const grantedTokens = new Map<string, string>();
+
+const tokenKey = ({ path, holder }: WorktreeWriterParams): string => `${path}\x00${holder}`;
+
+export const holdsWorktreeWriter = ({ path, holder }: WorktreeWriterParams): boolean =>
+  grantedTokens.has(tokenKey({ path, holder }));
+
+export const acquireWorktreeWriter = async ({
+  path,
+  holder,
+}: WorktreeWriterParams): Promise<WorktreeWriterLease> => {
+  const key = tokenKey({ path, holder });
+  const lease = await invoke<WorktreeWriterLease>('worktree_writer_acquire', {
+    path,
+    holder,
+    token: grantedTokens.get(key) ?? null,
+  }).catch(() => deniedLease({ path, holder }));
+  if (lease.isGranted && lease.token !== null) {
+    grantedTokens.set(key, lease.token);
+  } else {
+    grantedTokens.delete(key);
+  }
+  return lease;
+};
+
+export const releaseWorktreeWriter = async ({
+  path,
+  holder,
+}: WorktreeWriterParams): Promise<WorktreeWriterLease> => {
+  const key = tokenKey({ path, holder });
+  const token = grantedTokens.get(key);
+  if (token === undefined) {
+    return freeLease({ path });
+  }
+  grantedTokens.delete(key);
+  return invoke<WorktreeWriterLease>('worktree_writer_release', { path, holder, token }).catch(() =>
+    freeLease({ path }),
+  );
+};
+
+export const cancelWorktreeWriter = async ({
+  path,
+  holder,
+}: WorktreeWriterParams): Promise<WorktreeWriterLease> => {
+  grantedTokens.delete(tokenKey({ path, holder }));
+  return invoke<WorktreeWriterLease>('worktree_writer_cancel', { path, holder }).catch(() =>
+    freeLease({ path }),
+  );
+};
+
+export const abandonWorktreeWriter = async ({
+  path,
+  holder,
+}: WorktreeWriterParams): Promise<WorktreeWriterLease> => {
+  grantedTokens.delete(tokenKey({ path, holder }));
+  return invoke<WorktreeWriterLease>('worktree_writer_abandon', { path, holder }).catch(() =>
+    freeLease({ path }),
+  );
+};
+
+export const worktreeWriterStatus = async ({
+  path,
+}: {
+  readonly path: string;
+}): Promise<WorktreeWriterLease> => {
+  return invoke<WorktreeWriterLease>('worktree_writer_status', { path }).catch(() =>
+    freeLease({ path }),
+  );
+};
+
 export type CreateSessionDirArgs = {
   readonly basePath: string;
   readonly slug: string;

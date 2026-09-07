@@ -17,6 +17,7 @@ import {
 import { formatError } from '@goodboy/ui';
 import {
   countUserTextEvents,
+  getAgentById,
   insertMessage,
   insertProviderRun,
   listContextSlotsForSession,
@@ -51,6 +52,10 @@ import { invokeAgentList, invokeAgentUpdateStatus } from '../../../features/work
 import { resolveProviderForTurn } from '../../../features/providers/routing';
 import { withProviderCooldown } from '../../../features/providers/taskModelRouting';
 import {
+  acquireWorktreeWriter,
+  cancelWorktreeWriter,
+  holdsWorktreeWriter,
+  releaseWorktreeWriter,
   scratchDirPrepare,
   sessionDirExists,
   worktreeChangedFiles,
@@ -64,6 +69,7 @@ import { detectDrift } from '../../../features/session/drift-detection';
 import {
   AGENT_KIND_DEFAULTS,
   KIND_TO_ROLE,
+  classifyAgent,
   inferAgentKindFromName,
   kindWritesFiles,
 } from '../../../features/session/agent-kind';
@@ -97,6 +103,7 @@ import {
 } from '../../turn-helpers';
 import { applyHeuristicTitle } from './applyHeuristicTitle';
 import { clusterBoundaryMarker, composeClusterBoundary } from '../workflows/clusterImplementation';
+import { resolveWorktreePath } from '../resolve/resolveWorktreePath';
 import { createResolveCandidateWriter } from './createResolveCandidateWriter';
 import { completeResolvedAgent } from './completeResolvedAgent';
 import { resolvePhaseAgent } from './resolvePhaseAgent';
@@ -152,17 +159,18 @@ const formatResetTime = ({ resetAtMs }: { readonly resetAtMs: number }): string 
 // through the snapshot, not an agent-visible or user-editable slot.
 const FILES_TOUCHED_NUMSTAT_SLOT = 'files_touched_numstat';
 
+type TurnLease = {
+  path: string | null;
+  holder: AgentId | null;
+  token: string | null;
+  attemptId: string | undefined;
+};
+
 export const sendTurn = (set: SetFn, get: GetFn) => {
-  const run = async ({
-    sessionId,
-    agentId,
-    content,
-    attachments,
-    override,
-    force,
-    origin,
-    retry,
-  }: Input): Promise<SendTurnResult> => {
+  const runOnce = async (
+    { sessionId, agentId, content, attachments, override, force, origin, retry }: Input,
+    lease: TurnLease,
+  ): Promise<SendTurnResult> => {
     const before = get();
     const session = before.sessions.find((s) => s.id === sessionId);
     if (!session) {
@@ -411,8 +419,11 @@ export const sendTurn = (set: SetFn, get: GetFn) => {
     }
 
     const provider: ProviderId = routingDecision.selectedProvider;
+    const agentKindOverrideForTurn = get().agentKindOverride[activeAgentId] ?? null;
     const turnAgentKind =
-      get().agentKindOverride[activeAgentId] ?? inferAgentKindFromName(activeAgent?.name ?? '');
+      activeAgent != null
+        ? classifyAgent(activeAgent, agentKindOverrideForTurn)
+        : (agentKindOverrideForTurn ?? inferAgentKindFromName(''));
     const autoStepModel =
       phaseDefinition != null && phaseDefinition.modelOverride == null
         ? autoModelForRole({
@@ -500,6 +511,52 @@ export const sendTurn = (set: SetFn, get: GetFn) => {
 
     const resolvedOverride =
       session.providerPreference.allowTurnOverride && override != null ? override : undefined;
+
+    const isResolverTurn = turnAgentKind === 'resolver';
+    const agentRowForLease = isResolverTurn
+      ? ((get().sessionPhaseRuns[sessionId] ?? []).find((row) => row.id === activeAgentId) ??
+        (await getAgentById(tauriDatabase, activeAgentId).catch(() => null)))
+      : null;
+    const writerLeasePath = isResolverTurn ? await resolveWorktreePath({ get, sessionId }) : null;
+    if (isResolverTurn && (writerLeasePath === null || agentRowForLease === null)) {
+      throw new Error(
+        writerLeasePath === null
+          ? 'resolver turn refused: the session has no worktree to lease'
+          : 'resolver turn refused: the resolver agent is no longer on the session',
+      );
+    }
+    if (writerLeasePath !== null && agentRowForLease !== null) {
+      const wasHeldByCaller = holdsWorktreeWriter({
+        path: writerLeasePath,
+        holder: activeAgentId,
+      });
+      const granted = await acquireWorktreeWriter({
+        path: writerLeasePath,
+        holder: activeAgentId,
+      });
+      if (!granted.isGranted || granted.token === null) {
+        await get().recordResolveAttempt({
+          sessionId,
+          agent: agentRowForLease,
+          provider,
+          model,
+          effort: rawEffort,
+          instructions: resolvedPrompt,
+          phase: 'queued',
+        });
+        await cancelWorktreeWriter({ path: writerLeasePath, holder: activeAgentId });
+        return { blockedOverBudget: false, isWriterLeaseDenied: true };
+      }
+      lease.token = granted.token;
+      if (!wasHeldByCaller) {
+        lease.path = writerLeasePath;
+        lease.holder = activeAgentId;
+      }
+    }
+    const writerLease =
+      writerLeasePath === null || lease.token === null
+        ? undefined
+        : { path: writerLeasePath, holder: activeAgentId, token: lease.token };
 
     const runId = crypto.randomUUID() as ProviderRunId;
     const isFirstTurn = (get().agentRunHistory[activeAgentId] ?? []).length === 0;
@@ -717,6 +774,7 @@ export const sendTurn = (set: SetFn, get: GetFn) => {
             phase: 'running',
           })
         : undefined;
+    lease.attemptId = resolveAttemptId;
     let assistantText = '';
     const resolveCandidateWriter = createResolveCandidateWriter({
       persist: async () => {
@@ -848,6 +906,7 @@ export const sendTurn = (set: SetFn, get: GetFn) => {
         systemPrompt: fullSystemPrompt,
         ...(effortFlag !== undefined && { effort: effortFlag }),
         ...(resolvedModel.maxMode === true && { cursorMaxMode: true }),
+        ...(writerLease !== undefined && { writerLease }),
         ...(apiKeyBinding ?? {}),
         ...claudeFlags,
       })) {
@@ -1192,20 +1251,23 @@ export const sendTurn = (set: SetFn, get: GetFn) => {
         const retryState: TurnState = { kind: 'idle', lastActivityAt: now() };
         const retryDerived = applyAgentTurnState(set, sessionId, activeAgentId, retryState, now());
         await updateSessionState(tauriDatabase, sessionId, retryDerived, now());
-        return await run({
-          sessionId,
-          agentId: activeAgentId,
-          content,
-          ...(attachments !== undefined && { attachments }),
-          ...(override !== undefined && { override }),
-          ...(force === true ? { force: true } : {}),
-          retry: {
-            attempt: (retry?.attempt ?? 0) + 1,
-            provider: fallbackPlan.provider,
-            model: fallbackPlan.model,
-            attachmentRefs,
+        return await runOnce(
+          {
+            sessionId,
+            agentId: activeAgentId,
+            content,
+            ...(attachments !== undefined && { attachments }),
+            ...(override !== undefined && { override }),
+            ...(force === true ? { force: true } : {}),
+            retry: {
+              attempt: (retry?.attempt ?? 0) + 1,
+              provider: fallbackPlan.provider,
+              model: fallbackPlan.model,
+              attachmentRefs,
+            },
           },
-        });
+          lease,
+        );
       }
       if (failure.kind === 'usage_limit' && !cancelledBeforeFailure) {
         const resetLabel =
@@ -1380,6 +1442,21 @@ export const sendTurn = (set: SetFn, get: GetFn) => {
       throw lastError;
     }
     return NOT_BLOCKED;
+  };
+  const run = async (input: Input): Promise<SendTurnResult> => {
+    const lease: TurnLease = { path: null, holder: null, token: null, attemptId: undefined };
+    try {
+      return await runOnce(input, lease);
+    } finally {
+      const { path, holder, attemptId } = lease;
+      if (path !== null && holder !== null) {
+        await releaseWorktreeWriter({ path, holder });
+        void get().drainResolveQueue({
+          sessionId: input.sessionId,
+          ...(attemptId !== undefined && { endedAttemptId: attemptId }),
+        });
+      }
+    }
   };
   return run;
 };

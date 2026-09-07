@@ -23,6 +23,13 @@ export type PhaseParams = SessionParams & {
   readonly attemptId?: string;
   readonly phase: ResolveAttemptPhase;
   readonly error?: string | null;
+  readonly isCleanExit?: boolean;
+};
+export type DrainParams = SessionParams & {
+  readonly endedAttemptId?: string;
+};
+export type WorktreeDrainParams = {
+  readonly worktreePath: string;
 };
 export type UpdateParams = SessionParams & {
   readonly threadId: string;
@@ -46,5 +53,8 @@ export type ResolveActions = {
   readonly persistResolveTurn: (params: TurnParams) => Promise<void>;
   readonly recordResolveAttempt: (params: AttemptParams) => Promise<string>;
   readonly recordResolvePhase: (params: PhaseParams) => Promise<void>;
+  readonly drainResolveQueue: (params: DrainParams) => Promise<void>;
+  readonly drainResolveWorktree: (params: WorktreeDrainParams) => Promise<void>;
+  readonly reconcileResolveDrains: () => Promise<void>;
   readonly updateResolveThread: (params: UpdateParams) => Promise<boolean>;
 };
