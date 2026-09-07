@@ -35,6 +35,7 @@ import type {
   ProjectScript,
   ProjectScriptId,
 } from '@goodboy/types';
+import { ATTRIBUTION_FOOTER } from '../../../shared/utils/attribution';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(async () => null),
@@ -412,6 +413,7 @@ function buildWorkspace(overrides: Partial<Workspace> = {}): Workspace {
       roleModels: null,
       parallelAgents: null,
       providerPool: null,
+      attributionFooter: null,
     },
     createdAt: NOW,
     updatedAt: NOW,
@@ -438,6 +440,7 @@ function buildProject(overrides: Partial<Project> = {}): Project {
       roleModels: null,
       parallelAgents: null,
       providerPool: null,
+      attributionFooter: null,
     },
     createdAt: NOW,
     updatedAt: NOW,
@@ -1348,7 +1351,7 @@ describe('store contract', () => {
       expect(addReplySpy).toHaveBeenCalledWith(
         expect.anything(),
         persisted.threadId,
-        persisted.reply,
+        `${persisted.reply}\n\n${ATTRIBUTION_FOOTER}`,
         expect.anything(),
       );
     });
@@ -1494,7 +1497,7 @@ describe('store contract', () => {
       expect(addReplySpy).toHaveBeenCalledWith(
         expect.anything(),
         'PRRT_1',
-        '**Not applying.**\n\n**Resolution.** Closed without a change: the requested behavior is intentional',
+        `**Not applying.**\n\n**Resolution.** Closed without a change: the requested behavior is intentional\n\n${ATTRIBUTION_FOOTER}`,
         expect.anything(),
       );
       expect(resolveThreadSpy).toHaveBeenCalledOnce();

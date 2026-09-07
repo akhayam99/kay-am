@@ -391,6 +391,7 @@ function buildWorkspace(overrides: Partial<Workspace> = {}): Workspace {
       roleModels: null,
       parallelAgents: null,
       providerPool: null,
+      attributionFooter: null,
     },
     createdAt: NOW,
     updatedAt: NOW,

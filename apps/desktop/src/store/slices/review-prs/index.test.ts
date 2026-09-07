@@ -61,6 +61,7 @@ const buildWorkspace = (): Workspace => {
       roleModels: null,
       parallelAgents: null,
       providerPool: null,
+      attributionFooter: null,
     },
     createdAt: NOW,
     updatedAt: NOW,

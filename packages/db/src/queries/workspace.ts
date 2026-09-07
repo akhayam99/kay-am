@@ -92,8 +92,8 @@ export const insertWorkspace = async ({ db, workspace }: InsertWorkspaceParams):
        id, name, slug, sessions_root, default_provider_id, default_workflow_id,
        default_branch_prefix, parallel_enabled, default_verbosity, provider_bindings,
        task_models, role_models, parallel_agents, provider_pool, created_at, updated_at,
-       deleted_at, disconnected_at, last_accessed_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       deleted_at, disconnected_at, last_accessed_at, attribution_footer
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       workspace.id,
       workspace.name,
@@ -122,6 +122,11 @@ export const insertWorkspace = async ({ db, workspace }: InsertWorkspaceParams):
       workspace.deletedAt === undefined ? null : Date.parse(workspace.deletedAt),
       workspace.disconnectedAt === undefined ? null : Date.parse(workspace.disconnectedAt),
       lastAccessedAt,
+      workspace.overrides.attributionFooter === null
+        ? null
+        : workspace.overrides.attributionFooter
+          ? 1
+          : 0,
     ],
   );
   if (workspace.profile === undefined) {

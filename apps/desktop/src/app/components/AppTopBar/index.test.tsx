@@ -19,6 +19,7 @@ const { currentWorkspace, hooks, store } = vi.hoisted(() => {
       roleModels: null,
       parallelAgents: null,
       providerPool: null,
+      attributionFooter: null,
     },
     createdAt: '2026-08-02T08:00:00.000Z' as IsoDateTime,
     updatedAt: '2026-08-02T08:00:00.000Z' as IsoDateTime,

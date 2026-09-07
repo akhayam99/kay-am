@@ -13,6 +13,7 @@ const EMPTY_OVERRIDE: OverrideSettings = {
   roleModels: null,
   parallelAgents: null,
   providerPool: null,
+  attributionFooter: null,
 };
 
 export const setWorkspaceProviderBinding = (set: SetFn, get: GetFn) => {

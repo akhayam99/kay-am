@@ -14,6 +14,7 @@ vi.mock('../github', () => ({
   ghCreateIssueComment: h.ghCreateIssueComment,
 }));
 
+import { ATTRIBUTION_FOOTER } from '../../../shared/utils/attribution';
 import { GithubIssueDetail } from './index';
 
 const ISSUE: GithubIssue = {
@@ -94,7 +95,7 @@ describe('GithubIssueDetail', () => {
       expect(h.ghCreateIssueComment).toHaveBeenCalledWith({
         cwd: '/repo',
         issueNumber: 42,
-        body: 'On it.',
+        body: `On it.\n\n${ATTRIBUTION_FOOTER}`,
         workspaceId: 'workspace-1',
       }),
     );

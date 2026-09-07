@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { WorkspaceId } from '@goodboy/types';
+import type { OverrideSettings, WorkspaceId } from '@goodboy/types';
 import type { AppStore } from '../../store';
+import { overridesWithAttribution } from '../../../__tests__/helpers/attributionOverrides';
+import { ATTRIBUTION_FOOTER } from '../../../shared/utils/attribution';
 
 const listChannelsSpy = vi.fn();
 const listUsersSpy = vi.fn();
@@ -28,8 +30,12 @@ const REPLY_TS = '1723456999.000100';
 
 type TestState = Record<string, unknown>;
 
-const buildStore = () => {
-  let state: TestState = { ...initialSlackThreadsState };
+type BuildStoreParams = {
+  readonly workspaceOverrides?: Record<string, OverrideSettings>;
+};
+
+const buildStore = ({ workspaceOverrides = {} }: BuildStoreParams = {}) => {
+  let state: TestState = { ...initialSlackThreadsState, workspaceOverrides };
   const set = (partial: unknown) => {
     const next = typeof partial === 'function' ? partial(state) : partial;
     state = { ...state, ...(next as TestState) };
@@ -153,7 +159,7 @@ describe('slack-threads slice', () => {
       workspaceId: WORKSPACE_ID,
       channelId: CHANNEL_ID,
       threadTs: THREAD_TS,
-      text: 'on it',
+      text: `on it\n\n${ATTRIBUTION_FOOTER}`,
     });
     expect(getThreadSpy).toHaveBeenCalledWith({
       workspaceId: WORKSPACE_ID,
@@ -193,6 +199,31 @@ describe('slack-threads slice', () => {
       workspaceId: WORKSPACE_ID,
       channelId: CHANNEL_ID,
       threadTs: THREAD_TS,
+    });
+  });
+
+  it('drops the attribution line when the workspace switched it off', async () => {
+    postReplySpy.mockResolvedValue({ ts: REPLY_TS });
+    getThreadSpy.mockResolvedValue([]);
+    listThreadHeadsSpy.mockResolvedValue([]);
+    const store = buildStore({
+      workspaceOverrides: {
+        [WORKSPACE_ID]: overridesWithAttribution({ attributionFooter: false }),
+      },
+    });
+
+    await store.slice.replyToSlackThread({
+      workspaceId: WORKSPACE_ID,
+      channelId: CHANNEL_ID,
+      threadTs: THREAD_TS,
+      text: 'on it',
+    });
+
+    expect(postReplySpy).toHaveBeenCalledWith({
+      workspaceId: WORKSPACE_ID,
+      channelId: CHANNEL_ID,
+      threadTs: THREAD_TS,
+      text: 'on it',
     });
   });
 

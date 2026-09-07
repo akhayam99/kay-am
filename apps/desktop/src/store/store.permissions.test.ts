@@ -272,6 +272,7 @@ describe('sendTurn, permission proxy integration', () => {
             roleModels: null,
             parallelAgents: null,
             providerPool: null,
+            attributionFooter: null,
           },
           createdAt: '2026-05-07T00:00:00.000Z' as IsoDateTime,
           updatedAt: '2026-05-07T00:00:00.000Z' as IsoDateTime,

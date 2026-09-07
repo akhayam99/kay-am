@@ -283,6 +283,7 @@ describe('audit retry queue, sendTurn enqueue on failure', () => {
             roleModels: null,
             parallelAgents: null,
             providerPool: null,
+            attributionFooter: null,
           },
           createdAt: NOW,
           updatedAt: NOW,

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IsoDateTime, ProviderId, SessionId, WorkspaceId } from '@goodboy/types';
+import { overridesWithAttribution } from '../__tests__/helpers/attributionOverrides';
 
 vi.mock('../features/chat/turn', () => ({
   runTurn: vi.fn(),
@@ -263,6 +264,7 @@ describe('summarizer notifications', () => {
             roleModels: null,
             parallelAgents: null,
             providerPool: null,
+            attributionFooter: null,
           },
           createdAt: NOW,
           updatedAt: NOW,
@@ -329,6 +331,7 @@ describe('summarizer notifications', () => {
             roleModels: null,
             parallelAgents: null,
             providerPool: null,
+            attributionFooter: null,
           },
           createdAt: NOW,
           updatedAt: NOW,
@@ -400,6 +403,7 @@ describe('summarizer notifications', () => {
             roleModels: null,
             parallelAgents: null,
             providerPool: null,
+            attributionFooter: null,
           },
           createdAt: NOW,
           updatedAt: NOW,
@@ -467,18 +471,7 @@ const seedSummarizerState = async ({ connected, cooldowns }: SeedParams) => {
         name: 'ws',
         slug: 'ws',
         sessionsRoot: '/tmp',
-        overrides: {
-          defaultProviderId: null,
-          defaultWorkflowId: null,
-          defaultBranchPrefix: null,
-          parallelEnabled: null,
-          defaultVerbosity: null,
-          providerBindings: null,
-          taskModels: null,
-          roleModels: null,
-          parallelAgents: null,
-          providerPool: null,
-        },
+        overrides: overridesWithAttribution({ attributionFooter: null }),
         createdAt: NOW,
         updatedAt: NOW,
       },

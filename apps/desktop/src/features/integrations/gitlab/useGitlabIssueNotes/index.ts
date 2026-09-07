@@ -9,6 +9,7 @@ import {
   type GitlabIssueNote,
 } from '../client';
 import { projectPathFromIssue } from '../issueProjectPath';
+import { appendAttribution, isAttributionEnabled } from '../../../../shared/utils/attribution';
 
 type Params = {
   readonly issue: GitlabIssue | null;
@@ -31,6 +32,9 @@ export const useGitlabIssueNotes = ({ issue, workspaceId, projectId }: Params): 
     );
     return integration != null ? integration.config.host : null;
   });
+  const isAttributed = useAppStore((state) =>
+    isAttributionEnabled({ overrides: state.workspaceOverrides[workspaceId] }),
+  );
   const [notes, setNotes] = useState<ReadonlyArray<GitlabIssueNote>>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,10 +87,17 @@ export const useGitlabIssueNotes = ({ issue, workspaceId, projectId }: Params): 
       if (host == null || projectPath == null || issueIid == null) {
         return;
       }
-      await gitlabCreateIssueNote({ workspaceId, host, projectPath, issueIid, body, projectId });
+      await gitlabCreateIssueNote({
+        workspaceId,
+        host,
+        projectPath,
+        issueIid,
+        body: appendAttribution({ body, isEnabled: isAttributed }),
+        projectId,
+      });
       setReloadToken((token) => token + 1);
     },
-    [workspaceId, host, projectPath, issueIid, projectId],
+    [workspaceId, host, projectPath, issueIid, projectId, isAttributed],
   );
 
   return {

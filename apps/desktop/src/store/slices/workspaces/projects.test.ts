@@ -71,6 +71,7 @@ const overrides = {
   roleModels: null,
   parallelAgents: null,
   providerPool: null,
+  attributionFooter: null,
 } as const;
 
 const workspace = (): Workspace => ({

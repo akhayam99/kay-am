@@ -3,6 +3,7 @@ import type {
   Agent,
   AgentId,
   IsoDateTime,
+  OverrideSettings,
   PendingResolution,
   SessionId,
   WorkspaceId,
@@ -75,6 +76,7 @@ type State = {
   updateResolveThread: ReturnType<typeof vi.fn>;
   sessions: ReadonlyArray<{ id: SessionId; workspaceId: WorkspaceId }>;
   workspaces: ReadonlyArray<{ id: WorkspaceId }>;
+  workspaceOverrides: Record<string, OverrideSettings>;
   sessionGithub: Record<string, { pr: { number: number } | null; detail?: { comments: [] } }>;
   sessionResolvedThreads: Record<string, ReadonlyArray<string>>;
   sessionPhaseRuns: Record<string, ReadonlyArray<Agent>>;
@@ -94,6 +96,7 @@ const makeStore = () => {
     updateResolveThread: vi.fn(async () => true),
     sessions: [{ id: SESSION_ID, workspaceId: WORKSPACE_ID }],
     workspaces: [{ id: WORKSPACE_ID }],
+    workspaceOverrides: {},
     sessionGithub: { [SESSION_ID]: { pr: { number: 42 } } },
     sessionResolvedThreads: {},
     sessionPhaseRuns: { [SESSION_ID]: [agent] },

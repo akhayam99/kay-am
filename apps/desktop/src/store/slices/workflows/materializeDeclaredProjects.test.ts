@@ -24,6 +24,7 @@ const project = (id: string, name: string): Project => ({
     roleModels: null,
     parallelAgents: null,
     providerPool: null,
+    attributionFooter: null,
   },
   createdAt: NOW,
   updatedAt: NOW,

@@ -11,6 +11,8 @@ import type {
 } from '@goodboy/types';
 import type { AppStore } from '../../store';
 import type { SetFn } from './types';
+import { overridesWithAttribution } from '../../../__tests__/helpers/attributionOverrides';
+import { ATTRIBUTION_FOOTER } from '../../../shared/utils/attribution';
 import { createReviewDraftsSlice } from './index';
 
 const {
@@ -148,6 +150,7 @@ const buildHarness = (initial: Record<string, unknown>): Harness => {
       },
     ],
     workspaceIntegrations: {},
+    workspaceOverrides: {},
     sessionExternalTasks: { [SESSION_ID]: [githubTask] },
     sessionProjectPrs: {},
     sessionGithub: {},
@@ -241,11 +244,14 @@ describe('review-drafts slice', () => {
     const [, input] = addPullRequestReviewSpy.mock.calls[0]!;
     expect(input.pullRequestId).toBe('PR_node1');
     expect(input.event).toBe('APPROVE');
-    expect(input.body).toBe('lgtm');
+    expect(input.body).toBe(`lgtm\n\n${ATTRIBUTION_FOOTER}`);
     expect(input.threads).toHaveLength(2);
     expect(input.threads[0]).toEqual(
       expect.objectContaining({ path: 'src/a.ts', line: 2, side: 'RIGHT' }),
     );
+    for (const thread of input.threads) {
+      expect(thread.body).not.toContain(ATTRIBUTION_FOOTER);
+    }
     expect(markPublishedSpy).toHaveBeenCalledWith(
       expect.objectContaining({ ids: ['draft-1', 'draft-2'] }),
     );
@@ -254,6 +260,35 @@ describe('review-drafts slice', () => {
       'published',
       'published',
     ]);
+  });
+
+  it('signs only the review summary, never a per line comment', async () => {
+    const drafts = [makeDraft({}), makeDraft({ overrides: { id: 'draft-2', line: 3 } })];
+    const { slice } = buildHarness({
+      reviewDrafts: { [SESSION_ID]: drafts },
+      workspaceOverrides: { [WS_ID]: overridesWithAttribution({ attributionFooter: true }) },
+    });
+
+    await slice.publishPrReview(SESSION_ID, { verdict: 'comment', body: 'a few notes' });
+
+    const [, input] = addPullRequestReviewSpy.mock.calls[0]!;
+    expect(input.body).toBe(`a few notes\n\n${ATTRIBUTION_FOOTER}`);
+    expect(input.threads.map((thread: { body: string }) => thread.body)).toEqual([
+      'guard the null case',
+      'guard the null case',
+    ]);
+  });
+
+  it('leaves the summary unsigned when the workspace switched attribution off', async () => {
+    const drafts = [makeDraft({})];
+    const { slice } = buildHarness({
+      reviewDrafts: { [SESSION_ID]: drafts },
+      workspaceOverrides: { [WS_ID]: overridesWithAttribution({ attributionFooter: false }) },
+    });
+
+    await slice.publishPrReview(SESSION_ID, { verdict: 'approve', body: 'lgtm' });
+
+    expect(addPullRequestReviewSpy.mock.calls[0]?.[1].body).toBe('lgtm');
   });
 
   it('publishes against the explicit target instead of the first linked task', async () => {
@@ -332,7 +367,7 @@ describe('review-drafts slice', () => {
       'https://gitlab.com',
       'acme/web',
       10,
-      'Request changes: overall notes',
+      `Request changes: overall notes\n\n${ATTRIBUTION_FOOTER}`,
     );
     expect(result.published).toBe(1);
     expect(result.failed).toHaveLength(1);

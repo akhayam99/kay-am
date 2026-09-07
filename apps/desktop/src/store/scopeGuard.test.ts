@@ -28,6 +28,7 @@ const buildProject = (overrides: Partial<Project> = {}): Project => ({
     roleModels: null,
     parallelAgents: null,
     providerPool: null,
+    attributionFooter: null,
   },
   createdAt: NOW,
   updatedAt: NOW,
