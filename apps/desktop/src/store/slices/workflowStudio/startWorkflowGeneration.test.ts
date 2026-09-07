@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { getCheapModel } from '@goodboy/core';
 import type { Workflow, WorkflowId } from '@goodboy/types';
 
 const { formatWorkflowFromNLMock } = vi.hoisted(() => ({
@@ -80,7 +81,7 @@ describe('startWorkflowGeneration', () => {
     );
   });
 
-  it('falls back to a connected provider when the workspace default is not connected', async () => {
+  it('uses the first connected provider automatic model when no workspace default is set', async () => {
     formatWorkflowFromNLMock.mockResolvedValue({
       name: 'Review and ship',
       description: 'Review the change, then ship it.',
@@ -116,7 +117,105 @@ describe('startWorkflowGeneration', () => {
 
     expect(formatWorkflowFromNLMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        deps: expect.objectContaining({ providerId: 'codex', model: 'gpt-5.4-mini' }),
+        deps: expect.objectContaining({
+          providerId: 'codex',
+          model: getCheapModel('codex'),
+        }),
+      }),
+    );
+  });
+
+  it('uses the workspace default automatic model when it is set and connected', async () => {
+    formatWorkflowFromNLMock.mockResolvedValue({
+      name: 'Review and ship',
+      description: 'Review the change, then ship it.',
+      goal: 'Ship the change',
+      steps: [
+        {
+          role: 'reviewer',
+          name: 'Review',
+          promptPrefix: 'Review the change',
+          expectedOutput: 'Review findings',
+        },
+      ],
+    });
+    const saved = { id: 'wf-3' as WorkflowId } satisfies Partial<Workflow>;
+    const state = {
+      workflowGenerations: {},
+      providers: [
+        { id: 'codex', connection: 'connected' },
+        { id: 'anthropic', connection: 'connected' },
+      ],
+      workspaceOverrides: {
+        'ws-1': { defaultProviderId: 'anthropic' },
+      },
+      savePhaseTemplate: vi.fn(async () => saved),
+      clearWorkflowStudioDraft: vi.fn(),
+    };
+    const set = vi.fn((updater: (current: typeof state) => Partial<typeof state>) => {
+      Object.assign(state, updater(state));
+    });
+    const generate = startWorkflowGeneration(set as never, (() => state) as never);
+
+    await generate({
+      workspaceId: 'ws-1' as never,
+      description: 'Review and ship this change',
+      workflow: null,
+      form: null,
+    });
+
+    expect(formatWorkflowFromNLMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deps: expect.objectContaining({
+          providerId: 'anthropic',
+          model: getCheapModel('anthropic'),
+        }),
+      }),
+    );
+  });
+
+  it('falls back to a connected provider when the workspace default is set but disconnected', async () => {
+    formatWorkflowFromNLMock.mockResolvedValue({
+      name: 'Review and ship',
+      description: 'Review the change, then ship it.',
+      goal: 'Ship the change',
+      steps: [
+        {
+          role: 'reviewer',
+          name: 'Review',
+          promptPrefix: 'Review the change',
+          expectedOutput: 'Review findings',
+        },
+      ],
+    });
+    const saved = { id: 'wf-4' as WorkflowId } satisfies Partial<Workflow>;
+    const state = {
+      workflowGenerations: {},
+      providers: [{ id: 'codex', connection: 'connected' }],
+      workspaceOverrides: {
+        'ws-1': { defaultProviderId: 'anthropic' },
+      },
+      savePhaseTemplate: vi.fn(async () => saved),
+      clearWorkflowStudioDraft: vi.fn(),
+    };
+    const set = vi.fn((updater: (current: typeof state) => Partial<typeof state>) => {
+      Object.assign(state, updater(state));
+    });
+    const generate = startWorkflowGeneration(set as never, (() => state) as never);
+
+    await generate({
+      workspaceId: 'ws-1' as never,
+      description: 'Review and ship this change',
+      workflow: null,
+      form: null,
+    });
+
+    expect(formatWorkflowFromNLMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deps: expect.objectContaining({
+          providerId: 'codex',
+          model: getCheapModel('codex'),
+        }),
       }),
     );
   });

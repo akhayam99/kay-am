@@ -30,6 +30,11 @@ export const OrchestratorRoutingRow = ({ sessionId, run, disabled }: Props) => {
   const taskModels = useAppStore((state) =>
     session == null ? undefined : state.workspaceOverrides?.[session.workspaceId]?.taskModels,
   );
+  const workspaceDefaultProviderId = useAppStore((state) =>
+    session == null
+      ? undefined
+      : state.workspaceOverrides?.[session.workspaceId]?.defaultProviderId,
+  );
   const setWorkflowOrchestratorRouting = useAppStore(
     (state) => state.setWorkflowOrchestratorRouting,
   );
@@ -39,7 +44,7 @@ export const OrchestratorRoutingRow = ({ sessionId, run, disabled }: Props) => {
   const automatic = resolveTaskModel({
     task: 'workflow_orchestrator',
     preferences: taskModels,
-    workspaceDefaultProviderId: defaultProvider,
+    workspaceDefaultProviderId,
     sessionDefaultProviderId: defaultProvider,
   });
   const pinned = run.orchestratorRouting ?? null;

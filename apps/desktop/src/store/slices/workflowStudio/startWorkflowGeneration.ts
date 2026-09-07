@@ -16,16 +16,16 @@ const generationTaskModel = ({
   workspaceId,
 }: GenerationModelParams): TaskModelPreference => {
   const overrides = state.workspaceOverrides?.[workspaceId] ?? null;
-  const resolved = resolveTaskModel({
-    task: 'plan_generation',
-    preferences: overrides?.taskModels,
-    workspaceDefaultProviderId: overrides?.defaultProviderId,
-    sessionDefaultProviderId: DEFAULT_SESSION_PROVIDER_PREFERENCE.defaultProvider,
-  });
   const connected = state.providers
     .filter((provider) => provider.connection === 'connected')
     .map((provider) => provider.id);
   const firstConnected = connected[0];
+  const resolved = resolveTaskModel({
+    task: 'plan_generation',
+    preferences: overrides?.taskModels,
+    workspaceDefaultProviderId: overrides?.defaultProviderId,
+    sessionDefaultProviderId: firstConnected ?? DEFAULT_SESSION_PROVIDER_PREFERENCE.defaultProvider,
+  });
   if (firstConnected == null || connected.includes(resolved.providerId)) {
     return resolved;
   }
