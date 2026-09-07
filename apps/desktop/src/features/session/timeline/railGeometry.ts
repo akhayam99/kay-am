@@ -1,10 +1,9 @@
 export const RAIL_SPINE_X = 8;
 export const RAIL_LANE_OFFSET = 16;
 const RAIL_EDGE_PAD = 8;
-const RAIL_CURVE_K = 0.5523;
 const RAIL_CURVE_HANDLE = 8.84;
 
-type RailDash = 'solid' | 'dashed' | 'future';
+type RailDash = 'solid' | 'dashed';
 
 export type RailGroupShape = 'open' | 'merged';
 
@@ -22,7 +21,6 @@ export type RailRowInput = {
   readonly height: number;
   readonly topY: number;
   readonly markerY: number | null;
-  readonly topAnchorY: number | null;
   readonly groupId: string | null;
   readonly isPending: boolean;
 };
@@ -37,7 +35,7 @@ export type RailSegment = {
 };
 
 export type RailJoin = {
-  readonly kind: 'depart' | 'merge';
+  readonly kind: 'merge' | 'branch';
   readonly spineColumn: number;
   readonly laneColumn: number;
   readonly identityIndex: number | null;
@@ -69,18 +67,17 @@ type Params = {
   readonly groups: ReadonlyArray<RailGroupInput>;
 };
 
-type GroupPlan = {
-  readonly group: RailGroupInput;
-  readonly column: number;
-  readonly memberIndexes: ReadonlyArray<number>;
-  readonly originIndex: number;
-  readonly boundaryIndex: number;
-  readonly hasFuture: boolean;
-};
-
 type Interval = {
   readonly from: number;
   readonly to: number;
+};
+
+type GroupSpan = {
+  readonly group: RailGroupInput;
+  readonly originIndex: number;
+  readonly topIndex: number;
+  readonly memberIndexes: ReadonlyArray<number>;
+  readonly interval: Interval;
 };
 
 export const railColumnX = ({ column }: { readonly column: number }): number =>
@@ -99,7 +96,7 @@ export const futureRailRow = ({ id, height }: FutureRowParams): RailRow => ({
       column: 0,
       identityIndex: null,
       isMuted: false,
-      dash: 'future',
+      dash: 'dashed',
       fromY: 0,
       toY: height,
     },
@@ -112,9 +109,6 @@ export const futureRailRow = ({ id, height }: FutureRowParams): RailRow => ({
 const anchorOf = ({ row }: { readonly row: RailRowInput }): number =>
   row.markerY ?? (row.topY + row.height) / 2;
 
-const topAnchorOf = ({ row }: { readonly row: RailRowInput }): number =>
-  row.topAnchorY ?? anchorOf({ row });
-
 type JoinPathParams = {
   readonly join: PlannedJoin;
   readonly height: number;
@@ -123,10 +117,9 @@ type JoinPathParams = {
 const joinPathOf = ({ join, height }: JoinPathParams): string => {
   const spineX = railColumnX({ column: join.spineColumn });
   const laneX = railColumnX({ column: join.laneColumn });
-  if (join.kind === 'depart') {
-    return `M ${spineX} ${join.anchorY} C ${spineX + RAIL_CURVE_HANDLE} ${join.anchorY}, ${laneX} ${RAIL_CURVE_K * join.anchorY}, ${laneX} 0`;
-  }
-  return `M ${laneX} ${height} C ${laneX} ${height - RAIL_CURVE_HANDLE}, ${spineX + RAIL_CURVE_HANDLE} ${join.anchorY}, ${spineX} ${join.anchorY}`;
+  const edgeY = join.kind === 'branch' ? 0 : height;
+  const handleY = join.kind === 'branch' ? RAIL_CURVE_HANDLE : height - RAIL_CURVE_HANDLE;
+  return `M ${laneX} ${edgeY} C ${laneX} ${handleY}, ${spineX + RAIL_CURVE_HANDLE} ${join.anchorY}, ${spineX} ${join.anchorY}`;
 };
 
 export type BranchRailRowInput = {
@@ -269,214 +262,179 @@ export const layoutTimelineRail = ({ rows, groups }: Params): RailLayout => {
   }
 
   const groupById = new Map(groups.map((group) => [group.id, group]));
+  const parentOf = ({ group }: { readonly group: RailGroupInput }): RailGroupInput | null =>
+    group.parentGroupId == null ? null : (groupById.get(group.parentGroupId) ?? null);
+
   const depthOf = ({ group }: { readonly group: RailGroupInput }): number => {
     let depth = 0;
-    let parentId = group.parentGroupId;
-    while (parentId != null && depth < groups.length) {
+    let current = parentOf({ group });
+    while (current !== null && depth < groups.length) {
       depth += 1;
-      parentId = groupById.get(parentId)?.parentGroupId ?? null;
+      current = parentOf({ group: current });
     }
     return depth;
   };
 
-  const lastIndex = Math.max(0, rows.length - 1);
-  const intervalOf = ({ group }: { readonly group: RailGroupInput }): Interval => {
-    const members = membersByGroupId.get(group.id) ?? [];
-    const originIndex = indexById.get(group.originRowId) ?? lastIndex;
-    const first = members[0];
-    if (first === undefined) {
-      return { from: originIndex, to: originIndex };
+  const rootOf = ({ group }: { readonly group: RailGroupInput }): RailGroupInput => {
+    let current = group;
+    let hops = 0;
+    let parent = parentOf({ group: current });
+    while (parent !== null && hops < groups.length) {
+      current = parent;
+      parent = parentOf({ group: current });
+      hops += 1;
     }
-    return { from: group.shape === 'open' ? 0 : first, to: originIndex };
+    return current;
   };
 
-  const ordered = [...groups].sort(
-    (first, second) =>
-      depthOf({ group: first }) - depthOf({ group: second }) ||
-      intervalOf({ group: first }).from - intervalOf({ group: second }).from ||
-      first.id.localeCompare(second.id),
-  );
+  const lastIndex = Math.max(0, rows.length - 1);
+  const spans: ReadonlyArray<GroupSpan> = groups.flatMap((group) => {
+    const originIndex = indexById.get(group.originRowId) ?? lastIndex;
+    const memberIndexes = (membersByGroupId.get(group.id) ?? []).filter(
+      (index) => index < originIndex,
+    );
+    const topIndex = memberIndexes[0];
+    if (topIndex === undefined) {
+      return [];
+    }
+    return [
+      {
+        group,
+        originIndex,
+        topIndex,
+        memberIndexes,
+        interval: { from: group.shape === 'open' ? 0 : topIndex, to: originIndex },
+      },
+    ];
+  });
 
   const columnByGroupId = new Map<string, number>();
-  const takenByColumn = new Map<number, Interval[]>();
-  for (const group of ordered) {
-    const interval = intervalOf({ group });
-    const parentColumn =
-      group.parentGroupId == null ? 0 : (columnByGroupId.get(group.parentGroupId) ?? 0);
+  const placed: Array<{ readonly column: number; readonly interval: Interval }> = [];
+  const ordered = [...spans].sort(
+    (first, second) =>
+      depthOf({ group: first.group }) - depthOf({ group: second.group }) ||
+      first.interval.from - second.interval.from ||
+      first.topIndex - second.topIndex ||
+      first.group.id.localeCompare(second.group.id),
+  );
+  for (const span of ordered) {
+    const parentId = span.group.parentGroupId;
+    const parentColumn = parentId == null ? 0 : (columnByGroupId.get(parentId) ?? 0);
     let column = parentColumn + 1;
-    let taken = takenByColumn.get(column);
-    while (taken?.some((other) => overlaps({ first: other, second: interval })) === true) {
+    while (
+      placed.some(
+        (other) =>
+          other.column === column && overlaps({ first: other.interval, second: span.interval }),
+      )
+    ) {
       column += 1;
-      taken = takenByColumn.get(column);
     }
-    columnByGroupId.set(group.id, column);
-    if (taken === undefined) {
-      takenByColumn.set(column, [interval]);
-    } else {
-      taken.push(interval);
-    }
+    columnByGroupId.set(span.group.id, column);
+    placed.push({ column, interval: span.interval });
   }
-
-  const plans: ReadonlyArray<GroupPlan> = ordered.map((group) => {
-    const memberIndexes = membersByGroupId.get(group.id) ?? [];
-    const settled = memberIndexes.filter((index) => rows[index]?.isPending !== true);
-    const originIndex = indexById.get(group.originRowId) ?? lastIndex;
-    const boundaryIndex = settled[0] ?? originIndex;
-    return {
-      group,
-      column: columnByGroupId.get(group.id) ?? 1,
-      memberIndexes,
-      originIndex,
-      boundaryIndex,
-      hasFuture:
-        group.shape === 'open' || memberIndexes.some((index) => rows[index]?.isPending === true),
-    };
-  });
 
   const laneSegmentsByIndex: RailSegment[][] = rows.map(() => []);
   const joinsByIndex: PlannedJoin[][] = rows.map(() => []);
 
-  const pushSpan = ({ index, plan }: { readonly index: number; readonly plan: GroupPlan }) => {
-    const row = rows[index];
-    if (row === undefined) {
-      return;
-    }
-    const shared = {
-      column: plan.column,
-      identityIndex: plan.group.identityIndex,
-      isMuted: plan.group.isMuted,
+  for (const span of spans) {
+    const { group, originIndex, memberIndexes } = span;
+    const column = columnByGroupId.get(group.id) ?? 1;
+    const parentId = group.parentGroupId;
+    const parentColumn = parentId == null ? 0 : (columnByGroupId.get(parentId) ?? 0);
+    const root = rootOf({ group });
+    const ink = {
+      column,
+      identityIndex: root.identityIndex,
+      isMuted: root.isMuted,
     };
-    if (index > plan.boundaryIndex) {
-      laneSegmentsByIndex[index]?.push({
-        ...shared,
-        dash: 'solid',
-        fromY: row.topY,
-        toY: row.height,
+    const chain = [originIndex, ...[...memberIndexes].reverse()];
+
+    for (const [step, lower] of chain.entries()) {
+      const upper = chain[step + 1];
+      const lowerRow = rows[lower];
+      const upperRow = upper === undefined ? undefined : rows[upper];
+      if (upper === undefined || lowerRow === undefined || upperRow === undefined) {
+        continue;
+      }
+      const dash: RailDash = upperRow.isPending ? 'dashed' : 'solid';
+      laneSegmentsByIndex[upper]?.push({
+        ...ink,
+        dash,
+        fromY: anchorOf({ row: upperRow }),
+        toY: upperRow.height,
       });
-      return;
-    }
-    if (index < plan.boundaryIndex) {
-      laneSegmentsByIndex[index]?.push({
-        ...shared,
-        dash: 'dashed',
-        fromY: row.topY,
-        toY: row.height,
-      });
-      return;
-    }
-    const anchor = anchorOf({ row });
-    laneSegmentsByIndex[index]?.push({ ...shared, dash: 'solid', fromY: anchor, toY: row.height });
-    laneSegmentsByIndex[index]?.push({
-      ...shared,
-      dash: plan.hasFuture ? 'dashed' : 'solid',
-      fromY: row.topY,
-      toY: anchor,
-    });
-  };
-
-  for (const plan of plans) {
-    const parentColumn =
-      plan.group.parentGroupId == null ? 0 : (columnByGroupId.get(plan.group.parentGroupId) ?? 0);
-    const first = plan.memberIndexes[0];
-    const topIndex = first !== undefined && first < plan.originIndex ? first : undefined;
-    const originRow = rows[plan.originIndex];
-
-    if (topIndex === undefined) {
-      continue;
-    }
-
-    for (let index = topIndex + 1; index < plan.originIndex; index += 1) {
-      pushSpan({ index, plan });
-    }
-
-    if (originRow !== undefined) {
-      joinsByIndex[plan.originIndex]?.push({
-        kind: 'depart',
-        spineColumn: parentColumn,
-        laneColumn: plan.column,
-        identityIndex: plan.group.identityIndex,
-        isMuted: plan.group.isMuted,
-        dash: plan.boundaryIndex === plan.originIndex ? 'dashed' : 'solid',
-        anchorY: anchorOf({ row: originRow }),
-      });
-    }
-
-    const topRow = rows[topIndex];
-    if (topRow === undefined) {
-      continue;
-    }
-    const topAnchor = topAnchorOf({ row: topRow });
-    const shared = {
-      column: plan.column,
-      identityIndex: plan.group.identityIndex,
-      isMuted: plan.group.isMuted,
-    };
-    const isTopPending = topIndex < plan.boundaryIndex;
-
-    if (plan.group.shape === 'open' && !isTopPending) {
-      laneSegmentsByIndex[topIndex]?.push({
-        ...shared,
-        dash: 'solid',
-        fromY: topAnchor,
-        toY: topRow.height,
-      });
-      laneSegmentsByIndex[topIndex]?.push({
-        ...shared,
-        dash: 'dashed',
-        fromY: topRow.topY,
-        toY: topAnchor,
-      });
-      for (let index = 0; index < topIndex; index += 1) {
+      for (let index = upper + 1; index < lower; index += 1) {
         const row = rows[index];
         if (row === undefined) {
           continue;
         }
-        laneSegmentsByIndex[index]?.push({
-          ...shared,
-          dash: 'dashed',
-          fromY: row.topY,
-          toY: row.height,
+        laneSegmentsByIndex[index]?.push({ ...ink, dash, fromY: row.topY, toY: row.height });
+      }
+      if (lower !== originIndex) {
+        laneSegmentsByIndex[lower]?.push({
+          ...ink,
+          dash,
+          fromY: lowerRow.topY,
+          toY: anchorOf({ row: lowerRow }),
         });
       }
-      continue;
     }
 
-    joinsByIndex[topIndex]?.push({
-      kind: 'merge',
-      spineColumn: parentColumn,
-      laneColumn: plan.column,
-      identityIndex: plan.group.identityIndex,
-      isMuted: plan.group.isMuted,
-      dash: isTopPending ? 'dashed' : 'solid',
-      anchorY: anchorOf({ row: topRow }),
+    const originRow = rows[originIndex];
+    const nearestIndex = memberIndexes[memberIndexes.length - 1];
+    const nearestRow = nearestIndex === undefined ? undefined : rows[nearestIndex];
+    if (originRow !== undefined && nearestRow !== undefined) {
+      joinsByIndex[originIndex]?.push({
+        kind: 'branch',
+        spineColumn: parentColumn,
+        laneColumn: column,
+        identityIndex: root.identityIndex,
+        isMuted: root.isMuted,
+        dash: nearestRow.isPending ? 'dashed' : 'solid',
+        anchorY: anchorOf({ row: originRow }),
+      });
+    }
+
+    if (group.shape !== 'open') {
+      continue;
+    }
+    const topIndex = memberIndexes[0];
+    const topRow = topIndex === undefined ? undefined : rows[topIndex];
+    if (topIndex === undefined || topRow === undefined) {
+      continue;
+    }
+    laneSegmentsByIndex[topIndex]?.push({
+      ...ink,
+      dash: 'dashed',
+      fromY: topRow.topY,
+      toY: anchorOf({ row: topRow }),
     });
+    for (let index = 0; index < topIndex; index += 1) {
+      const row = rows[index];
+      if (row === undefined) {
+        continue;
+      }
+      laneSegmentsByIndex[index]?.push({
+        ...ink,
+        dash: 'dashed',
+        fromY: row.topY,
+        toY: row.height,
+      });
+    }
   }
 
-  const normalizedRows = rows.map((row, index) => {
-    const ownColumn = row.groupId == null ? 0 : (columnByGroupId.get(row.groupId) ?? 0);
-    const plannedJoins = joinsByIndex[index] ?? [];
-    const ownMerge = plannedJoins.find(
-      (join) => join.kind === 'merge' && join.laneColumn === ownColumn,
-    );
-    const markerColumn = ownMerge?.spineColumn ?? ownColumn;
-    const joins = plannedJoins.map((join) =>
-      join.kind === 'depart' && ownMerge !== undefined
-        ? { ...join, spineColumn: markerColumn }
-        : join,
-    );
-    return { joins, markerColumn };
-  });
-  const maxColumn = [...columnByGroupId.values()].reduce((widest, column) => {
-    return column > widest ? column : widest;
-  }, 0);
+  const maxColumn = [...columnByGroupId.values()].reduce(
+    (widest, column) => (column > widest ? column : widest),
+    0,
+  );
 
   return {
     width: RAIL_SPINE_X + maxColumn * RAIL_LANE_OFFSET + RAIL_EDGE_PAD,
     columnByGroupId,
-    rows: rows.map((row, index) => {
-      const markerColumn = normalizedRows[index]?.markerColumn ?? 0;
-      const normalizedJoins = normalizedRows[index]?.joins ?? [];
-      const segments = [
+    rows: rows.map((row, index) => ({
+      id: row.id,
+      height: row.height,
+      segments: [
         {
           column: 0,
           identityIndex: null,
@@ -486,19 +444,13 @@ export const layoutTimelineRail = ({ rows, groups }: Params): RailLayout => {
           toY: row.height,
         } satisfies RailSegment,
         ...(laneSegmentsByIndex[index] ?? []),
-      ];
-      const joins = normalizedJoins.map((join) => ({
+      ],
+      joins: (joinsByIndex[index] ?? []).map((join) => ({
         ...join,
         path: joinPathOf({ join, height: row.height }),
-      }));
-      return {
-        id: row.id,
-        height: row.height,
-        segments,
-        joins,
-        markerColumn,
-        markerY: row.markerY,
-      };
-    }),
+      })),
+      markerColumn: row.groupId == null ? 0 : (columnByGroupId.get(row.groupId) ?? 0),
+      markerY: row.markerY,
+    })),
   };
 };

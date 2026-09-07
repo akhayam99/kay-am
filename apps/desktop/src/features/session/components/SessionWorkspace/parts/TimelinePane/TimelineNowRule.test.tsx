@@ -13,7 +13,6 @@ const item: TimelineNowItem = {
   topY: TIMELINE_RHYTHM.now.ruleY,
   ruleY: TIMELINE_RHYTHM.now.ruleY,
   markerY: null,
-  topAnchorY: null,
   groupId: null,
   isPending: false,
   gap: 'none',

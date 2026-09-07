@@ -54,7 +54,6 @@ const itemOf = ({ entry, grade = 'entry' }: ItemParams): TimelineRowItem => ({
   height: TIMELINE_RHYTHM.grade[grade].height,
   topY: 0,
   markerY: 18,
-  topAnchorY: null,
   groupId: null,
   isPending: false,
   gap: 'entry',

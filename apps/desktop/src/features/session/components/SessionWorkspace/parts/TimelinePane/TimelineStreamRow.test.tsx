@@ -69,7 +69,6 @@ const itemOf = (): TimelineRowItem => ({
   height: TIMELINE_RHYTHM.grade.step.height + TIMELINE_RHYTHM.gap.sibling,
   topY: 0,
   markerY: 18,
-  topAnchorY: null,
   groupId: 'lane:run:one',
   isPending: false,
   gap: 'sibling',

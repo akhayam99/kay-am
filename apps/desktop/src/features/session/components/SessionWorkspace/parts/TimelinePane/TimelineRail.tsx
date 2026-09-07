@@ -10,17 +10,9 @@ type Props = {
 const LANE_WIDTH = 2;
 const SPINE_WIDTH = 1;
 const DASH_PATTERN = '3 3';
-const FUTURE_PATTERN = '2 4';
 
-const dashArrayOf = ({ dash }: { readonly dash: RailSegment['dash'] }): string | undefined => {
-  if (dash === 'dashed') {
-    return DASH_PATTERN;
-  }
-  if (dash === 'future') {
-    return FUTURE_PATTERN;
-  }
-  return undefined;
-};
+const dashArrayOf = ({ dash }: { readonly dash: RailSegment['dash'] }): string | undefined =>
+  dash === 'dashed' ? DASH_PATTERN : undefined;
 
 const strokeOf = ({ identityIndex }: { readonly identityIndex: number | null }): string =>
   identityIndex == null ? 'var(--color-border)' : runIdentityStroke({ index: identityIndex });
