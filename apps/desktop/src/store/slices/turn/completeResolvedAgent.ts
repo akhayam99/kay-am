@@ -22,6 +22,7 @@ type Params = {
   readonly sessionId: SessionId;
   readonly resolvedAgentId: AgentId;
   readonly assistantText: string;
+  readonly resolveAttemptId?: string;
   readonly now: () => IsoDateTime;
 };
 
@@ -31,6 +32,7 @@ export const completeResolvedAgent = async ({
   sessionId,
   resolvedAgentId,
   assistantText,
+  resolveAttemptId,
   now,
 }: Params): Promise<boolean | null> => {
   const ranAgent = get().sessionPhaseRuns[sessionId]?.find((run) => run.id === resolvedAgentId);
@@ -91,40 +93,24 @@ export const completeResolvedAgent = async ({
     return null;
   }
 
-  const {
-    outcomes: nextOutcomes,
-    turnOutcomes,
-    markerCount,
-  } = resolverTurnOutcomes({
+  const { turnOutcomes, markerCount } = resolverTurnOutcomes({
     assistantText,
     previousOutcomes: get().resolverThreadOutcomes[resolvedAgentId] ?? {},
   });
-  const verdictOutcomes = markerCount === 0 ? turnOutcomes : nextOutcomes;
-  const ownedThreadIds = ranAgent ? agentThreadIds(ranAgent) : [];
-  const settledThreadIds =
-    ownedThreadIds.length > 0 ? ownedThreadIds : Object.keys(verdictOutcomes);
-  const kinds = settledThreadIds.flatMap((threadId) => {
-    const outcome = verdictOutcomes[threadId];
-    return outcome === undefined ? [] : [outcome.kind];
-  });
-  const hasOpenThread = kinds.length < settledThreadIds.length;
-  const nextState =
-    hasOpenThread || kinds.length === 0
-      ? 'awaiting'
-      : kinds.includes('resolved')
-        ? 'committed'
-        : kinds.every((kind) => kind === 'wontfix')
-          ? 'wontfix'
-          : 'analyzed';
-  set((state) => ({
-    resolverState: { ...state.resolverState, [resolvedAgentId]: nextState },
-    resolverThreadOutcomes: {
-      ...state.resolverThreadOutcomes,
-      [resolvedAgentId]: nextOutcomes,
-    },
-  }));
+  if (ranAgent !== undefined) {
+    await get().persistResolveTurn({
+      sessionId,
+      agent: ranAgent,
+      assistantText,
+      attemptId: resolveAttemptId,
+    });
+  }
+  const sourceThreadIds = ranAgent === undefined ? [] : agentThreadIds(ranAgent);
+  const ownedThreadIds = new Set(
+    sourceThreadIds.length > 0 ? sourceThreadIds : Object.keys(turnOutcomes),
+  );
   for (const [threadId, outcome] of Object.entries(turnOutcomes)) {
-    if (outcome.kind !== 'resolved') {
+    if (!ownedThreadIds.has(threadId) || outcome.kind !== 'resolved') {
       continue;
     }
     const queued = get().sessionPendingResolutions[sessionId]?.find(

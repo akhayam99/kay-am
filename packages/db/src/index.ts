@@ -316,3 +316,11 @@ export {
   type InsertOpenQuestionInput,
   type InsertOpenQuestionResult,
 } from './queries/open-question';
+
+export { listResolveThreads, upsertResolveThread } from './queries/resolve-thread';
+export {
+  listResolveAttempts,
+  insertResolveAttempt,
+  setResolveAttemptPhase,
+} from './queries/resolve-attempt';
+export { hasResolveImport, commitResolveImport } from './queries/resolve-import';

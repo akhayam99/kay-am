@@ -72,97 +72,107 @@ const listPendingResolutionsForSessionSpy = vi.fn<
 const queuePendingResolutionSpy = vi.fn(async () => undefined);
 const markPendingResolutionReplyPostedSpy = vi.fn(async () => undefined);
 
-vi.mock('@goodboy/db', () => ({
-  getSetting: dbGetSettingSpy,
-  setSetting: dbSetSettingSpy,
-  insertMessage: vi.fn(async () => undefined),
-  insertProviderRun: vi.fn(async () => undefined),
-  insertSession: vi.fn(async () => undefined),
-  insertSessionWorktree: vi.fn(async () => undefined),
-  insertTelemetry: vi.fn(async () => undefined),
-  insertTurnEventsBatch: vi.fn(async () => undefined),
-  insertWorkspace: vi.fn(async () => undefined),
-  disconnectWorkspace: vi.fn(async () => undefined),
-  reconnectWorkspace: vi.fn(async () => undefined),
-  touchWorkspaceLastAccessed: vi.fn(async () => undefined),
-  findWorkspaceByRootPath: vi.fn(async () => null),
-  upsertSessionExternalTask: vi.fn(async () => undefined),
-  deleteSessionExternalTask: vi.fn(async () => undefined),
-  listExternalTasksForWorkspace: vi.fn(async () => []),
-  listContextSlotsForSession: vi.fn(async () => []),
-  insertContextSlotHistory: vi.fn(async () => undefined),
-  listContextSlotHistory: vi.fn(async () => []),
-  countContextSlotHistoryForSession: vi.fn(async () => ({})),
-  listMessagesForAgent: vi.fn(async () => []),
-  listMessagesForSession: vi.fn(async () => []),
-  listTurnEventsForAgent: vi.fn(async () => []),
-  listTurnEventsForSession: vi.fn(async () => []),
-  listAgentRunIdsForSession: vi.fn(async () => new Map()),
-  listSessionsForWorkspace: vi.fn(async () => []),
-  listArchivedSessionsForWorkspace: vi.fn(async () => []),
-  listTelemetryForSession: vi.fn(async () => []),
-  listWorkspaces: vi.fn(async () => []),
-  listWorktreesForSession: vi.fn(async () => []),
-  listWorktreesForSessions: vi.fn(async () => new Map()),
-  listAgentsForSessions: vi.fn(async () => new Map()),
-  deleteWorktreesForSession: vi.fn(async () => undefined),
-  updateSessionWorktreeBranch: vi.fn(async () => undefined),
-  updateSessionWorktreeRepoSlug: vi.fn(async () => undefined),
-  listAllSessionWorktrees: vi.fn(async () => []),
-  renameSession: vi.fn(async () => undefined),
-  deleteSession: vi.fn(async () => undefined),
-  archiveSession: vi.fn(async () => undefined),
-  unarchiveSession: vi.fn(async () => undefined),
-  updateSessionConfig: vi.fn(async () => undefined),
-  updateAgentConfig: vi.fn(async () => undefined),
-  summarizeSessionTelemetry: vi.fn(async () => null),
-  summarizeWorkspaceTelemetry: vi.fn(async () => null),
-  summarizeWorkspaceProviderTelemetry: vi.fn(async () => []),
-  updateProviderRunStatus: vi.fn(async () => undefined),
-  updateSessionPermissionMode: vi.fn(async () => undefined),
-  updateSessionAutoRun: vi.fn(async () => undefined),
-  updateSessionTitleUserEdited: vi.fn(async () => undefined),
-  updateSessionState: vi.fn(async () => undefined),
-  attachWorkflowToSession: vi.fn(async () => undefined),
-  detachWorkflowFromSession: vi.fn(async () => undefined),
-  updateWorkflowOrder: vi.fn(async () => undefined),
-  updateSessionWorkflowStep: vi.fn(async () => undefined),
-  listProjectScripts: listProjectScriptsSpy,
-  upsertProjectScript: upsertProjectScriptSpy,
-  deleteProjectScript: deleteProjectScriptSpy,
-  deletePendingResolution: deletePendingResolutionSpy,
-  listPendingResolutionsForSession: listPendingResolutionsForSessionSpy,
-  queuePendingResolution: queuePendingResolutionSpy,
-  markPendingResolutionReplyPosted: markPendingResolutionReplyPostedSpy,
-  upsertContextSlot: vi.fn(async () => undefined),
-  listOpenQuestionsForSession: vi.fn(async () => []),
-  insertNudgeEvent: insertNudgeEventSpy,
-  updateNudgeEventOutcome: updateNudgeOutcomeSpy,
-  insertNotification: insertNotificationSpy,
-  listNotifications: vi.fn(async () => []),
-  countNotifications: vi.fn(async () => ({ total: 0, unread: 0 })),
-  NOTIFICATION_LIST_LIMIT: 200,
-  markAllNotificationsRead: vi.fn(async () => undefined),
-  clearAllNotifications: vi.fn(async () => undefined),
-  listDiffCommentsForSession: listDiffCommentsSpy,
-  insertDiffComment: insertDiffCommentSpy,
-  resolveDiffComment: resolveDiffCommentDbSpy,
-  reopenDiffComment: reopenDiffCommentDbSpy,
-  consumeDiffComments: consumeDiffCommentsDbSpy,
-  deleteDiffComment: deleteDiffCommentDbSpy,
-  listIntegrationBindingsForWorkspace: listIntegrationBindingsForWorkspaceSpy,
-  getIntegrationBinding: vi.fn(async () => null),
-  upsertIntegrationBinding: upsertIntegrationBindingSpy,
-  deleteIntegrationBinding: deleteIntegrationBindingSpy,
-  deleteIntegrationBindingsForProvider: vi.fn(async () => undefined),
-  insertOpenQuestion: vi.fn(async () => undefined),
-  markOpenQuestionsResolvedByText: vi.fn(async () => 0),
-  listResolvedQuestionTextsForSession: vi.fn(async () => []),
-  insertTurnEvent: vi.fn(async () => undefined),
-  getGithubPrCache: vi.fn(async () => null),
-  upsertGithubPrCache: vi.fn(async () => undefined),
-  deleteGithubPrCache: vi.fn(async () => undefined),
-}));
+const resolveMockState = vi.hoisted(() => ({ reset: (): void => {} }));
+beforeEach(() => resolveMockState.reset());
+
+vi.mock('@goodboy/db', async () => {
+  const queries = (
+    await import('../resolve/testing/createResolveQueryMocks')
+  ).createResolveQueryMocks();
+  resolveMockState.reset = queries.resetResolveQueryMocks;
+  return {
+    ...queries,
+    getSetting: dbGetSettingSpy,
+    setSetting: dbSetSettingSpy,
+    insertMessage: vi.fn(async () => undefined),
+    insertProviderRun: vi.fn(async () => undefined),
+    insertSession: vi.fn(async () => undefined),
+    insertSessionWorktree: vi.fn(async () => undefined),
+    insertTelemetry: vi.fn(async () => undefined),
+    insertTurnEventsBatch: vi.fn(async () => undefined),
+    insertWorkspace: vi.fn(async () => undefined),
+    disconnectWorkspace: vi.fn(async () => undefined),
+    reconnectWorkspace: vi.fn(async () => undefined),
+    touchWorkspaceLastAccessed: vi.fn(async () => undefined),
+    findWorkspaceByRootPath: vi.fn(async () => null),
+    upsertSessionExternalTask: vi.fn(async () => undefined),
+    deleteSessionExternalTask: vi.fn(async () => undefined),
+    listExternalTasksForWorkspace: vi.fn(async () => []),
+    listContextSlotsForSession: vi.fn(async () => []),
+    insertContextSlotHistory: vi.fn(async () => undefined),
+    listContextSlotHistory: vi.fn(async () => []),
+    countContextSlotHistoryForSession: vi.fn(async () => ({})),
+    listMessagesForAgent: vi.fn(async () => []),
+    listMessagesForSession: vi.fn(async () => []),
+    listTurnEventsForAgent: vi.fn(async () => []),
+    listTurnEventsForSession: vi.fn(async () => []),
+    listAgentRunIdsForSession: vi.fn(async () => new Map()),
+    listSessionsForWorkspace: vi.fn(async () => []),
+    listArchivedSessionsForWorkspace: vi.fn(async () => []),
+    listTelemetryForSession: vi.fn(async () => []),
+    listWorkspaces: vi.fn(async () => []),
+    listWorktreesForSession: vi.fn(async () => []),
+    listWorktreesForSessions: vi.fn(async () => new Map()),
+    listAgentsForSessions: vi.fn(async () => new Map()),
+    deleteWorktreesForSession: vi.fn(async () => undefined),
+    updateSessionWorktreeBranch: vi.fn(async () => undefined),
+    updateSessionWorktreeRepoSlug: vi.fn(async () => undefined),
+    listAllSessionWorktrees: vi.fn(async () => []),
+    renameSession: vi.fn(async () => undefined),
+    deleteSession: vi.fn(async () => undefined),
+    archiveSession: vi.fn(async () => undefined),
+    unarchiveSession: vi.fn(async () => undefined),
+    updateSessionConfig: vi.fn(async () => undefined),
+    updateAgentConfig: vi.fn(async () => undefined),
+    summarizeSessionTelemetry: vi.fn(async () => null),
+    summarizeWorkspaceTelemetry: vi.fn(async () => null),
+    summarizeWorkspaceProviderTelemetry: vi.fn(async () => []),
+    updateProviderRunStatus: vi.fn(async () => undefined),
+    updateSessionPermissionMode: vi.fn(async () => undefined),
+    updateSessionAutoRun: vi.fn(async () => undefined),
+    updateSessionTitleUserEdited: vi.fn(async () => undefined),
+    updateSessionState: vi.fn(async () => undefined),
+    attachWorkflowToSession: vi.fn(async () => undefined),
+    detachWorkflowFromSession: vi.fn(async () => undefined),
+    updateWorkflowOrder: vi.fn(async () => undefined),
+    updateSessionWorkflowStep: vi.fn(async () => undefined),
+    listProjectScripts: listProjectScriptsSpy,
+    upsertProjectScript: upsertProjectScriptSpy,
+    deleteProjectScript: deleteProjectScriptSpy,
+    deletePendingResolution: deletePendingResolutionSpy,
+    listPendingResolutionsForSession: listPendingResolutionsForSessionSpy,
+    queuePendingResolution: queuePendingResolutionSpy,
+    markPendingResolutionReplyPosted: markPendingResolutionReplyPostedSpy,
+    upsertContextSlot: vi.fn(async () => undefined),
+    listOpenQuestionsForSession: vi.fn(async () => []),
+    insertNudgeEvent: insertNudgeEventSpy,
+    updateNudgeEventOutcome: updateNudgeOutcomeSpy,
+    insertNotification: insertNotificationSpy,
+    listNotifications: vi.fn(async () => []),
+    countNotifications: vi.fn(async () => ({ total: 0, unread: 0 })),
+    NOTIFICATION_LIST_LIMIT: 200,
+    markAllNotificationsRead: vi.fn(async () => undefined),
+    clearAllNotifications: vi.fn(async () => undefined),
+    listDiffCommentsForSession: listDiffCommentsSpy,
+    insertDiffComment: insertDiffCommentSpy,
+    resolveDiffComment: resolveDiffCommentDbSpy,
+    reopenDiffComment: reopenDiffCommentDbSpy,
+    consumeDiffComments: consumeDiffCommentsDbSpy,
+    deleteDiffComment: deleteDiffCommentDbSpy,
+    listIntegrationBindingsForWorkspace: listIntegrationBindingsForWorkspaceSpy,
+    getIntegrationBinding: vi.fn(async () => null),
+    upsertIntegrationBinding: upsertIntegrationBindingSpy,
+    deleteIntegrationBinding: deleteIntegrationBindingSpy,
+    deleteIntegrationBindingsForProvider: vi.fn(async () => undefined),
+    insertOpenQuestion: vi.fn(async () => undefined),
+    markOpenQuestionsResolvedByText: vi.fn(async () => 0),
+    listResolvedQuestionTextsForSession: vi.fn(async () => []),
+    insertTurnEvent: vi.fn(async () => undefined),
+    getGithubPrCache: vi.fn(async () => null),
+    upsertGithubPrCache: vi.fn(async () => undefined),
+    deleteGithubPrCache: vi.fn(async () => undefined),
+  };
+});
 
 vi.mock('../../../shared/lib/db', () => ({
   runDbMigrations: vi.fn(async () => undefined),
@@ -322,7 +332,7 @@ const ghSetTokenSpy = vi.fn();
 const ghClearTokenSpy = vi.fn(async () => undefined);
 const gitPushSpy = vi.fn(async () => ({ stdout: '', stderr: '', exitCode: 0 }));
 const resolveThreadSpy = vi.fn(async () => undefined);
-const addReplySpy = vi.fn(async () => undefined);
+const addReplySpy = vi.fn(async () => ({ id: 'reply-id' }));
 const detectRepoSlugSpy = vi.fn(async () => null as string | null);
 const listPrsForBranchSpy = vi.fn(async () => [] as ReadonlyArray<PullRequestState>);
 const fetchLinkedIssuesSpy = vi.fn(async () => []);
@@ -569,6 +579,11 @@ describe('store contract', () => {
         githubStatus: null,
         sessionGithub: {},
         sessionResolvedThreads: {},
+        sessionResolveThreads: {},
+        sessionResolveAttempts: {},
+        resolverState: {},
+        resolverThreadOutcomes: {},
+        sessionPendingResolutions: {},
         sessionProjectPrs: {},
         sessionSelectedPrNumber: {},
         volatilePermissionAllows: new Set<string>(),
@@ -948,6 +963,9 @@ describe('store contract', () => {
         .getState()
         .resolveGithubThread(SESSION_ID, 'PRT_1', { commitSha: 'abcdef1234567890' });
       expect(ok).toBe(false);
+      expect(
+        store.getState().sessionResolveThreads[SESSION_ID]?.find((row) => row.threadId === 'PRT_1'),
+      ).toMatchObject({ state: 'fixed', stateReason: expect.stringContaining('non-fast-forward') });
       expect(addReplySpy).not.toHaveBeenCalled();
       expect(resolveThreadSpy).not.toHaveBeenCalled();
     });
@@ -1398,6 +1416,11 @@ describe('store contract', () => {
         workspaces: [buildWorkspace()],
         sessions: [buildSession()],
         sessionResolvedThreads: {},
+        sessionResolveThreads: {},
+        sessionResolveAttempts: {},
+        resolverState: {},
+        resolverThreadOutcomes: {},
+        sessionPendingResolutions: {},
       });
 
       const ok = await store
@@ -2038,6 +2061,14 @@ describe('store contract', () => {
         wontfix.threadId,
         expect.anything(),
       );
+      expect(
+        store
+          .getState()
+          .sessionResolveThreads[SESSION_ID]?.find((row) => row.threadId === fix.threadId),
+      ).toMatchObject({
+        state: 'fixed',
+        stateReason: expect.stringContaining('non-fast-forward'),
+      });
     });
 
     it('pushAllResolutions does not repost a reply already recorded as posted', async () => {
@@ -2107,6 +2138,15 @@ describe('store contract', () => {
         threadId: fix.threadId,
       });
       expect(deletePendingResolutionSpy).not.toHaveBeenCalled();
+      expect(
+        store
+          .getState()
+          .sessionResolveThreads[SESSION_ID]?.find((row) => row.threadId === fix.threadId),
+      ).toMatchObject({
+        state: 'fixed',
+        stateReason: expect.stringContaining('github timed out'),
+        replyPostedAt: expect.any(Number),
+      });
     });
 
     it('pushAllResolutions only counts a comment as posted when a reply body actually went out', async () => {

@@ -155,6 +155,7 @@ function buildHarness(
     async (_arg: { sessionId: SessionId; agentId: AgentId; content: string }) => undefined,
   );
   const state = {
+    recordResolveAttempt: vi.fn(async () => 'attempt-id'),
     sessions: [session],
     phaseTemplates: { [WS_ID]: [] },
     sessionPhaseRuns: { [SESSION_ID]: [] },

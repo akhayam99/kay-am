@@ -19,6 +19,16 @@ export const repointRewrittenCommits = async ({
   if (replaced.size === 0) {
     return;
   }
+  for (const row of get().sessionResolveThreads[sessionId] ?? []) {
+    if (row.commitShas?.some((sha) => replaced.has(sha)) !== true) {
+      continue;
+    }
+    await get().updateResolveThread({
+      sessionId,
+      threadId: row.threadId,
+      patch: { commitShas: row.commitShas.map((sha) => (replaced.has(sha) ? head.sha : sha)) },
+    });
+  }
   set((state) => ({
     resolverThreadOutcomes: Object.fromEntries(
       Object.entries(state.resolverThreadOutcomes).map(([agentId, byThread]) => [

@@ -1,4 +1,8 @@
-import { deletePendingResolution, listPendingResolutionsForSession } from '@goodboy/db';
+import {
+  deletePendingResolution,
+  listPendingResolutionsForSession,
+  listResolveThreads,
+} from '@goodboy/db';
 import { formatError } from '@goodboy/ui';
 import type { PendingResolution, PendingResolutionOutcome, SessionId } from '@goodboy/types';
 import { tauriDatabase } from '../../../shared/lib/db';
@@ -6,6 +10,7 @@ import { markThreadResolvedNoPush } from './markThreadResolvedNoPush';
 import { postThreadReply } from './postThreadReply';
 import { pushSessionBranch } from './pushSessionBranch';
 import { resolverOutcomeForThread } from './resolverOutcomeForThread';
+import { restoreResolvePublication } from './restoreResolvePublication';
 import { withResolutionLock } from './withResolutionLock';
 import type { GetFn, SetFn } from './types';
 
@@ -57,6 +62,7 @@ export const pushAllResolutions = (set: SetFn, get: GetFn) => {
           return { pushed: false, resolved: 0, failed: 0 };
         }
 
+        const priorRows = await listResolveThreads({ db: tauriDatabase, sessionId });
         const inMemoryOutcomes = pending.map((resolution) =>
           resolverOutcomeForThread({
             outcomes: get().resolverThreadOutcomes,
@@ -65,9 +71,21 @@ export const pushAllResolutions = (set: SetFn, get: GetFn) => {
         );
         const outcomes = pending.map(
           (resolution, index): PendingResolutionOutcome | null =>
-            inMemoryOutcomes[index]?.kind ?? resolution.outcome ?? null,
+            inMemoryOutcomes[index]?.kind ??
+            resolution.outcome ??
+            (priorRows.find((row) => row.threadId === resolution.threadId)?.disposition === 'fix'
+              ? 'resolved'
+              : null),
         );
 
+        for (const resolution of pending) {
+          await get().updateResolveThread({
+            sessionId,
+            threadId: resolution.threadId,
+            prNumber: resolution.prNumber,
+            patch: { state: 'publishing' },
+          });
+        }
         const pushNeeded = outcomes.filter((outcome) => outcome === 'resolved').length;
         let pushed = false;
         let blocked = 0;
@@ -76,6 +94,19 @@ export const pushAllResolutions = (set: SetFn, get: GetFn) => {
           pushed = push.ok;
           if (!push.ok) {
             blocked = pushNeeded;
+            for (const [index, resolution] of pending.entries()) {
+              if (outcomes[index] !== 'resolved') {
+                continue;
+              }
+              await restoreResolvePublication({
+                get,
+                sessionId,
+                threadId: resolution.threadId,
+                previous: priorRows.find((row) => row.threadId === resolution.threadId),
+                hasCommit: true,
+                error: push.error,
+              });
+            }
             void get().emitNotification(
               'error',
               'error',
@@ -170,6 +201,14 @@ export const pushAllResolutions = (set: SetFn, get: GetFn) => {
           } catch (err) {
             failed += 1;
             lastError = formatError(err);
+            await restoreResolvePublication({
+              get,
+              sessionId,
+              threadId: resolution.threadId,
+              previous: priorRows.find((row) => row.threadId === resolution.threadId),
+              hasCommit: outcome === 'resolved',
+              error: lastError,
+            });
           }
         }
 

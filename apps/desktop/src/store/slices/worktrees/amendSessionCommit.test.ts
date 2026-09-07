@@ -34,6 +34,7 @@ const setFn = () => (() => undefined) as unknown as SetFn;
 
 const getFn = (worktrees: Record<string, ReadonlyArray<string>>): GetFn =>
   (() => ({
+    sessionResolveThreads: {},
     sessions: [{ id: SESSION_ID, workspaceId: WORKSPACE_ID }],
     projects: [{ id: PROJECT_ID, workspaceId: WORKSPACE_ID, kind: 'repo', rootPath: '/tmp/repo' }],
     sessionWorktrees: worktrees,
@@ -104,6 +105,8 @@ describe('local history rewrites', () => {
 
   it('repoints outcomes and queued resolutions onto the rewritten head', async () => {
     const state = {
+      sessionResolveThreads: {},
+      updateResolveThread: vi.fn(async () => true),
       sessions: [{ id: SESSION_ID, workspaceId: WORKSPACE_ID }],
       projects: [
         { id: PROJECT_ID, workspaceId: WORKSPACE_ID, kind: 'repo', rootPath: '/tmp/repo' },

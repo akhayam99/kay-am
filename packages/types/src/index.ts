@@ -294,3 +294,10 @@ export type {
   ReviewDraftSide,
   ReviewDraftStatus,
 } from './review-draft';
+
+export type {
+  ResolveThread,
+  ResolveThreadState,
+  ResolveAttempt,
+  ResolveAttemptPhase,
+} from './resolve';

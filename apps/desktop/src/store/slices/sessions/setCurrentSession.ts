@@ -148,11 +148,14 @@ export const setCurrentSession = (set: SetFn, get: GetFn) => {
         });
     }
 
-    if (cached?.agents) {
-      // Cached: phase runs + selected agent are already in store. transcript
-      // flag still gets cleared by ChatView's selectAgent effect (cached or
-      // fresh). Nothing else to do.
-    } else {
+    if (cached?.agents === true) {
+      void get()
+        .loadResolveSession({ sessionId: id })
+        .catch((error: unknown) => {
+          console.error('[resolve] load failed', formatError(error));
+        });
+    }
+    if (cached?.agents !== true) {
       const endAgents = perf('agents+runIds');
       const endPhaseRunList = perf('agents:phaseRunList');
       const endRunIds = perf('agents:runIds');
@@ -209,7 +212,17 @@ export const setCurrentSession = (set: SetFn, get: GetFn) => {
             agentKindOverride: { ...state.agentKindOverride, ...kindOverridesFromDb },
           }));
           markDone('agents');
-          void get().hydrateResolverOutcomes(id);
+          void get()
+            .loadResolveSession({ sessionId: id })
+            .catch((error: unknown) => {
+              void get().emitNotification(
+                'error',
+                'error',
+                'could not load resolver outcomes',
+                formatError(error),
+                { sessionId: id },
+              );
+            });
           void get().loadPendingResolutions(id);
 
           if (!get().selectedAgentId[id]) {

@@ -1,5 +1,6 @@
 import {
   deletePendingResolution,
+  listResolveThreads,
   listPendingResolutionsForSession,
   queuePendingResolution,
 } from '@goodboy/db';
@@ -8,6 +9,7 @@ import type { PendingResolutionOutcome, SessionId } from '@goodboy/types';
 import { tauriDatabase } from '../../../shared/lib/db';
 import { markThreadResolvedNoPush } from './markThreadResolvedNoPush';
 import { pushSessionBranch } from './pushSessionBranch';
+import { restoreResolvePublication } from './restoreResolvePublication';
 import { withResolutionLock } from './withResolutionLock';
 import type { GetFn, SetFn } from './types';
 
@@ -66,11 +68,37 @@ export const resolveGithubThread = (set: SetFn, get: GetFn) => {
           sessionId,
           ...(workspace !== undefined && { workspaceId: workspace.id }),
         };
+        const previous = (await listResolveThreads({ db: tauriDatabase, sessionId })).find(
+          (row) => row.threadId === threadId,
+        );
         try {
           const commitSha = closure?.commitSha ?? '';
+          await get().updateResolveThread({
+            sessionId,
+            threadId,
+            prNumber: get().sessionGithub[sessionId]?.pr?.number,
+            patch: {
+              state: 'publishing',
+              ...(closure?.reply !== undefined && { replyDraft: closure.reply }),
+              ...(closure?.reason !== undefined && {
+                replyDraft: closure.reply ?? closure.reason,
+                disposition: 'no_change',
+                stateReason: `wontfix:${closure.reason}`,
+              }),
+              ...(commitSha !== '' && { commitShas: [commitSha], disposition: 'fix' }),
+            },
+          });
           if (commitSha !== '') {
             const push = await pushSessionBranch(get, sessionId);
             if (!push.ok) {
+              await restoreResolvePublication({
+                get,
+                sessionId,
+                threadId,
+                previous,
+                hasCommit: true,
+                error: push.error,
+              });
               void get().emitNotification(
                 'error',
                 'error',
@@ -135,6 +163,14 @@ export const resolveGithubThread = (set: SetFn, get: GetFn) => {
           await get().refreshSessionPrDetail(sessionId, { force: true });
           return true;
         } catch (err) {
+          await restoreResolvePublication({
+            get,
+            sessionId,
+            threadId,
+            previous,
+            hasCommit: (closure?.commitSha ?? '') !== '',
+            error: formatError(err),
+          });
           void get().emitNotification(
             'error',
             'error',

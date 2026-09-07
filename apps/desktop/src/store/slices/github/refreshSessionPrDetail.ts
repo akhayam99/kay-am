@@ -5,6 +5,7 @@ import { tauriGhRunner } from '../../../features/github/github';
 import { getSessionRepo } from '../worktrees/getSessionRepo';
 import { isActiveSessionProject } from '../worktrees/isActiveSessionProject';
 import { selectActiveProjectPrs } from './activeProjectPrs';
+import type { ResolveUpdates } from '../resolve/types';
 import type { GetFn, SetFn } from './types';
 
 type Params = {
@@ -106,6 +107,46 @@ export const refreshSessionPrDetail = (set: SetFn, get: GetFn) => {
           cwd: repo.repoRoot,
           workspaceId: session.workspaceId,
           projectId: repo.projectId,
+        });
+        await get().updateResolveThreads({
+          sessionId,
+          updates: ({ rows }) => {
+            const updates: Array<ResolveUpdates[number]> = [];
+            for (const thread of detail.comments) {
+              if (thread.resolved === undefined || thread.threadId === undefined) {
+                continue;
+              }
+              const row = rows.find((item) => item.threadId === thread.threadId);
+              if (
+                row === undefined ||
+                row.prNumber !== pr.number ||
+                (row.projectId !== null && row.projectId !== projectId) ||
+                row.githubResolved === thread.resolved
+              ) {
+                continue;
+              }
+              updates.push({
+                threadId: thread.threadId,
+                revision: row.revision,
+                patch: thread.resolved
+                  ? {
+                      state: 'closed',
+                      githubResolved: true,
+                      closedAt: Date.now(),
+                      closedSource: 'github',
+                    }
+                  : {
+                      githubResolved: false,
+                      ...(row.state === 'closed' && {
+                        state: 'open',
+                        closedAt: null,
+                        closedSource: null,
+                      }),
+                    },
+              });
+            }
+            return updates;
+          },
         });
         set((state) => {
           if (!isActiveSessionProject({ state, sessionId, projectId })) {

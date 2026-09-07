@@ -223,6 +223,17 @@ const runSpawn = async ({ set, get, sessionId, session, args }: Params): Promise
   }
 
   const kickoff = composeKickoff(planSection, baseKickoff);
+  if (resolvedKind === 'resolver') {
+    await get().recordResolveAttempt({
+      sessionId,
+      agent: inserted,
+      provider: resolvedProvider,
+      model: resolvedModel,
+      effort: resolvedEffort,
+      instructions: kickoff,
+      phase: 'queued',
+    });
+  }
   if (kickoff.length > 0) {
     if (args.deferKickoff) {
       set((s) => ({
