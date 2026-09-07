@@ -1,4 +1,5 @@
-import { EmptyState, ScrollFade, SectionHeader, Tooltip, cn } from '@goodboy/ui';
+import type { ReactNode } from 'react';
+import { Divider, EmptyState, ScrollFade, SectionHeader, Tooltip, cn } from '@goodboy/ui';
 import { Check, Plus, RotateCcw, X } from 'lucide-react';
 import type { Workflow, WorkflowId } from '@goodboy/types';
 import {
@@ -17,6 +18,7 @@ type Props = {
   readonly onSelect: (t: Workflow) => void;
   readonly onNew: () => void;
   readonly onReset: () => void;
+  readonly importSection: ReactNode;
 };
 
 export const WorkflowsRail = ({
@@ -28,6 +30,7 @@ export const WorkflowsRail = ({
   onSelect,
   onNew,
   onReset,
+  importSection,
 }: Props) => {
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -70,6 +73,10 @@ export const WorkflowsRail = ({
           </ul>
         )}
       </ScrollFade>
+
+      <Divider />
+      <div className="shrink-0 px-3 py-3">{importSection}</div>
+      <Divider />
 
       <div className="shrink-0 px-3 pb-3 pt-1">
         {confirmReset ? (

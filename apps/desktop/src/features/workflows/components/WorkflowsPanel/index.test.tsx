@@ -3,16 +3,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
-const { state } = vi.hoisted(() => ({
+const { invokeMock, state } = vi.hoisted(() => ({
+  invokeMock: vi.fn(async (_cmd: string, _args?: unknown): Promise<unknown> => undefined),
   state: {
     phaseTemplates: {} as Record<string, ReadonlyArray<unknown>>,
     stepLibrary: {} as Record<string, ReadonlyArray<unknown>>,
     providers: [] as ReadonlyArray<unknown>,
+    projects: [] as ReadonlyArray<unknown>,
     workspaces: [] as ReadonlyArray<unknown>,
     workflowStudioDrafts: {} as Record<string, unknown>,
     workflowGenerations: {} as Record<string, unknown>,
     loadPhaseTemplates: vi.fn(async () => undefined),
     loadStepLibrary: vi.fn(async () => undefined),
+    copyWorkflowFromWorkspace: vi.fn(async (_input: unknown): Promise<unknown> => undefined),
     savePhaseTemplate: vi.fn(async (_input: unknown): Promise<unknown> => undefined),
     deleteWorkflow: vi.fn(async () => undefined),
     saveStepDef: vi.fn(async () => undefined),
@@ -25,7 +28,7 @@ const { state } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(async () => undefined) }));
+vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
 
 vi.mock('@goodboy/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@goodboy/core')>();
@@ -51,16 +54,20 @@ beforeEach(() => {
   state.phaseTemplates = {};
   state.stepLibrary = {};
   state.providers = [];
+  state.projects = [];
   state.workspaces = [];
   state.workflowStudioDrafts = {};
   state.workflowGenerations = {};
   state.loadPhaseTemplates = vi.fn(async () => undefined);
   state.loadStepLibrary = vi.fn(async () => undefined);
+  state.copyWorkflowFromWorkspace = vi.fn(async (_input: unknown): Promise<unknown> => undefined);
   state.savePhaseTemplate = vi.fn(async (_input: unknown): Promise<unknown> => undefined);
   state.deleteWorkflow = vi.fn(async () => undefined);
   state.saveStepDef = vi.fn(async () => undefined);
   state.deleteStepDef = vi.fn(async () => undefined);
   state.resetWorkflows = vi.fn(async () => undefined);
+  invokeMock.mockReset();
+  invokeMock.mockResolvedValue(undefined);
 });
 afterEach(cleanup);
 
@@ -86,6 +93,56 @@ const makeWorkflow = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+const sourceProject = {
+  id: 'project-source',
+  workspaceId: 'ws-source',
+  name: 'Source project',
+  rootPath: '/source',
+  kind: 'repo',
+};
+
+const sourceWorkspace = {
+  id: 'ws-source',
+  name: 'Source workspace',
+};
+
+const makeWorkflowRow = (overrides: Record<string, unknown> = {}) => ({
+  id: 'wf-source',
+  workspaceId: 'ws-source',
+  name: 'Source review',
+  description: 'Review a change',
+  goal: 'Find regressions',
+  processText: 'Inspect the change and report findings.',
+  steps: [
+    {
+      id: 'step-source',
+      workflowId: 'wf-source',
+      libraryStepId: null,
+      role: 'reviewer',
+      ordinal: 0,
+      name: 'Review',
+      promptPrefix: 'Review the change.',
+      expectedOutput: 'Findings',
+      providerOverride: null,
+      modelOverride: null,
+      effort: 'high',
+      verbosity: 'verbose',
+      orchestratorReason: null,
+    },
+  ],
+  createdAt: '2026-09-07T12:00:00.000Z',
+  updatedAt: '2026-09-07T12:00:00.000Z',
+  deletedAt: null,
+  isPreset: true,
+  origin: 'custom',
+  ...overrides,
+});
+
+const configureSourceWorkspace = () => {
+  state.projects = [sourceProject];
+  state.workspaces = [sourceWorkspace];
+};
+
 describe('WorkflowsPanel', () => {
   it('renders the empty-state copy when no workflows exist', () => {
     renderPanel();
@@ -95,6 +152,106 @@ describe('WorkflowsPanel', () => {
   it('renders a New workflow button', () => {
     renderPanel();
     expect(screen.getByRole('button', { name: /new workflow/i })).toBeDefined();
+  });
+
+  it('shows the empty import state without another workspace', () => {
+    renderPanel();
+
+    expect(screen.getByText('No other workspaces')).toBeDefined();
+  });
+
+  it('loads workflows after selecting a source project', async () => {
+    configureSourceWorkspace();
+    invokeMock.mockResolvedValueOnce([makeWorkflowRow()]);
+    renderPanel();
+
+    expect(screen.getByRole('option', { name: 'Source project · Source workspace' })).toBeDefined();
+    fireEvent.change(screen.getByLabelText('Project'), {
+      target: { value: 'project-source' },
+    });
+
+    expect(screen.getByRole('status', { name: 'Loading workflows' })).toBeDefined();
+    expect(await screen.findByRole('option', { name: 'Source review' })).toBeDefined();
+    expect(invokeMock).toHaveBeenCalledWith('workflow_list', { workspaceId: 'ws-source' });
+  });
+
+  it('shows the empty import state when the source has no custom presets', async () => {
+    configureSourceWorkspace();
+    invokeMock.mockResolvedValueOnce([]);
+    renderPanel();
+
+    fireEvent.change(screen.getByLabelText('Project'), {
+      target: { value: 'project-source' },
+    });
+
+    expect(await screen.findByText('No workflows to import')).toBeDefined();
+  });
+
+  it('selects a source workflow and opens the imported copy', async () => {
+    configureSourceWorkspace();
+    invokeMock.mockResolvedValueOnce([makeWorkflowRow()]);
+    const imported = makeWorkflow({
+      id: 'wf-imported',
+      name: 'Source review 2',
+      workspaceId: 'ws-1',
+      origin: 'custom',
+    });
+    state.copyWorkflowFromWorkspace = vi.fn(async () => imported);
+    renderPanel();
+
+    fireEvent.change(screen.getByLabelText('Project'), {
+      target: { value: 'project-source' },
+    });
+    await screen.findByRole('option', { name: 'Source review' });
+    fireEvent.change(screen.getByLabelText('Workflow'), {
+      target: { value: 'wf-source' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+
+    await waitFor(() =>
+      expect(state.copyWorkflowFromWorkspace).toHaveBeenCalledWith({
+        sourceWorkspaceId: 'ws-source',
+        sourceWorkflowId: 'wf-source',
+        targetWorkspaceId: 'ws-1',
+      }),
+    );
+    const name = screen.getByRole('textbox', { name: 'Workflow name' }) as HTMLInputElement;
+    expect(name.value).toBe('Source review 2');
+  });
+
+  it('keeps the source selection visible when import fails', async () => {
+    configureSourceWorkspace();
+    invokeMock.mockResolvedValueOnce([makeWorkflowRow()]);
+    state.copyWorkflowFromWorkspace = vi.fn(async () => {
+      throw new Error('target database unavailable');
+    });
+    renderPanel();
+
+    fireEvent.change(screen.getByLabelText('Project'), {
+      target: { value: 'project-source' },
+    });
+    await screen.findByRole('option', { name: 'Source review' });
+    fireEvent.change(screen.getByLabelText('Workflow'), {
+      target: { value: 'wf-source' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+
+    expect(await screen.findByText("Couldn't import workflow")).toBeDefined();
+    expect(screen.getByText('target database unavailable')).toBeDefined();
+    expect(screen.getByLabelText('Workflow')).toBeDefined();
+  });
+
+  it('shows a source loading failure inline', async () => {
+    configureSourceWorkspace();
+    invokeMock.mockRejectedValueOnce(new Error('source database unavailable'));
+    renderPanel();
+
+    fireEvent.change(screen.getByLabelText('Project'), {
+      target: { value: 'project-source' },
+    });
+
+    expect(await screen.findByText("Couldn't load workflows")).toBeDefined();
+    expect(screen.getByText('source database unavailable')).toBeDefined();
   });
 
   it('loads phase templates and step library on mount', () => {
