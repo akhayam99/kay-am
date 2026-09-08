@@ -344,6 +344,15 @@ const createRequest = async ({ request }: InspectParams): Promise<MountBridgeOut
   if (mount === undefined) {
     return { ok: false, error: 'that mount is not loaded', code: 'mount_unavailable' };
   }
+  if (request.provider === 'gitlab') {
+    await get()
+      .refreshSessionMr(request.sessionId, { force: true, mountId: request.mountId })
+      .catch(() => undefined);
+  } else {
+    await get()
+      .refreshSessionPr(request.sessionId, { force: true, mountId: request.mountId })
+      .catch(() => undefined);
+  }
   const existing = await linkForBranch({
     sessionId: request.sessionId,
     mountId: request.mountId,

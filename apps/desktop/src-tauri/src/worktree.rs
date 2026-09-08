@@ -3213,6 +3213,82 @@ mod rewrite_tests {
     }
 
     #[test]
+    fn selected_split_keeps_the_parent_worktree_while_resolving_a_cherry_pick() {
+        let root = std::fs::canonicalize(init_repo("selected-split")).unwrap();
+        commit(&root, "auth.txt", "base\n", "base");
+        push_to_new_remote(&root);
+        let parent_dir = root.join(".goodboy").join("worktrees");
+        let parent = worktree_create_blocking(CreateArgs {
+            repo_path: root.to_string_lossy().into_owned(),
+            branch_prefix: "feature".to_string(),
+            slug: "eng-3240-draft".to_string(),
+            parent_dir: Some(parent_dir.to_string_lossy().into_owned()),
+            existing_branch: None,
+            fallback_ref: None,
+            base_branch: Some("main".to_string()),
+            dir_name: Some("mount-parent".to_string()),
+        })
+        .unwrap();
+        let parent_path = PathBuf::from(&parent.worktree_path);
+        let selected = commit(
+            &parent_path,
+            "auth.txt",
+            "parent auth\n",
+            "extract authentication",
+        );
+        commit(
+            &parent_path,
+            "parent-only.txt",
+            "later work\n",
+            "continue parent draft",
+        );
+        let parent_head = git_ok(&parent_path, &["rev-parse", "HEAD"]);
+        let split = worktree_create_blocking(CreateArgs {
+            repo_path: root.to_string_lossy().into_owned(),
+            branch_prefix: "feature".to_string(),
+            slug: "eng-3240-auth".to_string(),
+            parent_dir: Some(parent_dir.to_string_lossy().into_owned()),
+            existing_branch: None,
+            fallback_ref: None,
+            base_branch: Some("main".to_string()),
+            dir_name: Some("mount-split".to_string()),
+        })
+        .unwrap();
+        let split_path = PathBuf::from(&split.worktree_path);
+        commit(
+            &split_path,
+            "auth.txt",
+            "split preparation\n",
+            "prepare selected split",
+        );
+
+        assert!(super::git(&split_path, &["cherry-pick", &selected]).is_err());
+        std::fs::write(
+            split_path.join("auth.txt"),
+            "split preparation\nparent auth\n",
+        )
+        .unwrap();
+        git_ok(&split_path, &["add", "auth.txt"]);
+        git_ok(&split_path, &["cherry-pick", "--continue"]);
+
+        assert_eq!(git_ok(&parent_path, &["rev-parse", "HEAD"]), parent_head);
+        assert_eq!(
+            (
+                parent_path.join("parent-only.txt").exists(),
+                split_path.join("parent-only.txt").exists()
+            ),
+            (true, false)
+        );
+        assert_eq!(
+            (
+                git_ok(&parent_path, &["branch", "--show-current"]),
+                git_ok(&split_path, &["branch", "--show-current"])
+            ),
+            (parent.branch_name, split.branch_name)
+        );
+    }
+
+    #[test]
     fn a_session_mount_lands_under_goodboy_worktrees_and_stays_out_of_status() {
         let root = std::fs::canonicalize(init_repo("exclude-on-create")).unwrap();
         commit(&root, "base.txt", "base", "base");
@@ -3407,6 +3483,26 @@ mod teardown_tests {
 
         assert!(matches!(result, WorktreeRemovalResult::Removed { .. }));
         assert!(!target.exists());
+    }
+
+    #[test]
+    fn dependency_size_is_reported_and_disappears_after_safe_cleanup() {
+        let root = init_repo("remove-dependencies");
+        let target = add_worktree(&root, "dependencies");
+        std::fs::create_dir_all(target.join("node_modules").join("dep")).unwrap();
+        std::fs::write(
+            target.join("node_modules").join("dep").join("index.js"),
+            vec![0u8; 4096],
+        )
+        .unwrap();
+
+        let before = worktree_directory_size_blocking(target.to_string_lossy().into_owned());
+        let removed = remove(&root, &target);
+        let after = worktree_directory_size_blocking(target.to_string_lossy().into_owned());
+
+        assert!(before.size_bytes.is_some_and(|bytes| bytes >= 4096));
+        assert!(matches!(removed, WorktreeRemovalResult::Removed { .. }));
+        assert_eq!((after.exists, after.size_bytes), (false, None));
     }
 
     #[test]

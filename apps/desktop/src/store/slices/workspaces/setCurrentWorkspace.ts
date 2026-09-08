@@ -40,6 +40,7 @@ import { buildProviderSpendBreakdown } from '../budget';
 import { reconcileLoadedAgent, reconcileLoadedSessions } from '../sessions/reconcileSessionRuns';
 import { buildSessionProjectMounts } from '../worktrees/buildSessionProjectMounts';
 import { pickActiveMount } from '../project-mounts/activeMount';
+import { verifyAvailableWorktrees } from '../project-mounts/verifyAvailableWorktrees';
 import { clearPendingTurnEvents } from '../transcripts/buffer';
 import type { GetFn, SetFn } from './types';
 
@@ -127,7 +128,11 @@ export const setCurrentWorkspace = (set: SetFn, get: GetFn) => {
       const kindOverridesFromDb: Record<string, AgentKind> = {};
       const invalidActiveMountSessionIds = new Set<string>();
       for (const s of sessions) {
-        const rows = worktreesBySession.get(s.id) ?? [];
+        const rows = await verifyAvailableWorktrees({
+          sessionId: s.id,
+          candidates: worktreesBySession.get(s.id) ?? [],
+          projects,
+        });
         sessionWorktreeRecords[s.id] = rows;
         const mounts = buildSessionProjectMounts({ projects, rows });
         sessionProjectMounts[s.id] = mounts;

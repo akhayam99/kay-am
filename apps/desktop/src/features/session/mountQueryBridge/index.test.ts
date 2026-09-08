@@ -22,6 +22,8 @@ const { state, links } = vi.hoisted(() => ({
     })),
     setSessionActiveMount: vi.fn(async () => undefined),
     resolveMountBranchMismatch: vi.fn(async () => state.views[0]),
+    refreshSessionPr: vi.fn(async () => undefined),
+    refreshSessionMr: vi.fn(async () => undefined),
     createPrForSession: vi.fn(async () => undefined),
     createMrForSession: vi.fn(async () => undefined),
     createPrSeries: vi.fn(async () => ({
@@ -250,7 +252,58 @@ describe('executeMountRequest', () => {
     );
 
     expect(state.createPrForSession).not.toHaveBeenCalled();
+    expect(state.refreshSessionPr).toHaveBeenCalledWith('session-1', {
+      force: true,
+      mountId: 'mount-1',
+    });
     expect(outcome.data).toMatchObject({ number: 42, created: false, repo: 'acme/api' });
+  });
+
+  it('discovers a remotely created request on retry before attempting another creation', async () => {
+    state.refreshSessionPr.mockImplementationOnce(async () => {
+      links.push({
+        mountId: 'mount-1',
+        provider: 'github',
+        host: 'github.com',
+        repoSlug: 'acme/api',
+        prNumber: 43,
+        headBranch: 'goodboy/one',
+        url: 'https://github.com/acme/api/pull/43',
+        state: 'draft',
+      });
+    });
+
+    const outcome = await executeMountRequest(
+      request({
+        provider: 'github',
+        verb: 'create-request',
+        args: { title: 'part one', body: 'the first slice' },
+      }),
+    );
+
+    expect(state.createPrForSession).not.toHaveBeenCalled();
+    expect(outcome.data).toMatchObject({ number: 43, created: false });
+  });
+
+  it('keeps a provider action bound to its mount after another mount is activated', async () => {
+    await executeMountRequest(request({ verb: 'activate', mountId: 'mount-2', args: {} }));
+
+    await executeMountRequest(
+      request({
+        provider: 'github',
+        verb: 'create-request',
+        mountId: 'mount-1',
+        args: { title: 'part one', body: 'the first slice' },
+      }),
+    );
+
+    expect(state.setSessionActiveMount).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      mountId: 'mount-2',
+    });
+    expect(state.createPrForSession).toHaveBeenCalledWith(
+      expect.objectContaining({ mountId: 'mount-1' }),
+    );
   });
 
   it('reports a created request that could not be read back as still uncertain', async () => {

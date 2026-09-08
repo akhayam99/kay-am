@@ -163,3 +163,223 @@ That is what suppresses the block on Windows, where nothing ever binds, and
 before the listener is up or after it is gone. The two can still disagree only
 inside the instant between composing a prompt and spawning the child, and the
 cost of losing that race is a command the agent is told about for one turn.
+
+## Mount workflow
+
+Start by reading the mounts. A spawned turn already has the workspace, session,
+mount and run ids in `GOODBOY_WORKSPACE_ID`, `GOODBOY_SESSION_ID`,
+`GOODBOY_MOUNT_ID` and `GOODBOY_RUN_ID`. Pass `--mount` whenever the command
+should address a mount other than the one bound to the turn.
+
+```
+"$GOODBOY_BIN" query mount list --json
+"$GOODBOY_BIN" query mount inspect --mount <mount-id> --size --json
+```
+
+`mount list` returns mount records with this shape:
+
+```json
+{
+  "mountId": "<uuid>",
+  "sessionId": "<uuid>",
+  "projectId": "<uuid>",
+  "mountName": "api",
+  "branch": "ak/eng-3240-auth",
+  "baseBranch": "origin/main",
+  "mountPath": "/path/to/.goodboy/worktrees/<name>-<uuid>",
+  "isAttached": true,
+  "diskState": "present",
+  "revision": 3
+}
+```
+
+`mount inspect` adds `head`, `safety` and optional `size` objects. Check
+`head.matchesMount` before changing files. Check `safety.canRemove` and its
+`blockers` before asking to remove a directory.
+
+Fork when both lines of work must remain. The new branch is cut from the named
+base, and the source mount, directory, branch and request links do not change.
+
+```
+"$GOODBOY_BIN" query mount fork \
+  --mount <source-mount-id> \
+  --branch ak/eng-3240-auth \
+  --base origin/main \
+  --reason "split authentication into its own request" \
+  --request-id eng-3240-auth-fork \
+  --json
+```
+
+The response names `sourceMountId`, the new `mount`, its `operationId`, and
+`requiresNewTurn: true`. Stop work in the current turn after a successful fork.
+Goodboy queues one continuation turn bound to the new mount and directory. That
+turn is told that uncommitted files from the source are absent, so it can
+cherry-pick the selected commits and resolve conflicts there.
+
+Switch only when the current mount is the same line of work on a different
+branch.
+
+```
+"$GOODBOY_BIN" query mount switch \
+  --mount <mount-id> \
+  --branch ak/eng-3240-follow-up \
+  --create \
+  --reason "continue this mount on the follow-up branch" \
+  --request-id eng-3240-follow-up-switch \
+  --json
+```
+
+The response keeps the same `mountId` and `mountPath`, and includes
+`previousBranch`. Request links on the previous branch remain historical.
+`mount activate --mount <mount-id> --request-id <id>` changes only the mount for
+the next turn. It does not redirect a running or queued git or provider action,
+because those actions retain the mount id and revision captured when they were
+queued.
+
+## Mismatch recovery
+
+A raw `git checkout`, `git switch`, or detached HEAD never rewrites stored
+ownership. Inspection records the mismatch and mount-scoped writes refuse with
+`branch_mismatch`. Choose one interpretation explicitly:
+
+```
+"$GOODBOY_BIN" query mount resolve \
+  --mount <mount-id> \
+  --intent switch \
+  --reason "the checkout replaced this line of work" \
+  --request-id resolve-eng-3240-switch \
+  --json
+
+"$GOODBOY_BIN" query mount resolve \
+  --mount <mount-id> \
+  --intent fork \
+  --reason "both the recorded and checked out branches must survive" \
+  --request-id resolve-eng-3240-fork \
+  --json
+```
+
+`switch` adopts the observed branch on the existing mount. `fork` adopts it on
+the existing directory and creates a second mount for the previously recorded
+branch. Both return the resulting `mounts` array. Finish an in-progress merge,
+rebase or cherry-pick before resolving a mismatch.
+
+## Pull requests and series
+
+Request creation is always mount-scoped. Goodboy refreshes the provider before
+creation, so retrying after the remote accepted a request but before the local
+answer arrived discovers and attaches the existing request.
+
+```
+"$GOODBOY_BIN" query github pr-create \
+  --mount <mount-id> \
+  --title "Extract authentication" \
+  --body "Moves the authentication boundary." \
+  --base main \
+  --reference-mode part-of \
+  --request-id eng-3240-auth-pr \
+  --json
+
+"$GOODBOY_BIN" query gitlab mr-create \
+  --mount <mount-id> \
+  --title "Extract authentication" \
+  --body "Moves the authentication boundary." \
+  --base main \
+  --reference-mode part-of \
+  --request-id eng-3240-auth-mr \
+  --json
+```
+
+The result contains `mountId`, `provider`, `host`, `repo`, `number`, `url`,
+`state` and `created`. GitHub and GitLab requests are drafts unless `--ready` is
+passed. Bitbucket request reads are mount-aware, but the app has no Bitbucket
+creation path.
+
+Declare a split and its order instead of asking Goodboy to infer a stack from
+git:
+
+```
+"$GOODBOY_BIN" query series create \
+  --project api \
+  --name "ENG-3240 split" \
+  --total 6 \
+  --work-item ENG-3240 \
+  --parent-provider github \
+  --parent-host github.com \
+  --parent-repo acme/api \
+  --parent-number 90 \
+  --request-id eng-3240-series \
+  --json
+
+"$GOODBOY_BIN" query series set-member \
+  --series <series-id> \
+  --position 1 \
+  --mount <mount-id> \
+  --request-id eng-3240-series-1 \
+  --json
+
+"$GOODBOY_BIN" query series set-member \
+  --series <series-id> \
+  --position 5 \
+  --request-id eng-3240-series-5 \
+  --json
+
+"$GOODBOY_BIN" query series list --project api --json
+```
+
+A member with a mount is active. One without `--mount` is a planned position.
+Generated request text for a series member includes `Part of ENG-3240` and its
+declared position. It never adds a closing reference for that series.
+
+## Retry and cleanup
+
+Reuse the exact `--request-id` after a timeout. Do not invent a second id for the
+same attempted mutation. Read the operation before deciding what to do next:
+
+```
+"$GOODBOY_BIN" query mount operation --request-id eng-3240-auth-fork --json
+```
+
+A timeout can return `operation_pending` because the filesystem or provider may
+already have changed. Startup recovery reconciles recorded operations with the
+worktree and database. The same completed request id returns the original
+result, while the same id with different input is refused with
+`request_conflict`.
+
+Unmount through the bridge instead of deleting a folder:
+
+```
+"$GOODBOY_BIN" query mount unmount \
+  --mount <mount-id> \
+  --reason "merged and approved for cleanup" \
+  --request-id eng-3240-auth-unmount \
+  --json
+```
+
+The response reports `disposition` as `removed`, `missing`, or `kept`, plus a
+reason when kept. Cleanup counts dependency directories in its size estimate.
+It refuses a running agent, bound terminal, writer lease, lock, git operation,
+or dirty tracked and untracked work. Archive, delete, Settings cleanup, merge
+cleanup, unmount and orphan cleanup use this same policy. If a dirty directory
+must be detached, Goodboy retains a path ownership record so it remains visible
+for later cleanup. Removing a worktree never deletes its local branch. An
+unmounted mount can be attached again from that preserved branch.
+
+## Recovery limits
+
+Mount rows, request links, operations and series survive restart. A missing
+folder is marked unavailable during hydration and restoration and is never
+offered as a runnable mount. If the branch still exists, `mount attach` can
+recreate its worktree.
+
+Historical pull requests that were already lost from the database cannot be
+reconstructed by the migration. Recover them only after a verified provider
+lookup identifies the provider, host, repository, request number and head
+branch, then attach that identity to the chosen mount and branch explicitly.
+Branch names alone do not prove the user's earlier intent.
+
+The current transport uses Unix domain sockets and therefore runs only on macOS
+and Linux. Windows does not advertise or serve the bridge. The socket exists
+only while its owning Goodboy process is running, belongs to the current OS
+user, is local to one machine, and cannot continue an operation while the app
+is stopped. Very long state-directory paths can also hit the platform's Unix
+socket path-length limit before a listener can bind.

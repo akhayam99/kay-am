@@ -46,7 +46,12 @@ export const forkMount = (set: SetFn, get: GetFn) => {
           kind: 'fork',
           mountId: generatedMountId,
           expectedRevision: 0,
-          input: { projectId, repoRoot: project.rootPath },
+          input: {
+            projectId,
+            repoRoot: project.rootPath,
+            baseBranch: input.baseBranch ?? project.baseBranch ?? null,
+            mountName: input.mountName ?? project.name,
+          },
         });
         const reused = reusableMountOperationResult({
           operation,

@@ -1,70 +1,15 @@
-import type { IsoDateTime, MountId, Project, Session, SessionId } from '@goodboy/types';
+import type { Session, SessionId } from '@goodboy/types';
 import {
-  getSessionMount,
   listWorktreesForSession,
   unarchiveSession as unarchiveSessionInDb,
   updateSessionActiveProject,
-  updateSessionMountLifecycle,
-  type SessionWorktree,
 } from '@goodboy/db';
 import { tauriDatabase } from '../../../shared/lib/db';
-import { inspectWorktree } from '../../../features/worktree/worktree';
 import { invokeAgentList, invokeWorkflowsForSession } from '../../../features/workflows/workflows';
 import { buildSessionProjectMounts } from '../worktrees/buildSessionProjectMounts';
 import { pickActiveMount } from '../project-mounts/activeMount';
+import { verifyAvailableWorktrees } from '../project-mounts/verifyAvailableWorktrees';
 import type { GetFn, SetFn } from './types';
-
-type VerifyParams = {
-  readonly sessionId: SessionId;
-  readonly rows: ReadonlyArray<SessionWorktree>;
-  readonly projects: ReadonlyArray<Project>;
-};
-
-const verifyRestoredMounts = async ({
-  sessionId,
-  rows,
-  projects,
-}: VerifyParams): Promise<ReadonlyArray<SessionWorktree>> => {
-  const usable: Array<SessionWorktree> = [];
-  for (const row of rows) {
-    const project = projects.find((candidate) => candidate.id === row.projectId);
-    if (project === undefined || project.kind !== 'repo') {
-      usable.push(row);
-      continue;
-    }
-    const inspection = await inspectWorktree({
-      repoPath: project.rootPath,
-      worktreePath: row.worktreePath,
-    }).catch(() => null);
-    if (inspection === null) {
-      continue;
-    }
-    if (inspection.kind === 'registered' && !inspection.isMain) {
-      usable.push(row);
-      continue;
-    }
-    if (inspection.kind !== 'missing') {
-      continue;
-    }
-    const stored = await getSessionMount({
-      db: tauriDatabase,
-      sessionId,
-      mountId: row.id as MountId,
-    }).catch(() => null);
-    const mountRevision = stored?.revision ?? 0;
-    await updateSessionMountLifecycle({
-      db: tauriDatabase,
-      sessionId,
-      mountId: row.id as MountId,
-      worktreePath: null,
-      isAttached: false,
-      diskState: 'missing',
-      expectedRevision: mountRevision,
-      updatedAt: new Date().toISOString() as IsoDateTime,
-    }).catch(() => undefined);
-  }
-  return usable;
-};
 
 export const unarchiveTask = (set: SetFn, get: GetFn) => {
   return async (sessionId: SessionId) => {
@@ -115,7 +60,11 @@ export const unarchiveTask = (set: SetFn, get: GetFn) => {
         invokeWorkflowsForSession(sessionId).catch(() => []),
       ]);
       const projects = get().projects.filter((project) => project.workspaceId === workspaceId);
-      const worktreeRows = await verifyRestoredMounts({ sessionId, rows: storedRows, projects });
+      const worktreeRows = await verifyAvailableWorktrees({
+        sessionId,
+        candidates: storedRows,
+        projects,
+      });
       const mounts = buildSessionProjectMounts({ projects, rows: worktreeRows });
       const storedActiveProjectId = restoredSession.activeProjectId;
       const hasStoredActiveProjectId =
