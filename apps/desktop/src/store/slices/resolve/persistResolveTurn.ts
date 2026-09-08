@@ -2,7 +2,9 @@ import {
   listOpenQuestionsForSession,
   insertResolveAttempt,
   listResolveAttempts,
+  listResolveQueueItems,
   listResolveThreads,
+  insertResolveQueueItem,
   setResolveAttemptPhase,
   upsertResolveThread,
 } from '@goodboy/db';
@@ -120,12 +122,51 @@ export const persistResolveTurn = async ({
     await setResolveAttemptPhase({ db, id: attempt.id, phase: waiting ? 'waiting' : 'finished' });
   }
   if (!isCandidate) {
+    const updatedRows = await listResolveThreads({ db, sessionId });
+    const queueItems = await listResolveQueueItems({ db, sessionId });
+    const queuedThreadIds = new Set(queueItems.map(({ thread }) => thread.threadId));
+    for (const row of updatedRows) {
+      if (
+        !owned.includes(row.threadId) ||
+        row.disposition === null ||
+        queuedThreadIds.has(row.threadId)
+      ) {
+        continue;
+      }
+      const now = Date.now();
+      await insertResolveQueueItem({
+        db,
+        item: {
+          id: crypto.randomUUID(),
+          sessionId,
+          threadId: row.threadId,
+          generation: 0,
+          reopenedFromItemId: null,
+          candidateRevision: row.revision,
+          approvalState: 'none',
+          approvedRevision: null,
+          approvedReplyHash: null,
+          deferredAt: null,
+          deliveredAt: null,
+          supersededAt: null,
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
+    }
     projectResolveRows({
       set,
       get,
       sessionId,
-      rows: await listResolveThreads({ db, sessionId }),
+      rows: updatedRows,
       attempts: await listResolveAttempts({ db, sessionId }),
     });
+    const refreshedQueueItems = await listResolveQueueItems({ db, sessionId });
+    set((state) => ({
+      sessionResolveQueueItems: {
+        ...state.sessionResolveQueueItems,
+        [sessionId]: refreshedQueueItems,
+      },
+    }));
   }
 };

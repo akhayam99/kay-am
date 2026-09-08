@@ -1,5 +1,6 @@
 import {
   insertResolvePublication,
+  listResolveQueueItems,
   listResolveThreads,
   upsertResolvePublicationThread,
 } from '@goodboy/db';
@@ -7,6 +8,7 @@ import type {
   BranchCommit,
   PublicationBlocker,
   ResolvePublication,
+  ResolvePublicationExclusion,
   ResolvePublicationPreview,
   ResolvePublicationThread,
   ResolveThread,
@@ -191,7 +193,25 @@ export const preparePublication = async ({
   const target = publicationTarget({ get, sessionId });
   const repo = getSessionRepo({ get, sessionId });
   const rows = await listResolveThreads({ db: tauriDatabase, sessionId });
-  const { publishable, excluded } = selectPublishableThreads({ rows, threadIds });
+  const queueItems = await listResolveQueueItems({ db: tauriDatabase, sessionId });
+  const validApprovals = new Set(
+    queueItems.flatMap(({ item, thread }) =>
+      item.approvalState === 'accepted' &&
+      item.approvedRevision === thread.revision &&
+      item.candidateRevision === item.approvedRevision &&
+      item.deliveredAt === null
+        ? [thread.threadId]
+        : [],
+    ),
+  );
+  const selection = selectPublishableThreads({ rows, threadIds });
+  const invalid = selection.publishable.filter((row) => !validApprovals.has(row.threadId));
+  const publishable = selection.publishable.filter((row) => validApprovals.has(row.threadId));
+  const invalidExclusions: ReadonlyArray<ResolvePublicationExclusion> = invalid.map((row) => ({
+    threadId: row.threadId,
+    reason: 'not_ready',
+  }));
+  const excluded = [...selection.excluded, ...invalidExclusions];
   const isAttributed = isSessionAttributionEnabled({ get, sessionId });
   const frozen: ReadonlyArray<FrozenReply> = publishable.map((row) => {
     const closure = closureOf({ row });
