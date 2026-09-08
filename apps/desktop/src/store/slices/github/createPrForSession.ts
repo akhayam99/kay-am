@@ -1,16 +1,25 @@
 import { detectRepoSlug } from '@goodboy/core';
-import { upsertMountPullRequestLink } from '@goodboy/db';
-import type { IsoDateTime, MountId, MountPullRequestLink, SessionId } from '@goodboy/types';
+import { findPrSeriesMembership, upsertMountPullRequestLink } from '@goodboy/db';
+import type {
+  IsoDateTime,
+  MountId,
+  MountPullRequestLink,
+  PrSeriesMembership,
+  SessionExternalTask,
+  SessionId,
+} from '@goodboy/types';
 import { tauriGhRunner } from '../../../features/github/github';
 import { appendClosingReferences } from '../../../features/github/appendClosingReferences';
 import { closingIssueReferences } from '../../../features/github/closingIssueReferences';
+import { partOfReferences } from '../../../features/github/partOfReferences';
+import { seriesReferenceLines } from '../pr-series/seriesReferences';
 import { tauriDatabase } from '../../../shared/lib/db';
 import { mountRequestEventPayload } from '../project-mounts/mountRequests';
 import { githubRequestHost } from './mountPrLink';
 import { resolveSessionPrFetch } from './resolveSessionPrFetch';
 import type { GetFn, SetFn } from './types';
 
-export type CreatePrReferenceMode = 'closing' | 'none';
+export type CreatePrReferenceMode = 'closing' | 'part-of' | 'none';
 
 export type CreatePrInput = {
   readonly sessionId: SessionId;
@@ -26,6 +35,29 @@ const PR_URL = /\/pull\/(\d+)(?:$|[?#/])/;
 
 type ParseParams = {
   readonly stdout: string;
+};
+
+type SeriesLineParams = {
+  readonly membership: PrSeriesMembership | null;
+  readonly tasks: ReadonlyArray<SessionExternalTask>;
+  readonly branch: string;
+  readonly body: string;
+};
+
+const partOfLines = ({
+  membership,
+  tasks,
+  branch,
+  body,
+}: SeriesLineParams): ReadonlyArray<string> => {
+  const fromSeries =
+    membership === null
+      ? []
+      : seriesReferenceLines({ series: membership.series, member: membership.member, body });
+  const fromTasks = partOfReferences({ tasks, branch, body }).filter(
+    (line) => !fromSeries.includes(line),
+  );
+  return [...fromTasks, ...fromSeries];
 };
 
 const parseCreatedPrUrl = ({ stdout }: ParseParams): string | null => {
@@ -83,7 +115,14 @@ export const createPrForSession = (_set: SetFn, get: GetFn) => {
       throw new Error('No GitHub repository is linked to this mount.');
     }
     const linkedTasks = get().sessionExternalTasks[sessionId] ?? [];
-    const references = referenceMode === 'none' ? [] : linkedTasks;
+    const membership = await findPrSeriesMembership({
+      db: tauriDatabase,
+      sessionId,
+      mountId: mount.id,
+      branch: mount.branch,
+    });
+    const mode = referenceMode ?? (membership === null ? 'closing' : 'part-of');
+    const references = mode === 'closing' ? linkedTasks : [];
     const projectBaseBranch = get().projects.find(
       (project) => project.id === mount.projectId,
     )?.baseBranch;
@@ -102,6 +141,15 @@ export const createPrForSession = (_set: SetFn, get: GetFn) => {
             branch: mount.branch,
             body: filledBody,
           }),
+          lines:
+            mode === 'part-of'
+              ? partOfLines({
+                  membership,
+                  tasks: linkedTasks,
+                  branch: mount.branch,
+                  body: filledBody,
+                })
+              : [],
         }),
       );
     } else {
@@ -160,7 +208,7 @@ export const createPrForSession = (_set: SetFn, get: GetFn) => {
     }
     await get().refreshSessionPr(sessionId, { force: true, mountId: mount.id });
     const created = get().mountGithub?.[mount.id]?.pr ?? null;
-    if (!hasFields && created !== null && referenceMode !== 'none') {
+    if (!hasFields && created !== null && mode === 'closing') {
       const filledReferences = closingIssueReferences({
         tasks: linkedTasks,
         branch: mount.branch,

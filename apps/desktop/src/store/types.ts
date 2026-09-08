@@ -2,6 +2,7 @@ import type { ResolveState } from './slices/resolve/state';
 import type { OrphanWorktree } from '../features/worktree/worktree';
 import type { StorageStats } from './slices/storage';
 import type { MountCleanupState } from './slices/mount-cleanup/state';
+import type { PrSeriesState } from './slices/pr-series/state';
 import type { Notification, NotificationCounts, TelemetrySummary } from '@goodboy/db';
 import type {
   Agent,
@@ -268,6 +269,7 @@ export type AppState = AppSliceState & {
   readonly sessionActiveMount: Readonly<Record<string, MountId | null>>;
   readonly mountCleanupProposals: MountCleanupState['mountCleanupProposals'];
   readonly retainedWorktreePaths: MountCleanupState['retainedWorktreePaths'];
+  readonly prSeries: PrSeriesState['prSeries'];
   readonly sessionLanguageAnchor: Readonly<Record<SessionId, string>>;
   readonly sessionActiveProject: Readonly<Record<string, ProjectId>>;
   readonly sessionBranches: Readonly<Record<string, string>>;

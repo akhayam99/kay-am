@@ -4,6 +4,7 @@ mod github;
 pub mod mount;
 pub mod project;
 pub mod protocol;
+mod series;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;

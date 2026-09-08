@@ -35,6 +35,7 @@ vi.mock('../../../features/worktree/worktree', () => ({
 }));
 
 vi.mock('@goodboy/db', () => ({
+  findPrSeriesMembership: vi.fn(async () => null),
   listMountPullRequestLinks: vi.fn(async ({ mountId }: { readonly mountId: MountId }) =>
     h.links.filter((link) => link.mountId === mountId),
   ),

@@ -62,6 +62,9 @@ import type {
   WorkspaceIntegrationProvider,
   MountCleanupProposal,
   MountId,
+  PrSeries,
+  PrSeriesMember,
+  PrSeriesView,
   ProjectScriptId,
   GhTokenStatus,
   PrMergeMethod,
@@ -179,6 +182,12 @@ import type { AdoptProjectResult } from './slices/projects/adoptProject';
 import { createProjectMountsSlice } from './slices/project-mounts';
 import { projectMountsInitialState } from './slices/project-mounts/state';
 import { createMountCleanupSlice, mountCleanupInitialState } from './slices/mount-cleanup';
+import { createPrSeriesSlice, prSeriesInitialState } from './slices/pr-series';
+import type {
+  CreatePrSeriesInput,
+  LoadPrSeriesInput,
+  SetPrSeriesMemberInput,
+} from './slices/pr-series';
 import type { ArchiveTaskOptions } from './slices/sessions/types';
 import type {
   CleanupSessionMountsInput,
@@ -440,6 +449,9 @@ type AppActions = {
     input: SessionCleanupKeyInput,
   ): Promise<ReadonlyArray<MountCleanupProposal>>;
   resolveMountCleanup(input: ResolveMountCleanupInput): Promise<void>;
+  createPrSeries(input: CreatePrSeriesInput): Promise<PrSeries>;
+  setPrSeriesMember(input: SetPrSeriesMemberInput): Promise<PrSeriesMember>;
+  loadPrSeries(input: LoadPrSeriesInput): Promise<ReadonlyArray<PrSeriesView>>;
   linkSessionExternalTask(
     sessionId: SessionId,
     task: Omit<SessionExternalTask, 'sessionId'>,
@@ -987,6 +999,7 @@ export const initialState: AppState = {
   sessionProjectMounts: {},
   ...projectMountsInitialState,
   ...mountCleanupInitialState,
+  ...prSeriesInitialState,
   sessionLanguageAnchor: {},
   sessionActiveProject: {},
   sessionBranches: {},
@@ -1117,6 +1130,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   ...createProjectsSlice(set, get),
   ...createProjectMountsSlice(set, get),
   ...createMountCleanupSlice(set, get),
+  ...createPrSeriesSlice(set, get),
   ...createPresenceSlice(set, get),
   ...createTurnSlice(set, get),
   ...createWorktreesSlice(set, get),

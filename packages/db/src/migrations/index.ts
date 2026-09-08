@@ -2,6 +2,7 @@ import { m140ResolveOutcomes } from './m140-resolve-outcomes';
 import { m141AttributionFooter } from './m141-attribution-footer';
 import { m142SessionMountLifecycle } from './m142-session-mount-lifecycle';
 import { m143SessionEventPrDiscovered } from './m143-session-event-pr-discovered';
+import { m144PrSeries } from './m144-pr-series';
 import { m001Initial } from './m001-initial';
 import { m002TelemetryKind } from './m002-telemetry-kind';
 import { m003SessionProvider } from './m003-session-provider';
@@ -291,4 +292,5 @@ export const migrations: ReadonlyArray<Migration> = [
   { version: 141, sql: m141AttributionFooter },
   { version: 142, sql: m142SessionMountLifecycle },
   { version: 143, sql: m143SessionEventPrDiscovered },
+  { version: 144, sql: m144PrSeries },
 ];

@@ -217,6 +217,14 @@ export {
   upsertMountPullRequestLink,
 } from './queries/mount-pr-link';
 export {
+  findPrSeriesMembership,
+  getPrSeries,
+  insertPrSeries,
+  listPrSeries,
+  listPrSeriesMembers,
+  upsertPrSeriesMember,
+} from './queries/pr-series';
+export {
   deleteRetainedWorktreePath,
   insertRetainedWorktreePath,
   listAllRetainedWorktreePaths,

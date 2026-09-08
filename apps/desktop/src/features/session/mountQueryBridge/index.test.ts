@@ -24,6 +24,21 @@ const { state, links } = vi.hoisted(() => ({
     resolveMountBranchMismatch: vi.fn(async () => state.views[0]),
     createPrForSession: vi.fn(async () => undefined),
     createMrForSession: vi.fn(async () => undefined),
+    createPrSeries: vi.fn(async () => ({
+      id: 'series-1',
+      projectId: 'p-api',
+      name: 'restyle',
+      plannedCount: 6,
+    })),
+    setPrSeriesMember: vi.fn(async () => ({
+      id: 'member-3',
+      seriesId: 'series-1',
+      ordinal: 3,
+      mountId: 'mount-1',
+      branch: 'goodboy/one',
+      status: 'active',
+    })),
+    loadPrSeries: vi.fn(async () => []),
   },
 }));
 
@@ -275,5 +290,79 @@ describe('mountResult', () => {
       diskState: 'present',
       revision: 2,
     });
+  });
+});
+
+describe('the series verbs', () => {
+  it('creates a series for the project the caller named', async () => {
+    const outcome = await executeMountRequest({
+      id: 'handoff-9',
+      provider: 'series',
+      verb: 'create',
+      sessionId: 'session-1' as SessionId,
+      projectId: 'p-api' as ProjectId,
+      mountId: null,
+      requestId: 'req-9',
+      args: { name: 'restyle', total: 6, workItem: 'ENG-3240' },
+    });
+
+    expect(state.createPrSeries).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: 'p-api', name: 'restyle', plannedCount: 6 }),
+    );
+    expect(outcome.data).toEqual({
+      seriesId: 'series-1',
+      projectId: 'p-api',
+      name: 'restyle',
+      plannedCount: 6,
+    });
+  });
+
+  it('refuses to create a series without a project', async () => {
+    const outcome = await executeMountRequest({
+      id: 'handoff-10',
+      provider: 'series',
+      verb: 'create',
+      sessionId: 'session-1' as SessionId,
+      projectId: null,
+      mountId: null,
+      requestId: 'req-10',
+      args: { name: 'restyle' },
+    });
+
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error).toContain('--project');
+  });
+
+  it('puts the named mount at the position the caller gave', async () => {
+    const outcome = await executeMountRequest({
+      id: 'handoff-11',
+      provider: 'series',
+      verb: 'set-member',
+      sessionId: 'session-1' as SessionId,
+      projectId: 'p-api' as ProjectId,
+      mountId: 'mount-1' as MountId,
+      requestId: 'req-11',
+      args: { series: 'series-1', position: 3 },
+    });
+
+    expect(state.setPrSeriesMember).toHaveBeenCalledWith(
+      expect.objectContaining({ seriesId: 'series-1', position: 3, mountId: 'mount-1' }),
+    );
+    expect(outcome.data).toMatchObject({ position: 3, status: 'active' });
+  });
+
+  it('refuses an unknown series verb rather than guessing one', async () => {
+    const outcome = await executeMountRequest({
+      id: 'handoff-12',
+      provider: 'series',
+      verb: 'reorder',
+      sessionId: 'session-1' as SessionId,
+      projectId: 'p-api' as ProjectId,
+      mountId: null,
+      args: {},
+    });
+
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error).toContain('reorder');
   });
 });

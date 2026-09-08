@@ -67,6 +67,7 @@ const mountCommandLines = ({
     'A fork or an attach only takes effect on the next turn: this process keeps the directory and the write permissions it was started with. Work in the returned mount on that next turn, then cherry-pick what belongs there and resolve conflicts normally.',
     'Use `mount switch --mount <id> --branch <name>` only when you intend to replace THIS mount current branch. Pull requests stay linked to the mount, so earlier ones become history rather than moving with the branch.',
     'Push and open requests through the mount-scoped commands: `"$GOODBOY_BIN" query github push --mount <id>` and `"$GOODBOY_BIN" query github pr-create --mount <id> --title "<title>"`.',
+    'When one change ships as several ordered requests, group them: `"$GOODBOY_BIN" query series create --project <name> --name "<series>" --total <n> --request-id <unique>`, then `series set-member --series <id> --position <n> --mount <id> --request-id <unique>` for each one, and `series list` to read them back. The order is yours to declare, Goodboy never reads it out of git, and members carry `Part of` instead of a closing reference.',
     'NEVER use a raw `git checkout -b` as a way of declaring a fork. Goodboy reads an unexpected HEAD as a mismatch to resolve, never as intent, and refuses to guess whether you meant a switch or a fork.',
   ];
 };

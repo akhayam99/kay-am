@@ -165,6 +165,9 @@ pub async fn dispatch(app: &AppHandle, request: &QueryRequest) -> Result<Value, 
     if request.provider == "mount" {
         return super::mount::dispatch(app, &scope, &request.verb).await;
     }
+    if request.provider == "series" {
+        return super::series::dispatch(app, &scope, &request.verb).await;
+    }
     if request.provider != "github" {
         ensure_connected(app, &request.workspace_id, &request.provider)?;
     }
@@ -1008,6 +1011,7 @@ mod tests {
 
     const READ_VERBS: &[(&str, &str)] = &[
         ("mount", "list"),
+        ("series", "list"),
         ("mount", "inspect"),
         ("mount", "operation"),
         ("linear", "issue"),
@@ -1059,6 +1063,8 @@ mod tests {
         ("mount", "unmount"),
         ("mount", "activate"),
         ("mount", "resolve"),
+        ("series", "create"),
+        ("series", "set-member"),
         ("linear", "comment-create"),
         ("linear", "issue-update"),
         ("github", "pr-comment-create"),

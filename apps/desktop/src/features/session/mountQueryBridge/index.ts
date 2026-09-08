@@ -19,6 +19,7 @@ import { queueMountContinuation } from '../../../store/slices/turn/mountContinua
 import { tauriDatabase } from '../../../shared/lib/db';
 import { useAppStore } from '../../../store/store';
 import { isMainWindow } from '../../workspace/window';
+import { executeSeriesRequest, type SeriesBridgeRequest } from './series';
 
 const MOUNT_EVENT = 'query-bridge://mount-command';
 
@@ -35,6 +36,8 @@ export type MountBridgeRequest = {
   readonly reason?: string;
   readonly args: BridgeArgs;
 };
+
+export type BridgeRequest = MountBridgeRequest | SeriesBridgeRequest;
 
 export type MountBridgeOutcome = {
   readonly ok: boolean;
@@ -323,6 +326,18 @@ const linkResult = ({
   created,
 });
 
+const requestReferenceMode = ({
+  args,
+}: {
+  readonly args: BridgeArgs;
+}): 'closing' | 'part-of' | 'none' => {
+  const raw = text({ args, key: 'referenceMode' });
+  if (raw === 'closes') {
+    return 'closing';
+  }
+  return raw === 'none' ? 'none' : 'part-of';
+};
+
 const createRequest = async ({ request }: InspectParams): Promise<MountBridgeOutcome> => {
   const get = useAppStore.getState;
   const mount = await loadedMount(request);
@@ -341,6 +356,7 @@ const createRequest = async ({ request }: InspectParams): Promise<MountBridgeOut
   const draft = !truthy({ args: request.args, key: 'ready' });
   const title = text({ args: request.args, key: 'title' });
   const body = text({ args: request.args, key: 'body' });
+  const referenceMode = requestReferenceMode({ args: request.args });
   if (request.provider === 'gitlab') {
     await get().createMrForSession({
       sessionId: request.sessionId,
@@ -348,6 +364,7 @@ const createRequest = async ({ request }: InspectParams): Promise<MountBridgeOut
       title,
       description: body,
       draft,
+      referenceMode,
       ...(base === '' ? {} : { targetBranch: base }),
     });
   } else {
@@ -357,8 +374,7 @@ const createRequest = async ({ request }: InspectParams): Promise<MountBridgeOut
       title,
       body,
       draft,
-      referenceMode:
-        text({ args: request.args, key: 'referenceMode' }) === 'closes' ? 'closing' : 'none',
+      referenceMode,
       ...(base === '' ? {} : { base }),
     });
   }
@@ -377,10 +393,11 @@ const createRequest = async ({ request }: InspectParams): Promise<MountBridgeOut
   return { ok: true, data: linkResult({ link, created: true }) };
 };
 
-export const executeMountRequest = async (
-  request: MountBridgeRequest,
-): Promise<MountBridgeOutcome> => {
+export const executeMountRequest = async (request: BridgeRequest): Promise<MountBridgeOutcome> => {
   try {
+    if (request.provider === 'series') {
+      return await executeSeriesRequest({ request });
+    }
     if (request.verb === 'create-request') {
       return await createRequest({ request });
     }
@@ -412,7 +429,7 @@ export const listenMountCommands = async (): Promise<UnlistenFn> => {
   if (!inTauri() || !isMainWindow()) {
     return () => undefined;
   }
-  return listen<MountBridgeRequest>(MOUNT_EVENT, (event) => {
+  return listen<BridgeRequest>(MOUNT_EVENT, (event) => {
     const request = event.payload;
     void executeMountRequest(request)
       .then((result) =>

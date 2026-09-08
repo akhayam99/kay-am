@@ -7,6 +7,8 @@ export type {
   MessageId,
   MountId,
   OpenQuestionId,
+  PrSeriesId,
+  PrSeriesMemberId,
   ProjectId,
   ProjectScriptId,
   PermissionRequestId,
@@ -44,6 +46,14 @@ export type {
   SessionMount,
   SessionMountView,
 } from './mount';
+export type {
+  PrSeries,
+  PrSeriesMember,
+  PrSeriesMemberStatus,
+  PrSeriesMemberView,
+  PrSeriesMembership,
+  PrSeriesView,
+} from './pr-series';
 export type { FileVersion, FileVersionChangeKind, FileVersionSnapshotSource } from './file-version';
 export type { IntegrationCredential, IntegrationCredentialUsage } from './integration-credential';
 export type { OpenQuestion, OpenQuestionSelectMode, OpenQuestionStatus } from './open-question';

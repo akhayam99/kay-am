@@ -17,6 +17,7 @@ type GhRun = (
 const h = vi.hoisted(() => ({
   run: vi.fn<GhRun>(async () => ({ stdout: '', stderr: '', exitCode: 0 })),
   upsertMountPullRequestLink: vi.fn(async () => true),
+  findPrSeriesMembership: vi.fn(async (): Promise<unknown> => null),
 }));
 
 vi.mock('../../../features/github/github', () => ({
@@ -29,6 +30,7 @@ vi.mock('../../../shared/lib/db', () => ({
 
 vi.mock('@goodboy/db', () => ({
   upsertMountPullRequestLink: h.upsertMountPullRequestLink,
+  findPrSeriesMembership: h.findPrSeriesMembership,
 }));
 
 import { createPrForSession } from './createPrForSession';
@@ -160,6 +162,8 @@ const bodyArg = (): string => {
 beforeEach(() => {
   h.run.mockClear();
   h.upsertMountPullRequestLink.mockClear();
+  h.findPrSeriesMembership.mockReset();
+  h.findPrSeriesMembership.mockResolvedValue(null);
   h.run.mockImplementation(async () => ({ stdout: `${CREATED_URL}\n`, stderr: '', exitCode: 0 }));
 });
 
@@ -326,5 +330,107 @@ describe('createPrForSession, mount targeting', () => {
 
     const args = createArgs();
     expect(args[args.indexOf('--base') + 1]).toBe('main');
+  });
+});
+
+const membership = (overrides: Record<string, unknown> = {}): unknown => ({
+  series: {
+    id: 'series-1',
+    sessionId: SESSION_ID,
+    projectId: PROJECT_ID,
+    name: 'restyle',
+    workItemIdentifier: 'ENG-3240',
+    workItemUrl: null,
+    plannedCount: 6,
+    parentRequest: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+    ...((overrides['series'] as Record<string, unknown>) ?? {}),
+  },
+  member: {
+    id: 'member-3',
+    seriesId: 'series-1',
+    mountId: MOUNT_ID,
+    branch: BRANCH,
+    ordinal: 3,
+    label: '3/6',
+    status: 'active',
+    createdAt: NOW,
+    updatedAt: NOW,
+    ...((overrides['member'] as Record<string, unknown>) ?? {}),
+  },
+});
+
+describe('createPrForSession, series members', () => {
+  it('never closes the work item when the branch is one part of a series', async () => {
+    h.findPrSeriesMembership.mockResolvedValue(membership());
+    const state = buildState({
+      sessionExternalTasks: { [SESSION_ID]: [githubIssue()] },
+    });
+
+    await buildCreate(state)({
+      sessionId: SESSION_ID,
+      title: 'Patient header',
+      body: 'Splits the header out.',
+    });
+
+    expect(bodyArg()).not.toContain('Closes #41');
+    expect(bodyArg()).toContain('Part of ENG-3240');
+  });
+
+  it('writes the ordered position of the member under its series name', async () => {
+    h.findPrSeriesMembership.mockResolvedValue(membership());
+    const state = buildState();
+
+    await buildCreate(state)({
+      sessionId: SESSION_ID,
+      title: 'Patient header',
+      body: 'Splits the header out.',
+    });
+
+    expect(bodyArg()).toBe('Splits the header out.\n\nPart of ENG-3240\nrestyle 3/6');
+  });
+
+  it('leaves a body that already names the work item and the position untouched', async () => {
+    h.findPrSeriesMembership.mockResolvedValue(membership());
+    const state = buildState();
+
+    await buildCreate(state)({
+      sessionId: SESSION_ID,
+      title: 'Patient header',
+      body: 'Built on main, not stacked. Part of ENG-3240, restyle 3/6.',
+    });
+
+    expect(bodyArg()).toBe('Built on main, not stacked. Part of ENG-3240, restyle 3/6.');
+  });
+
+  it('closes the issue again once the caller asks for closing references explicitly', async () => {
+    h.findPrSeriesMembership.mockResolvedValue(membership());
+    const state = buildState({
+      sessionExternalTasks: { [SESSION_ID]: [githubIssue()] },
+    });
+
+    await buildCreate(state)({
+      sessionId: SESSION_ID,
+      title: 'Patient header',
+      body: 'Last part.',
+      referenceMode: 'closing',
+    });
+
+    expect(bodyArg()).toBe('Last part.\n\nCloses #41');
+  });
+
+  it('never rewrites a generated body of a series member after creation', async () => {
+    h.findPrSeriesMembership.mockResolvedValue(membership());
+    const created = { number: 7, body: 'Generated from the commits.' } as PullRequestState;
+    const state = buildState({
+      sessionExternalTasks: { [SESSION_ID]: [githubIssue()] },
+      mountGithub: { [MOUNT_ID]: { pr: created } },
+    });
+
+    await buildCreate(state)({ sessionId: SESSION_ID });
+
+    expect(createArgs()).toContain('--fill');
+    expect(state.editPr).not.toHaveBeenCalled();
   });
 });
