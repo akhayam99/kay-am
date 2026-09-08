@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, ListChecks } from 'lucide-react';
 import {
   BranchPair,
   Chip,
@@ -23,6 +23,7 @@ type Props = {
   readonly onSelectPr: (prNumber: number) => void;
   readonly onRefresh: () => void;
   readonly onOpenChecks: () => void;
+  readonly onOpenQueue: () => void;
   readonly onOpenOnGithub: () => void;
 };
 
@@ -36,6 +37,7 @@ export const PrContextRow = ({
   onSelectPr,
   onRefresh,
   onOpenChecks,
+  onOpenQueue,
   onOpenOnGithub,
 }: Props) => {
   const rollup = checksRollup({ checks });
@@ -76,6 +78,7 @@ export const PrContextRow = ({
       }
       actions={
         <>
+          <GhostActionButton icon={ListChecks} label="For you" onClick={onOpenQueue} />
           <RefreshIconButton
             label="Refresh the pull request"
             isLoading={isRefreshing}

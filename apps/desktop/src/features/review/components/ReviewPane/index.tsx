@@ -45,6 +45,7 @@ import { PublishConversationsBar, type PublishScope } from './PublishConversatio
 import type { PreviewBlockerAction } from './PublishConversationsBar/PublicationPreview';
 import { NoPullRequestState, NothingToFixState } from './ReviewEmptyStates';
 import { openDiffComments } from '../../../session/resolve/openDiffComments';
+import { ResolveQueueHome } from '../../../resolve/components/ResolveQueueHome';
 import { ChecksMode } from './modes/ChecksMode';
 import { CreatePrMode } from './modes/CreatePrMode';
 import { PrActivityMode } from './modes/PrActivityMode';
@@ -743,6 +744,7 @@ export const ReviewPane = ({ session, eyebrow }: Props) => {
       onSelectPr={(prNumber) => void selectSessionPr(sessionId, prNumber)}
       onRefresh={() => void refreshSessionPrDetail(sessionId, { force: true })}
       onOpenChecks={() => setMode('checks')}
+      onOpenQueue={() => setMode(mode === 'queue' ? 'conversations' : 'queue')}
       onOpenOnGithub={() => void openUrl(pr.url)}
     />
   );
@@ -875,7 +877,7 @@ export const ReviewPane = ({ session, eyebrow }: Props) => {
             publishing={isBusy}
             onPublish={(opts) => void onWriteReviewPublish(opts)}
           />
-        ) : (
+        ) : mode === 'queue' ? null : (
           <PublishConversationsBar
             readyCount={selection.readyIds.length}
             selectedCount={selection.selected.size}
@@ -916,6 +918,8 @@ export const ReviewPane = ({ session, eyebrow }: Props) => {
             listWidth={listWidth}
             onBack={() => setMode('conversations')}
           />
+        ) : mode === 'queue' ? (
+          <ResolveQueueHome session={session} />
         ) : isNarrow ? (
           isListHidden ? (
             detail
