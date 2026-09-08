@@ -38,10 +38,11 @@ item qualifies, never preselected.
 
 Publishing is three lines in the dock that expand in place: the commits going
 out, the replies being posted, the notes marked done, one button. A reply is
-recorded before it is attempted, and an answer Goodboy cannot read hands the
-thread back to you rather than risk posting it twice. One deliberate change of
-behavior: publishing no longer closes threads on GitHub. Resolution is kept on
-your machine and the thread stays open for the reviewer to close.
+recorded before it is attempted, and when the answer that comes back cannot be
+read, Goodboy hands the thread back to you rather than risk posting it twice.
+One deliberate change of behavior: publishing no longer closes threads on
+GitHub. Resolution is kept on your machine and the thread stays open for the
+reviewer to close.
 
 ### [#1706] Fork a mount without hijacking the one you forked from
 
