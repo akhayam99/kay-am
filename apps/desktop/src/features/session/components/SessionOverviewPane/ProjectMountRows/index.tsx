@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react';
+import { SectionHeader } from '@goodboy/ui';
 import type { Session } from '@goodboy/types';
 import type { LensKind } from '../../../../../store';
 import { useAppStore, useMountDiffStats } from '../../../../../store';
@@ -38,28 +39,25 @@ export const ProjectMountRows = ({ session, onSelectLens }: Props) => {
   }, [session.id]);
 
   return (
-    <section aria-label="Mounted projects" className="flex flex-col gap-4">
-      {groups.length === 0 ? (
-        <div className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-border-soft bg-elevated/30 px-3 py-2">
-          <span className="text-sm text-muted-foreground">No project mounted yet</span>
-          <MountProjectAction
-            sessionId={session.id}
-            workspaceId={session.workspaceId}
-            presentation="button"
-          />
+    <section aria-label="Mounted projects" className="flex min-w-0 flex-col gap-2">
+      <SectionHeader
+        label="Projects"
+        action={<MountProjectAction sessionId={session.id} workspaceId={session.workspaceId} />}
+      />
+      {groups.length === 0 ? null : (
+        <div className="flex flex-col gap-1">
+          {groups.map((group) => (
+            <ProjectMountGroup
+              key={group.projectId}
+              sessionId={session.id}
+              group={group}
+              diffStats={diffStats}
+              worktreeStatuses={worktreeStatuses}
+              pendingWorktrees={pendingWorktrees}
+              onSelectLens={onSelectLens}
+            />
+          ))}
         </div>
-      ) : (
-        groups.map((group) => (
-          <ProjectMountGroup
-            key={group.projectId}
-            sessionId={session.id}
-            group={group}
-            diffStats={diffStats}
-            worktreeStatuses={worktreeStatuses}
-            pendingWorktrees={pendingWorktrees}
-            onSelectLens={onSelectLens}
-          />
-        ))
       )}
       <MountCleanupProposals sessionId={session.id} />
     </section>

@@ -20,35 +20,23 @@ export const ATTENTION_REASON_META: Record<SessionAttentionReason, AttentionEntr
 
 type SessionStageEntry = {
   readonly label: string;
-  readonly dotClassName: string;
-  readonly textClassName: string;
 };
 
 export const SESSION_STAGE_META: Record<SessionStage, SessionStageEntry> = {
   attention: {
     label: 'needs you',
-    dotClassName: 'bg-warning',
-    textClassName: 'text-warning',
   },
   running: {
     label: 'running',
-    dotClassName: 'bg-info',
-    textClassName: 'text-info',
   },
   review: {
     label: 'in review',
-    dotClassName: 'bg-success',
-    textClassName: 'text-success',
   },
   building: {
     label: 'building',
-    dotClassName: 'bg-muted-foreground/40',
-    textClassName: 'text-muted-foreground/70',
   },
   done: {
     label: 'done',
-    dotClassName: 'bg-merged',
-    textClassName: 'text-merged',
   },
 };
 

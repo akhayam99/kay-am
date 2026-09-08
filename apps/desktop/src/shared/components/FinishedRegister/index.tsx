@@ -38,7 +38,6 @@ export const FinishedRegister = ({
           <div className="flex justify-center">
             <CountToggle
               label="Earlier"
-              itemsLabel="items"
               count={earlierCount}
               isShown={isEarlierShown}
               icon={ChevronDown}

@@ -116,13 +116,30 @@ describe('SessionDestructiveActions', () => {
     expect(screen.getByRole('button', { name: /delete session/i })).toBeTruthy();
   });
 
-  it('marks the delete control as destructive and leaves the archive control plain', () => {
+  it('stays neutral at rest and turns destructive only once armed', () => {
+    const restingDanger = /(^|\s)text-danger(\s|$)/;
     render(<SessionDestructiveActions session={session()} />);
-    expect(screen.getByRole('button', { name: /delete session/i }).className).toContain(
-      'text-danger',
-    );
+    const deleteButton = screen.getByRole('button', { name: /delete session/i });
+
+    expect(deleteButton.className).not.toMatch(restingDanger);
+    expect(deleteButton.className).toMatch(/hover:text-danger/);
     expect(screen.getByRole('button', { name: /^archive session/i }).className).not.toContain(
       'text-danger',
+    );
+
+    fireEvent.click(deleteButton);
+
+    expect(screen.getByRole('button', { name: /delete session/i }).className).toMatch(
+      restingDanger,
+    );
+    expect(
+      screen.getByRole('button', { name: /delete session/i }).getAttribute('aria-expanded'),
+    ).toBe('true');
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(screen.getByRole('button', { name: /delete session/i }).className).not.toMatch(
+      restingDanger,
     );
   });
 });

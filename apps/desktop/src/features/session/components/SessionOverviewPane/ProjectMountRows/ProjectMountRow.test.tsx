@@ -2,8 +2,6 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { ReactNode } from 'react';
-import type { OverflowMenuItem } from '@goodboy/ui';
 import type {
   IsoDateTime,
   MountId,
@@ -63,42 +61,6 @@ vi.mock('../../../../../app/components/Toast', () => ({
 vi.mock('../../../../../shared/lib/editor', () => ({
   openInEditor: vi.fn(async () => undefined),
 }));
-vi.mock('@goodboy/ui', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@goodboy/ui')>();
-  const { Tooltip } = actual;
-  return {
-    ...actual,
-    OverflowMenu: ({
-      items,
-      label,
-      tooltip,
-      triggerClassName,
-      trigger,
-    }: {
-      readonly items: ReadonlyArray<OverflowMenuItem>;
-      readonly label: string;
-      readonly tooltip: string;
-      readonly triggerClassName: string;
-      readonly trigger: ReactNode;
-    }) => (
-      <span>
-        <Tooltip content={tooltip}>
-          <button type="button" aria-label={label} className={triggerClassName}>
-            {trigger}
-          </button>
-        </Tooltip>
-        {items.map((item) =>
-          item.kind === 'item' ? (
-            <button key={item.key} type="button" onClick={item.onClick}>
-              {item.label}
-            </button>
-          ) : null,
-        )}
-      </span>
-    ),
-  };
-});
-
 import { tooltipTextOf } from '../../../../../__tests__/helpers/tooltip';
 import { openInEditor } from '../../../../../shared/lib/editor';
 import { ProjectMountRow } from './ProjectMountRow';
@@ -377,7 +339,7 @@ describe('ProjectMountRow folder action', () => {
     renderRow({});
 
     fireEvent.click(screen.getByRole('button', { name: 'Open the folder of API' }));
-    fireEvent.click(screen.getByRole('button', { name: 'VS Code' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'VS Code' }));
 
     expect(openInEditor).toHaveBeenCalledWith('/api', 'code');
   });

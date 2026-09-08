@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { SessionId } from '@goodboy/types';
 
 const { state, toastMock } = vi.hoisted(() => ({
@@ -20,23 +19,6 @@ vi.mock('../../../../store', () => ({
 
 vi.mock('../../../../app/components/Toast', () => ({
   useToast: () => ({ showToast: toastMock }),
-}));
-
-vi.mock('@goodboy/ui', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@goodboy/ui')>()),
-  OverflowMenu: ({
-    label,
-    triggerClassName,
-    trigger,
-  }: {
-    label: string;
-    triggerClassName: string;
-    trigger: ReactNode;
-  }) => (
-    <button type="button" aria-label={label} className={triggerClassName}>
-      {trigger}
-    </button>
-  ),
 }));
 
 vi.mock('../../../../shared/lib/editor', () => ({
@@ -64,6 +46,16 @@ describe('EditorMenu', () => {
     render(<EditorMenu sessionId={'sess-1' as SessionId} density="compact" />);
     const trigger = screen.getByRole('button', { name: /open worktree/i });
     expect(trigger.getAttribute('aria-label')).toBe('Open worktree');
+    expect(trigger.querySelector('button')).toBeNull();
+  });
+
+  it('opens the existing menu items from the compact icon trigger', () => {
+    state.detectedEditors = [{ binary: 'code', label: 'VS Code' }];
+    render(<EditorMenu sessionId={'sess-1' as SessionId} density="compact" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /open worktree/i }));
+    expect(screen.getByRole('menuitem', { name: 'VS Code' })).toBeDefined();
+    expect(screen.getByRole('menuitem', { name: 'Copy path' })).toBeDefined();
   });
 
   it('loads detected editors once when none are known yet', () => {

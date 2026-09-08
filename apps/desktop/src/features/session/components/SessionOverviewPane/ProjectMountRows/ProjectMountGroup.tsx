@@ -21,9 +21,6 @@ type Props = {
   readonly onSelectLens: (lens: LensKind) => void;
 };
 
-const ICON_BUTTON =
-  'relative inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]';
-
 type LabelParams = {
   readonly row: MountRowView;
 };
@@ -64,8 +61,8 @@ export const ProjectMountGroup = ({
   );
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-lg border border-border-soft bg-elevated/30">
-      <div className="flex min-h-9 w-full items-center gap-2 border-b border-border-soft px-3 py-1.5">
+    <div className="flex flex-col gap-1 rounded-lg border border-border-soft bg-elevated/30 p-1">
+      <div className="flex min-h-9 w-full items-center gap-2 px-2 py-1">
         <GlyphIcon
           size={ICON_SIZE.control}
           aria-hidden
@@ -94,17 +91,15 @@ export const ProjectMountGroup = ({
             projectName={group.projectName}
             worktreePath={headPath}
             worktreeStatus={worktreeStatuses.get(headPath) ?? null}
-            triggerClassName={ICON_BUTTON}
           />
         </div>
       </div>
-      <ul aria-label={`${group.projectName} branch mounts`} className="flex flex-col pl-3">
+      <ul aria-label={`${group.projectName} branch mounts`} className="flex flex-col gap-1 pl-2">
         {group.completedRows.length === 0 ? null : (
-          <li className="flex flex-col border-b border-border-soft last:border-b-0">
-            <div className="flex px-3 py-1">
+          <li className="flex flex-col gap-1">
+            <div className="flex px-2">
               <CountToggle
                 label="Completed"
-                itemsLabel="branch mounts"
                 count={group.completedRows.length}
                 isShown={isCompletedShown}
                 icon={ChevronDown}
@@ -114,7 +109,7 @@ export const ProjectMountGroup = ({
             {isCompletedShown ? (
               <ul
                 aria-label={`${group.projectName} completed branch mounts`}
-                className="flex flex-col border-t border-border-soft"
+                className="flex flex-col gap-1"
               >
                 {group.completedRows.map(renderRow)}
               </ul>

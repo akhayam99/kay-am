@@ -39,12 +39,14 @@ const SESSION_ID = 'sess-1' as SessionId;
 type RenderParams = {
   readonly value?: string;
   readonly historyCount?: number;
+  readonly isLoading?: boolean;
   readonly onOpenHistory?: () => void;
 };
 
 const renderRegion = ({
   value = 'Ship the parser rewrite',
   historyCount = 2,
+  isLoading = false,
   onOpenHistory = vi.fn(),
 }: RenderParams = {}) =>
   render(
@@ -52,7 +54,7 @@ const renderRegion = ({
       sessionId={SESSION_ID}
       value={value}
       historyCount={historyCount}
-      isLoading={false}
+      isLoading={isLoading}
       isSummarizing={false}
       onOpenHistory={onOpenHistory}
     />,
@@ -63,88 +65,45 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-const originalDescriptors = {
-  scrollHeight: Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollHeight'),
-  clientHeight: Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight'),
-};
-
-const mockTextMeasurement = ({
-  scrollHeight,
-  clientHeight,
-}: {
-  readonly scrollHeight: number;
-  readonly clientHeight: number;
-}) => {
-  Object.defineProperty(HTMLElement.prototype, 'scrollHeight', {
-    configurable: true,
-    get: () => scrollHeight,
-  });
-  Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
-    configurable: true,
-    get: () => clientHeight,
-  });
-};
-
-const restoreTextMeasurement = () => {
-  if (originalDescriptors.scrollHeight == null) {
-    Reflect.deleteProperty(HTMLElement.prototype, 'scrollHeight');
-  }
-  if (originalDescriptors.scrollHeight != null) {
-    Object.defineProperty(HTMLElement.prototype, 'scrollHeight', originalDescriptors.scrollHeight);
-  }
-  if (originalDescriptors.clientHeight == null) {
-    Reflect.deleteProperty(HTMLElement.prototype, 'clientHeight');
-  }
-  if (originalDescriptors.clientHeight != null) {
-    Object.defineProperty(HTMLElement.prototype, 'clientHeight', originalDescriptors.clientHeight);
-  }
-};
-
 describe('GoalOverviewRegion', () => {
-  it('clamps the goal text to four lines below the label row', () => {
-    renderRegion();
-    const text = screen.getByRole('button', { name: 'Edit goal' });
+  it('renders goal markdown inside the click-to-edit region', () => {
+    renderRegion({ value: 'Ship the **parser rewrite**' });
+    const region = screen.getByRole('button', { name: 'Edit goal' });
 
-    expect(text.className).toContain('line-clamp-4');
-    expect(text.className).not.toContain('truncate');
+    expect(region.querySelector('strong')?.textContent).toBe('parser rewrite');
+    expect(region.textContent).not.toContain('**');
   });
 
-  it('spreads the label and the labeled actions across the Goal line', () => {
+  it('keeps history as the only section action', () => {
     renderRegion();
-    const copy = screen.getByRole('button', { name: /copy goal/i });
     const history = screen.getByRole('button', { name: /2 previous versions of Goal/i });
-    const cluster = copy.closest('div');
-    const labelRow = cluster?.parentElement;
 
-    expect(labelRow?.className).toContain('justify-between');
-    expect(labelRow?.textContent).toContain('Goal');
-    expect(cluster?.contains(history)).toBe(true);
-    expect(copy.textContent).toContain('Copy the goal');
+    expect(screen.getByText('Goal')).toBeDefined();
     expect(history.textContent).toContain('History');
-    expect(labelRow?.contains(screen.getByRole('button', { name: 'Edit goal' }))).toBe(false);
+    expect(screen.queryByRole('button', { name: /copy goal/i })).toBeNull();
   });
 
-  it('offers Show more only when the goal overflows the clamp, and Show less collapses it back', () => {
-    mockTextMeasurement({ scrollHeight: 160, clientHeight: 80 });
-    renderRegion();
+  it('reveals long prose in place without opening the editor', () => {
+    const value = Array.from({ length: 60 }, () => 'parser').join(' ');
+    renderRegion({ value });
 
     const toggle = screen.getByRole('button', { name: 'Show more' });
     fireEvent.click(toggle);
-    expect(screen.getByRole('button', { name: 'Edit goal' }).className).not.toContain(
-      'line-clamp-4',
-    );
+    expect(screen.getByRole('button', { name: 'Show less' })).toBeDefined();
+    expect(screen.queryByRole('textbox', { name: 'Goal' })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Show less' }));
-    expect(screen.getByRole('button', { name: 'Edit goal' }).className).toContain('line-clamp-4');
-    restoreTextMeasurement();
+    expect(screen.getByRole('button', { name: 'Show more' })).toBeDefined();
+    expect(screen.queryByRole('textbox', { name: 'Goal' })).toBeNull();
   });
 
-  it('hides the Show more toggle when the goal fits inside the clamp', () => {
-    mockTextMeasurement({ scrollHeight: 80, clientHeight: 80 });
-    renderRegion();
+  it('does not intercept a link click as an edit gesture', () => {
+    renderRegion({ value: 'Read the [design notes](https://example.com/design)' });
+    const link = screen.getByRole('link', { name: 'design notes' });
+    link.addEventListener('click', (event) => event.preventDefault());
 
-    expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull();
-    restoreTextMeasurement();
+    fireEvent.click(link);
+    expect(screen.queryByRole('textbox', { name: 'Goal' })).toBeNull();
   });
 
   it('enters edit from a click on the text, with no edit button', () => {
@@ -175,13 +134,19 @@ describe('GoalOverviewRegion', () => {
     expect(screen.queryByRole('textbox', { name: 'Goal' })).toBeNull();
   });
 
-  it('keeps only copy and history on the right', () => {
+  it('opens history from the section action', () => {
     const onOpenHistory = vi.fn();
     renderRegion({ onOpenHistory });
 
-    expect(screen.getByRole('button', { name: /copy goal/i })).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: /2 previous versions of Goal/i }));
     expect(onOpenHistory).toHaveBeenCalledOnce();
+  });
+
+  it('uses an accessible skeleton while the goal loads', () => {
+    renderRegion({ isLoading: true });
+
+    expect(screen.getByRole('status', { name: 'Loading goal' })).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Edit goal' })).toBeNull();
   });
 
   it('saves the edit on the platform commit chord', () => {

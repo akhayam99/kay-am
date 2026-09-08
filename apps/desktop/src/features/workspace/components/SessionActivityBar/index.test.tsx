@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { Session, SessionId, WorkspaceId } from '@goodboy/types';
 
-const { state } = vi.hoisted(() => ({
+const { state, viewPrefs } = vi.hoisted(() => ({
   state: {
     sessionGithub: {} as Record<string, unknown>,
     sessionTelemetry: {} as Record<string, ReadonlyArray<unknown>>,
@@ -15,6 +15,9 @@ const { state } = vi.hoisted(() => ({
     bulkArchiveTask: vi.fn(async () => undefined),
     bulkDeleteTask: vi.fn(async () => undefined),
   },
+  viewPrefs: {
+    current: { group: 'none' as 'none' | 'stage', sort: 'recent' as const },
+  },
 }));
 
 vi.mock('../../../../store', () => ({
@@ -23,10 +26,9 @@ vi.mock('../../../../store', () => ({
   useSessionCost: () => 0,
   useSessionHasUnread: () => false,
   useSessionStageInfo: () => ({ stage: 'done' as const, reason: 'idle' }),
-  useSessionViewPrefs: () => ({ group: 'none' as const, sort: 'recent' as const }),
-  useSortedGroupedSessions: (_w: unknown, sessions: ReadonlyArray<unknown>) => [
-    { key: 'all', sessions },
-  ],
+  useSessionViewPrefs: () => viewPrefs.current,
+  useSortedGroupedSessions: (_workspaceId: unknown, sessions: ReadonlyArray<unknown>) =>
+    viewPrefs.current.group === 'stage' ? [{ key: 'done', sessions }] : [{ key: 'all', sessions }],
 }));
 
 vi.mock('./SessionViewMenu', () => ({
@@ -42,7 +44,6 @@ vi.mock('../../../../features/providers/components/CostBadge', () => ({
 }));
 
 vi.mock('../../../../features/github/components/PullRequestChip', () => ({
-  PullRequestChip: () => null,
   pullRequestMeta: () => null,
 }));
 
@@ -64,6 +65,7 @@ function renderBar(
   archived: ReadonlyArray<Session>,
   active: ReadonlyArray<Session> = [],
   onSelectSession: (id: SessionId) => void = vi.fn(),
+  onArchivedTabOpen: () => void = vi.fn(),
 ) {
   return render(
     <SessionActivityBar
@@ -72,12 +74,13 @@ function renderBar(
       archivedSessions={archived}
       currentSessionId={null}
       onSelectSession={onSelectSession}
+      onArchivedTabOpen={onArchivedTabOpen}
     />,
   );
 }
 
 function toggleArchivedTab() {
-  fireEvent.click(screen.getByRole('button', { name: 'Archived' }));
+  fireEvent.click(screen.getByRole('button', { name: /^Archived \(\d+\)$/ }));
 }
 
 function rowAt(index: number): HTMLElement {
@@ -104,6 +107,7 @@ beforeEach(() => {
   state.sessionExternalTasks = {};
   state.sessionProjectMounts = {};
   state.projects = [];
+  viewPrefs.current = { group: 'none', sort: 'recent' };
 });
 
 afterEach(cleanup);
@@ -114,6 +118,10 @@ describe('SessionActivityBar, baseline', () => {
     expect(screen.getByText(/^Sessions$/)).toBeDefined();
     expect(screen.getByRole('button', { name: /create new session/i })).toBeDefined();
     expect(screen.getByTestId('project-filter')).toBeDefined();
+    expect(screen.queryByRole('button', { name: /Archived/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /create new session/i }).getAttribute('title')).toBe(
+      null,
+    );
   });
 
   it('renders empty-state copy when no sessions in active tab', () => {
@@ -144,7 +152,7 @@ describe('SessionActivityBar, baseline', () => {
     expect(screen.getByRole('button', { name: /create new session/i })).toBeDefined();
   });
 
-  it('shows one project name when a session mounts the same project more than once', () => {
+  it('does not repeat mounted project names in the compact session row', () => {
     state.projects = [{ id: 'project-1', name: 'Goodboy' }];
     state.sessionProjectMounts = {
       'a-1': [
@@ -153,8 +161,33 @@ describe('SessionActivityBar, baseline', () => {
       ],
     };
     renderBar([], [makeSession('a-1', 'duplicate mounts')]);
-    expect(screen.getByLabelText('Project: Goodboy')).toBeDefined();
+    expect(screen.queryByLabelText('Project: Goodboy')).toBeNull();
     expect(screen.queryByLabelText(/2 projects/)).toBeNull();
+  });
+
+  it('shows the archived count and loads archived sessions on the transition', () => {
+    const onArchivedTabOpen = vi.fn();
+    renderBar([makeSession('s-1', 'archived one')], [], vi.fn(), onArchivedTabOpen);
+
+    const toggle = screen.getByRole('button', { name: 'Archived (1)' });
+    fireEvent.click(toggle);
+
+    expect(onArchivedTabOpen).toHaveBeenCalledOnce();
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('keeps terminal stage groups collapsed until their labeled count is expanded', () => {
+    viewPrefs.current = { group: 'stage', sort: 'recent' };
+    renderBar([], [makeSession('a-1', 'finished work')]);
+
+    const group = screen.getByRole('button', { name: 'done' });
+    expect(group.getAttribute('aria-expanded')).toBe('false');
+    expect(group.textContent).toContain('1');
+    expect(screen.queryByRole('button', { name: /finished work/i })).toBeNull();
+
+    fireEvent.click(group);
+    expect(group.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByRole('button', { name: /finished work/i })).toBeDefined();
   });
 });
 
@@ -339,7 +372,7 @@ describe('SessionActivityBar, external task chip', () => {
     expect(screen.queryByRole('button', { name: /studio/i })).toBeNull();
   });
 
-  it('renders the icon-variant chip and appends the identifier to the item title', () => {
+  it('appends the identifier to the item title without rendering a task glyph', () => {
     state.sessionExternalTasks = {
       'a-1': [
         {
@@ -354,12 +387,12 @@ describe('SessionActivityBar, external task chip', () => {
       ],
     };
     renderBar([], [makeSession('a-1', 'active one')]);
-    expect(screen.getByLabelText(/GB-7 from Linear/i)).toBeDefined();
-    expect(screen.getByRole('img', { name: 'Linear' })).toBeDefined();
+    expect(screen.queryByLabelText(/GB-7 from Linear/i)).toBeNull();
+    expect(screen.queryByRole('img', { name: 'Linear' })).toBeNull();
     expect(screen.getByTitle(/active one · idle · GB-7/)).toBeDefined();
   });
 
-  it('renders the matching glyph for a non-linear provider', () => {
+  it('retains a non-linear identifier in the item title without a glyph', () => {
     state.sessionExternalTasks = {
       'a-1': [
         {
@@ -374,7 +407,8 @@ describe('SessionActivityBar, external task chip', () => {
       ],
     };
     renderBar([], [makeSession('a-1', 'crashy')]);
-    expect(screen.getByRole('img', { name: 'Sentry' })).toBeDefined();
-    expect(screen.getByLabelText(/SENTRY-9 from Sentry/i)).toBeDefined();
+    expect(screen.queryByRole('img', { name: 'Sentry' })).toBeNull();
+    expect(screen.queryByLabelText(/SENTRY-9 from Sentry/i)).toBeNull();
+    expect(screen.getByTitle(/crashy · idle · SENTRY-9/)).toBeDefined();
   });
 });

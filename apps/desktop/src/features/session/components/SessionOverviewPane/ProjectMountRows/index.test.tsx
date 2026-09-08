@@ -205,11 +205,14 @@ describe('ProjectMountRows', () => {
     };
     render(<ProjectMountRows session={session} onSelectLens={vi.fn()} />);
 
-    const blocks = Array.from(screen.getByRole('region', { name: 'Mounted projects' }).children);
+    const blocks = ['API', 'WEB'].map(
+      (name) => screen.getByRole('list', { name: `${name} branch mounts` }).parentElement,
+    );
 
-    expect(blocks).toHaveLength(2);
+    expect(new Set(blocks).size).toBe(2);
     for (const block of blocks) {
-      expect(block.className).toContain('border');
+      expect(block).not.toBeNull();
+      expect((block as HTMLElement).className).toContain('border');
       expect(within(block as HTMLElement).getAllByTestId('project-mount-row')).toHaveLength(1);
     }
   });
@@ -371,7 +374,27 @@ describe('ProjectMountRows', () => {
   it('renders a quiet mount action when no project is mounted', () => {
     render(<ProjectMountRows session={session} onSelectLens={vi.fn()} />);
 
-    expect(screen.getByText('No project mounted yet')).toBeDefined();
+    expect(screen.getByText('Projects')).toBeDefined();
+    expect(screen.queryByText('No project mounted yet')).toBeNull();
     expect(screen.getByRole('button', { name: 'Mount project' })).toBeDefined();
+  });
+
+  it('keeps the mount action in the section header when mounts exist', () => {
+    store.sessionProjectMounts = {
+      'session-1': [
+        {
+          mountId: 'mount-1',
+          projectId: 'api',
+          mountName: 'API',
+          branch: 'feat/api',
+          worktreePath: '/api',
+          repoRoot: '/repo/api',
+        },
+      ],
+    };
+    render(<ProjectMountRows session={session} onSelectLens={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Mount project' })).toBeDefined();
+    expect(screen.getByTestId('project-mount-row')).toBeDefined();
   });
 });

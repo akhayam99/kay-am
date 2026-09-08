@@ -1,5 +1,14 @@
 import { useEffect, useMemo } from 'react';
-import { formatError, OverflowMenu, type OverflowMenuItem } from '@goodboy/ui';
+import {
+  AnchoredPopover,
+  Button,
+  IconButton,
+  Tooltip,
+  cn,
+  formatError,
+  useDropdown,
+  type OverflowMenuItem,
+} from '@goodboy/ui';
 import { Copy } from 'lucide-react';
 import type { SessionId } from '@goodboy/types';
 import { useAppStore } from '../../../../store';
@@ -7,14 +16,9 @@ import { openInEditor } from '../../../../shared/lib/editor';
 import { useToast } from '../../../../app/components/Toast';
 import { CONCEPT_ICONS, ICON_SIZE } from '../../../../shared/components/conceptIcons';
 import type { Density } from '../../density';
+import { EditorMenuContent } from './EditorMenuContent';
 
 const REFERENCE_EDITORS = new Set(['code', 'cursor']);
-
-const FULL_TRIGGER_BUTTON =
-  'inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground motion-safe:transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]';
-
-const COMPACT_TRIGGER_BUTTON =
-  'inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground motion-safe:transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]';
 
 type FolderTarget = {
   readonly name: string;
@@ -28,17 +32,28 @@ type Props = {
   readonly triggerClassName?: string;
 };
 
+type LaunchEditorParams = {
+  readonly binary: string;
+};
+
 export const EditorMenu = ({
   sessionId,
   density = 'full',
   target = null,
   triggerClassName,
 }: Props) => {
-  const sessionWorktreePath = useAppStore((s) => s.sessionWorktrees[sessionId]?.[0] ?? null);
+  const sessionWorktreePath = useAppStore(
+    (state) => state.sessionWorktrees[sessionId]?.[0] ?? null,
+  );
   const worktreePath = target === null ? sessionWorktreePath : target.worktreePath;
-  const detectedEditors = useAppStore((s) => s.detectedEditors);
-  const loadDetectedEditors = useAppStore((s) => s.loadDetectedEditors);
+  const detectedEditors = useAppStore((state) => state.detectedEditors);
+  const loadDetectedEditors = useAppStore((state) => state.loadDetectedEditors);
   const { showToast } = useToast();
+  const dropdown = useDropdown({
+    align: 'start',
+    width: 'min-w-[180px]',
+    expectedHeight: 220,
+  });
 
   useEffect(() => {
     if (detectedEditors.length > 0) {
@@ -47,14 +62,14 @@ export const EditorMenu = ({
     void loadDetectedEditors();
   }, []);
 
-  const launchEditor = async (binary: string) => {
+  const launchEditor = async ({ binary }: LaunchEditorParams) => {
     if (worktreePath == null) {
       return;
     }
     try {
       await openInEditor(worktreePath, binary);
-    } catch (err) {
-      showToast('error', `couldn't open editor: ${formatError(err)}`);
+    } catch (error) {
+      showToast('error', `couldn't open editor: ${formatError(error)}`);
     }
   };
 
@@ -65,15 +80,17 @@ export const EditorMenu = ({
     try {
       await navigator.clipboard.writeText(worktreePath);
       showToast('success', 'worktree path copied');
-    } catch (err) {
-      showToast('error', `couldn't copy path: ${formatError(err)}`);
+    } catch (error) {
+      showToast('error', `couldn't copy path: ${formatError(error)}`);
     }
   };
 
   const items = useMemo<ReadonlyArray<OverflowMenuItem>>(() => {
-    const refEditors = detectedEditors.filter((ed) => REFERENCE_EDITORS.has(ed.binary));
+    const referenceEditors = detectedEditors.filter((editor) =>
+      REFERENCE_EDITORS.has(editor.binary),
+    );
     const editorItems: ReadonlyArray<OverflowMenuItem> =
-      refEditors.length === 0
+      referenceEditors.length === 0
         ? [
             {
               kind: 'item',
@@ -86,12 +103,12 @@ export const EditorMenu = ({
           ]
         : [
             { kind: 'header', key: 'editor-header', label: 'Open in editor' },
-            ...refEditors.map((ed): OverflowMenuItem => ({
+            ...referenceEditors.map((editor): OverflowMenuItem => ({
               kind: 'item',
-              key: `editor-${ed.binary}`,
-              label: ed.label,
+              key: `editor-${editor.binary}`,
+              label: editor.label,
               icon: CONCEPT_ICONS.folderOpen,
-              onClick: () => void launchEditor(ed.binary),
+              onClick: () => void launchEditor({ binary: editor.binary }),
               disabled: worktreePath == null,
             })),
           ];
@@ -109,8 +126,6 @@ export const EditorMenu = ({
     ];
   }, [detectedEditors, worktreePath]);
 
-  const densityTriggerClassName =
-    density === 'compact' ? COMPACT_TRIGGER_BUTTON : FULL_TRIGGER_BUTTON;
   const label = target === null ? 'Open worktree' : `Open the folder of ${target.name}`;
   const tooltip =
     target === null
@@ -118,20 +133,44 @@ export const EditorMenu = ({
       : `Open ${target.name} in an editor, or copy its path`;
 
   return (
-    <OverflowMenu
-      items={items}
-      label={label}
-      tooltip={tooltip}
-      align="left"
-      triggerClassName={triggerClassName ?? densityTriggerClassName}
+    <AnchoredPopover
+      dropdown={dropdown}
+      role="menu"
+      ariaLabel={label}
+      className="py-1"
+      anchorClassName="shrink-0"
       trigger={
-        <>
-          <CONCEPT_ICONS.folderOpen size={ICON_SIZE.row} aria-hidden />
-          <span className="density-trigger-label" data-density={density}>
-            Open
-          </span>
-        </>
+        density === 'compact' ? (
+          <IconButton
+            variant="ghost"
+            icon={CONCEPT_ICONS.folderOpen}
+            iconSize={ICON_SIZE.row}
+            label={label}
+            tooltip={tooltip}
+            aria-haspopup="menu"
+            aria-expanded={dropdown.open}
+            onClick={dropdown.toggle}
+            className={cn('size-7', triggerClassName, dropdown.open && 'opacity-100 bg-muted/60')}
+          />
+        ) : (
+          <Tooltip content={tooltip}>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label={label}
+              aria-haspopup="menu"
+              aria-expanded={dropdown.open}
+              onClick={dropdown.toggle}
+              className={cn(triggerClassName, dropdown.open && 'bg-muted')}
+            >
+              <CONCEPT_ICONS.folderOpen size={ICON_SIZE.row} aria-hidden />
+              Open
+            </Button>
+          </Tooltip>
+        )
       }
-    />
+    >
+      <EditorMenuContent items={items} onClose={dropdown.close} />
+    </AnchoredPopover>
   );
 };

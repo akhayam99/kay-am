@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Chip, cn, Skeleton, Tooltip, formatError } from '@goodboy/ui';
+import { Chip, IconButton, Skeleton, Tooltip, cn, formatError, tintClasses } from '@goodboy/ui';
 import type { SessionId, WorkspaceId, WorktreeStatus } from '@goodboy/types';
 import type { LensKind, MountDiffStat } from '../../../../../store';
 import { useAppStore } from '../../../../../store';
@@ -29,8 +29,8 @@ type Props = {
   readonly onSelectLens: (lens: LensKind) => void;
 };
 
-const ICON_BUTTON =
-  'relative inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]';
+const UTILITY_REVEAL =
+  'opacity-0 motion-safe:transition-opacity group-hover/mount-row:opacity-100 group-focus-within/mount-row:opacity-100';
 
 const SLOT_POSITION = 'flex w-10 shrink-0 items-center';
 const SLOT_BRANCH = 'flex min-w-0 flex-1 items-center';
@@ -39,14 +39,20 @@ const SLOT_DIFF = 'flex w-28 shrink-0 items-center';
 const SLOT_STATE = 'flex w-28 shrink-0 items-center';
 const SLOT_REQUEST = 'flex w-14 shrink-0 items-center';
 const SLOT_ACTION = 'flex w-20 shrink-0 items-center';
-const SLOT_TOOLS =
-  'flex w-24 shrink-0 items-center justify-end opacity-0 motion-safe:transition-opacity group-hover:opacity-100 group-focus-within:opacity-100';
+const SLOT_TOOLS = 'flex w-24 shrink-0 items-center justify-end';
 const SLOT_MENU = 'flex w-7 shrink-0 items-center justify-center';
 
-const ACTIVITY_DOT = 'absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-success';
+const ACTIVITY_DOT = cn(
+  'pointer-events-none absolute -right-0.5 -top-0.5 size-1.5 rounded-full',
+  tintClasses('success').dot,
+);
 
 type SuffixParams = {
   readonly count: number;
+};
+
+type OpenLensParams = {
+  readonly lens: LensKind;
 };
 
 const runningSuffix = ({ count }: SuffixParams) => (count > 0 ? `, ${count} running` : '');
@@ -80,7 +86,7 @@ export const ProjectMountRow = ({
   const observation = row.observation;
   const hasTools = row.isAttached && worktreePath !== null;
 
-  const openLens = async ({ lens }: { readonly lens: LensKind }) => {
+  const openLens = async ({ lens }: OpenLensParams) => {
     await setSessionActiveMount({ sessionId, mountId: row.mountId }).catch(() => undefined);
     if (lens === 'scripts') {
       setScriptsLensScope({ scope: { projectId: row.projectId } });
@@ -103,9 +109,9 @@ export const ProjectMountRow = ({
     <li
       data-testid="project-mount-row"
       aria-label={label}
-      className="group flex w-full flex-col border-b border-border-soft last:border-b-0"
+      className="group/mount-row flex w-full flex-col"
     >
-      <div className="flex min-h-10 w-full items-center gap-2 px-3 py-1.5">
+      <div className="flex min-h-10 w-full items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/40">
         <div className={SLOT_POSITION}>
           {row.series === null ? null : (
             <Tooltip content={`Part ${row.series.label} of ${row.series.name}`}>
@@ -231,42 +237,46 @@ export const ProjectMountRow = ({
                 sessionId={sessionId}
                 density="compact"
                 target={{ name: label, worktreePath }}
-                triggerClassName={ICON_BUTTON}
+                triggerClassName={UTILITY_REVEAL}
               />
-              <Tooltip
-                content={`Open terminal in ${label}${runningSuffix({ count: activity.liveTerminals })}`}
+              <span
+                className={cn(
+                  'relative inline-flex shrink-0',
+                  activity.liveTerminals > 0 ? 'opacity-100' : UTILITY_REVEAL,
+                )}
               >
-                <button
-                  type="button"
-                  aria-label={`Open terminal for ${label}`}
+                <IconButton
+                  variant="ghost"
+                  icon={CONCEPT_ICONS.terminal}
+                  iconSize={ICON_SIZE.row}
+                  label={`Open terminal for ${label}`}
+                  tooltip={`Open terminal in ${label}${runningSuffix({ count: activity.liveTerminals })}`}
                   onClick={() => void openLens({ lens: 'terminal' })}
-                  className={ICON_BUTTON}
-                >
-                  <CONCEPT_ICONS.terminal size={ICON_SIZE.row} aria-hidden />
-                  {activity.liveTerminals > 0 ? (
-                    <span
-                      data-testid="terminal-activity-dot"
-                      aria-hidden
-                      className={ACTIVITY_DOT}
-                    />
-                  ) : null}
-                </button>
-              </Tooltip>
-              <Tooltip
-                content={`Open scripts for ${label}${runningSuffix({ count: activity.runningScripts })}`}
+                  className="size-7"
+                />
+                {activity.liveTerminals > 0 ? (
+                  <span data-testid="terminal-activity-dot" aria-hidden className={ACTIVITY_DOT} />
+                ) : null}
+              </span>
+              <span
+                className={cn(
+                  'relative inline-flex shrink-0',
+                  activity.runningScripts > 0 ? 'opacity-100' : UTILITY_REVEAL,
+                )}
               >
-                <button
-                  type="button"
-                  aria-label={`Open scripts for ${label}`}
+                <IconButton
+                  variant="ghost"
+                  icon={CONCEPT_ICONS.scripts}
+                  iconSize={ICON_SIZE.row}
+                  label={`Open scripts for ${label}`}
+                  tooltip={`Open scripts for ${label}${runningSuffix({ count: activity.runningScripts })}`}
                   onClick={() => void openLens({ lens: 'scripts' })}
-                  className={ICON_BUTTON}
-                >
-                  <CONCEPT_ICONS.scripts size={ICON_SIZE.row} aria-hidden />
-                  {activity.runningScripts > 0 ? (
-                    <span data-testid="scripts-activity-dot" aria-hidden className={ACTIVITY_DOT} />
-                  ) : null}
-                </button>
-              </Tooltip>
+                  className="size-7"
+                />
+                {activity.runningScripts > 0 ? (
+                  <span data-testid="scripts-activity-dot" aria-hidden className={ACTIVITY_DOT} />
+                ) : null}
+              </span>
             </>
           )}
         </div>
@@ -279,7 +289,7 @@ export const ProjectMountRow = ({
             menuLabel={`${label} actions`}
             worktreePath={worktreePath ?? row.lastWorktreePath ?? ''}
             worktreeStatus={worktreeStatus}
-            triggerClassName={ICON_BUTTON}
+            triggerClassName={UTILITY_REVEAL}
             {...(row.isAttached ? { mountId: row.mountId } : {})}
             branch={row.branch}
             canDetachProject={false}
@@ -287,7 +297,7 @@ export const ProjectMountRow = ({
         </div>
       </div>
       {observation === null ? null : (
-        <div className="flex flex-col px-3 pb-2">
+        <div className="flex flex-col px-2 pb-2">
           <MountBranchDecision
             sessionId={sessionId}
             mountId={row.mountId}

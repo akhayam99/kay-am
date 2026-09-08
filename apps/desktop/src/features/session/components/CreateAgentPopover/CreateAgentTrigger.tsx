@@ -1,14 +1,12 @@
 import { ArrowRight, Plus } from 'lucide-react';
-import { cn } from '@goodboy/ui';
+import { Button, cn } from '@goodboy/ui';
 import { DogMascot } from '../../../../shared/components/DogMascot';
 import { ICON_SIZE } from '../../../../shared/components/conceptIcons';
 
 export type CreateAgentTriggerVariant = 'tile' | 'compact';
 
 const TILE_CLASS =
-  'group flex items-center gap-2.5 rounded-lg border border-border-soft bg-elevated px-3 py-2.5 text-left shadow-sm transition-colors hover:border-border';
-const COMPACT_CLASS =
-  'inline-flex h-7 min-w-0 items-center gap-1.5 rounded-md border border-border-soft bg-elevated px-2 text-xs font-medium text-foreground shadow-sm transition-colors hover:border-border';
+  'group flex items-center gap-2.5 rounded-lg border border-border-soft bg-elevated px-3 py-2.5 text-left text-foreground motion-safe:transition-colors hover:border-border';
 
 type Props = {
   readonly variant: CreateAgentTriggerVariant;
@@ -21,16 +19,17 @@ type Props = {
 export const CreateAgentTrigger = ({ variant, isOpen, className, description, onClick }: Props) => {
   if (variant === 'compact') {
     return (
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={onClick}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
-        className={cn(COMPACT_CLASS, className)}
+        className={cn('min-w-0', className)}
       >
         <Plus size={ICON_SIZE.row} aria-hidden className="shrink-0" />
         <span className="truncate">Create agent</span>
-      </button>
+      </Button>
     );
   }
 
