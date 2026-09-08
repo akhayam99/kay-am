@@ -4,6 +4,7 @@ import type {
   ResolvePublicationPreview,
   ResolveQueueItemWithThread,
   ResolveThread,
+  ResolveUncapturedWork,
   SessionId,
 } from '@goodboy/types';
 
@@ -16,6 +17,7 @@ export type ResolveState = {
   readonly sessionResolvePublications: Readonly<
     Record<SessionId, ReadonlyArray<ResolvePublication>>
   >;
+  readonly sessionResolveUncapturedWork: Readonly<Record<SessionId, ResolveUncapturedWork | null>>;
   readonly activePublicationPreview: Readonly<Record<SessionId, ResolvePublicationPreview | null>>;
 };
 
@@ -24,5 +26,6 @@ export const resolveInitialState: ResolveState = {
   sessionResolveAttempts: {},
   sessionResolveQueueItems: {},
   sessionResolvePublications: {},
+  sessionResolveUncapturedWork: {},
   activePublicationPreview: {},
 };

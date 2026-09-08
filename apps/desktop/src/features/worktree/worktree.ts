@@ -32,6 +32,36 @@ export const createWorktree = async (args: CreateWorktreeArgs): Promise<CreatedW
   return invoke<CreatedWorktree>('worktree_create', { args });
 };
 
+type IntegrateCandidateParams = {
+  readonly worktreePath: string;
+  readonly candidateId: string;
+  readonly candidateSha: string;
+  readonly expectedHead: string;
+};
+
+type QuarantineCandidateParams = {
+  readonly worktreePath: string;
+  readonly candidateId: string;
+  readonly baseSha: string;
+};
+
+export type QuarantinedCandidate = {
+  readonly sha: string | null;
+  readonly baseSha: string;
+};
+
+export const integrateWorktreeCandidate = async (
+  args: IntegrateCandidateParams,
+): Promise<string> => {
+  const result = await invoke<{ readonly sha: string }>('worktree_integrate_candidate', { args });
+  return result.sha;
+};
+
+export const quarantineWorktreeCandidate = async (
+  args: QuarantineCandidateParams,
+): Promise<QuarantinedCandidate> =>
+  invoke<QuarantinedCandidate>('worktree_quarantine_candidate', { args });
+
 export type WorktreeWriterLease = {
   readonly path: string;
   readonly holder: string | null;

@@ -37,6 +37,7 @@ const item: ResolveQueueItem = {
   approvalState: 'none',
   approvedRevision: null,
   approvedReplyHash: null,
+  integratedSha: null,
   deferredAt: null,
   deliveredAt: null,
   supersededAt: null,
@@ -79,9 +80,7 @@ describe('createResolveQueryMocks resolve queue item behavior', () => {
     const mocks = createResolveQueryMocks();
     await mocks.upsertResolveThread({ row: thread, expectedRevision: null });
     await mocks.insertResolveQueueItem({ item: { ...item, supersededAt: 5 } });
-    await expect(
-      mocks.deferResolveQueueItem({ sessionId, itemId: item.id }),
-    ).resolves.toBe(false);
+    await expect(mocks.deferResolveQueueItem({ sessionId, itemId: item.id })).resolves.toBe(false);
   });
 
   it('refuses to defer an item that has already been delivered', async () => {
@@ -90,9 +89,7 @@ describe('createResolveQueryMocks resolve queue item behavior', () => {
     await mocks.insertResolveQueueItem({
       item: { ...item, approvalState: 'accepted', approvedRevision: 0, deliveredAt: 5 },
     });
-    await expect(
-      mocks.deferResolveQueueItem({ sessionId, itemId: item.id }),
-    ).resolves.toBe(false);
+    await expect(mocks.deferResolveQueueItem({ sessionId, itemId: item.id })).resolves.toBe(false);
     const [row] = await mocks.listResolveQueueItems({ sessionId });
     expect(row?.item.approvalState).toBe('accepted');
     expect(row?.item.deliveredAt).toBe(5);

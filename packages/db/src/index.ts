@@ -367,6 +367,19 @@ export {
 } from './queries/resolve-attempt';
 export { hasResolveImport, commitResolveImport } from './queries/resolve-import';
 export {
+  insertResolveCandidate,
+  insertResolveCandidateItem,
+  getResolveCandidate,
+  getReadyResolveCandidateForItem,
+  listResolveCandidateItems,
+  listResolveCandidates,
+  markResolveCandidateReady,
+  setResolveCandidateState,
+  markOverlappingResolveCandidatesStale,
+  markResolveCandidateIntegrated,
+  finalizeResolveCandidateIntegration,
+} from './queries/resolve-candidate';
+export {
   insertResolvePublication,
   setResolvePublicationPhase,
   listActiveResolvePublications,

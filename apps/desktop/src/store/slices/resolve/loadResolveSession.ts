@@ -10,11 +10,13 @@ import { reconcileResolveAttempts } from './reconcileResolveAttempts';
 import { importLegacyResolve } from './importLegacyResolve';
 import { projectResolveRows } from './projectResolveRows';
 import { loadPublicationsInto } from './publicationState';
+import { recoverUncapturedResolveWork } from './recoverUncapturedResolveWork';
 import type { SessionParams, SliceParams } from './types';
 
 type Params = SliceParams & SessionParams;
 
 export const loadResolveSession = async ({ set, get, sessionId }: Params): Promise<void> => {
+  await recoverUncapturedResolveWork({ set, get, sessionId }).catch(() => null);
   await importLegacyResolve({ set, get, sessionId });
   await reconcileResolveAttempts({
     set,

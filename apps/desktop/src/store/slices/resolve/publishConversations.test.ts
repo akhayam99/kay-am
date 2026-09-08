@@ -325,6 +325,7 @@ const approveThread = async ({ sessionId, threadId }: ApproveParams): Promise<vo
       approvalState: 'none',
       approvedRevision: null,
       approvedReplyHash: null,
+      integratedSha: null,
       deferredAt: null,
       deliveredAt: null,
       supersededAt: null,
