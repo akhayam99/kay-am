@@ -134,6 +134,7 @@ export const createResolveQueryMocks = () => {
         if (
           item === undefined ||
           item.sessionId !== sessionId ||
+          item.supersededAt !== null ||
           item.candidateRevision !== revision ||
           thread?.revision !== revision
         ) {
@@ -144,34 +145,59 @@ export const createResolveQueryMocks = () => {
           approvalState: 'accepted',
           approvedRevision: revision,
           approvedReplyHash: replyHash,
+          deferredAt: null,
         });
         return true;
       },
     ),
-    deferResolveQueueItem: vi.fn(async ({ itemId }: QueueItemIdParams) => {
+    deferResolveQueueItem: vi.fn(async ({ sessionId, itemId }: QueueItemIdParams) => {
       const item = queueItems.get(itemId);
-      if (item === undefined) {
+      if (
+        item === undefined ||
+        item.sessionId !== sessionId ||
+        item.supersededAt !== null ||
+        item.deliveredAt !== null
+      ) {
         return false;
       }
-      queueItems.set(itemId, { ...item, approvalState: 'deferred', deferredAt: Date.now() });
+      queueItems.set(itemId, {
+        ...item,
+        approvalState: 'deferred',
+        approvedRevision: null,
+        approvedReplyHash: null,
+        deferredAt: Date.now(),
+      });
       return true;
     }),
-    undeferResolveQueueItem: vi.fn(async ({ itemId }: QueueItemIdParams) => {
+    undeferResolveQueueItem: vi.fn(async ({ sessionId, itemId }: QueueItemIdParams) => {
       const item = queueItems.get(itemId);
-      if (item === undefined || item.approvalState !== 'deferred') {
+      if (
+        item === undefined ||
+        item.sessionId !== sessionId ||
+        item.supersededAt !== null ||
+        item.approvalState !== 'deferred'
+      ) {
         return false;
       }
       queueItems.set(itemId, { ...item, approvalState: 'none', deferredAt: null });
       return true;
     }),
-    markResolveQueueItemDelivered: vi.fn(async ({ itemId, deliveredAt }: DeliveredParams) => {
-      const item = queueItems.get(itemId);
-      if (item === undefined || item.approvalState !== 'accepted') {
-        return false;
-      }
-      queueItems.set(itemId, { ...item, deliveredAt });
-      return true;
-    }),
+    markResolveQueueItemDelivered: vi.fn(
+      async ({ sessionId, itemId, deliveredAt }: DeliveredParams) => {
+        const item = queueItems.get(itemId);
+        if (
+          item === undefined ||
+          item.sessionId !== sessionId ||
+          item.supersededAt !== null ||
+          item.approvalState !== 'accepted' ||
+          item.approvedRevision !== item.candidateRevision
+        ) {
+          return false;
+        }
+        queueItems.set(itemId, { ...item, deliveredAt });
+        return true;
+      },
+    ),
     hasResolveImport: vi.fn(async () => false),
     commitResolveImport: vi.fn(async ({ rows }: ImportParams) => {
       rows.forEach((row) => threads.set(row.threadId, row));

@@ -133,4 +133,37 @@ describe('resolve queue item queries', () => {
       markResolveQueueItemDelivered({ db, sessionId, itemId: item.id, deliveredAt: 5 }),
     ).resolves.toBe(true);
   });
+
+  it('refuses to defer an item that has already been delivered', async () => {
+    await setResolveQueueItemApproval({
+      db,
+      sessionId,
+      itemId: item.id,
+      revision: 2,
+      replyHash: 'hash',
+    });
+    await markResolveQueueItemDelivered({ db, sessionId, itemId: item.id, deliveredAt: 5 });
+    await expect(deferResolveQueueItem({ db, sessionId, itemId: item.id })).resolves.toBe(false);
+    const [row] = await listResolveQueueItems({ db, sessionId });
+    expect(row?.item.approvalState).toBe('accepted');
+    expect(row?.item.deliveredAt).toBe(5);
+  });
+
+  it('refuses to reopen an item under a session that does not own it', async () => {
+    await db.execute(
+      "INSERT INTO sessions (id, workspace_id, goal, state_kind, created_at, updated_at) VALUES ('other-session', 'workspace', 'Goal', 'idle', 1, 1)",
+    );
+    const otherSessionId = 'other-session' as SessionId;
+    const reopened = await reopenResolveQueueItem({
+      db,
+      sessionId: otherSessionId,
+      itemId: item.id,
+      id: 'item-hijack',
+      candidateRevision: 2,
+    });
+    expect(reopened).toBeNull();
+    const [row] = await listResolveQueueItems({ db, sessionId });
+    expect(row?.item.id).toBe(item.id);
+    expect(row?.item.supersededAt).toBeNull();
+  });
 });

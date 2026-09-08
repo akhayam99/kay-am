@@ -164,7 +164,7 @@ export const deferResolveQueueItem = async ({
 }: ItemParams): Promise<boolean> => {
   const now = Date.now();
   const result = await db.execute(
-    `UPDATE resolve_queue_items SET approval_state = 'deferred', approved_revision = NULL, approved_reply_hash = NULL, deferred_at = ?, updated_at = ? WHERE id = ? AND session_id = ? AND superseded_at IS NULL`,
+    `UPDATE resolve_queue_items SET approval_state = 'deferred', approved_revision = NULL, approved_reply_hash = NULL, deferred_at = ?, updated_at = ? WHERE id = ? AND session_id = ? AND superseded_at IS NULL AND delivered_at IS NULL`,
     [now, now, itemId, sessionId],
   );
   return result.rowsAffected === 1;
@@ -216,8 +216,8 @@ export const reopenResolveQueueItem = async ({
   await db.exec('BEGIN');
   try {
     const superseded = await db.execute(
-      'UPDATE resolve_queue_items SET superseded_at = ?, updated_at = ? WHERE id = ? AND superseded_at IS NULL',
-      [now, now, itemId],
+      'UPDATE resolve_queue_items SET superseded_at = ?, updated_at = ? WHERE id = ? AND session_id = ? AND superseded_at IS NULL',
+      [now, now, itemId, sessionId],
     );
     if (superseded.rowsAffected !== 1) {
       throw new Error('Resolve queue item changed before it could be reopened');
