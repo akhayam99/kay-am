@@ -27,6 +27,7 @@ const item = ({
   approvalState,
   approvedRevision: null,
   approvedReplyHash: null,
+  integratedSha: null,
   deferredAt: null,
   deliveredAt: null,
   supersededAt: null,

@@ -16,6 +16,7 @@ const baseItem: ResolveQueueItem = {
   approvalState: 'none',
   approvedRevision: null,
   approvedReplyHash: null,
+  integratedSha: null,
   deferredAt: null,
   deliveredAt: null,
   supersededAt: null,
@@ -51,12 +52,14 @@ const row = ({
   threadId,
   status,
   reviewerCreatedAtMs,
+  integratedSha = null,
 }: {
   readonly threadId: string;
   readonly status: ResolveQueueStatus;
   readonly reviewerCreatedAtMs: number;
+  readonly integratedSha?: string | null;
 }): ResolveQueueRow => ({
-  item: { ...baseItem, id: `item-${threadId}`, threadId },
+  item: { ...baseItem, id: `item-${threadId}`, threadId, integratedSha },
   thread: { ...baseThread, id: `row-${threadId}`, threadId },
   status,
   attempt: null,
@@ -76,7 +79,12 @@ describe('groupResolveQueue', () => {
     const rows = [
       row({ threadId: 'newest', status: 'for_you', reviewerCreatedAtMs: 300 }),
       row({ threadId: 'oldest', status: 'agent_asked', reviewerCreatedAtMs: 100 }),
-      row({ threadId: 'middle', status: 'changed_since_accepted', reviewerCreatedAtMs: 200 }),
+      row({
+        threadId: 'middle',
+        status: 'changed_since_accepted',
+        reviewerCreatedAtMs: 200,
+        integratedSha: 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678',
+      }),
     ];
     const groups = groupResolveQueue({ rows });
     expect(groups.forYou.map((entry) => entry.thread.threadId)).toEqual([
@@ -89,8 +97,18 @@ describe('groupResolveQueue', () => {
   it('excludes working, ready_to_push, pushed and later from the for-you bucket', () => {
     const rows = [
       row({ threadId: 'w', status: 'working', reviewerCreatedAtMs: 1 }),
-      row({ threadId: 'r', status: 'ready_to_push', reviewerCreatedAtMs: 2 }),
-      row({ threadId: 'p', status: 'pushed', reviewerCreatedAtMs: 3 }),
+      row({
+        threadId: 'r',
+        status: 'ready_to_push',
+        reviewerCreatedAtMs: 2,
+        integratedSha: 'b2c3d4e5f60718293a4b5c6d7e8f90123456789a',
+      }),
+      row({
+        threadId: 'p',
+        status: 'pushed',
+        reviewerCreatedAtMs: 3,
+        integratedSha: 'c3d4e5f60718293a4b5c6d7e8f90123456789ab2',
+      }),
       row({ threadId: 'l', status: 'later', reviewerCreatedAtMs: 4 }),
     ];
     const groups = groupResolveQueue({ rows });
