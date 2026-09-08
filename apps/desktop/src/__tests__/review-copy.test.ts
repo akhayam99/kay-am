@@ -1,10 +1,12 @@
 import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-const REVIEW_ROOT = join(import.meta.dirname, '..', 'features', 'review');
-const RESOLVE_ROOT = join(import.meta.dirname, '..', 'store', 'slices', 'resolve');
-const EM_DASH = '—';
+const TESTS_DIR = dirname(fileURLToPath(import.meta.url));
+const REVIEW_ROOT = join(TESTS_DIR, '..', 'features', 'review');
+const RESOLVE_ROOT = join(TESTS_DIR, '..', 'store', 'slices', 'resolve');
+const EM_DASH = '\u2014';
 const BATCH_VOCABULARY =
   /\b(batch|batches|batched|queue|queued|queueing|scheduler|scheduled|scheduling)\b/i;
 

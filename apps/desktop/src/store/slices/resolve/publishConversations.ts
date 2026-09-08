@@ -227,7 +227,7 @@ export const publishConversations = async ({
               'error',
               'error',
               'nothing was published',
-              `${error}. the conversations stayed as they were.`,
+              `${error}. The conversations stayed as they were.`,
               { sessionId, action: { kind: 'retry-publication', sessionId } },
             );
             return { kind: 'push_failed', error };
