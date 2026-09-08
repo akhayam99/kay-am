@@ -69,6 +69,14 @@ const listProjectScriptsSpy = vi.fn(async () => [] as ReadonlyArray<ProjectScrip
 const upsertProjectScriptSpy = vi.fn(async () => undefined);
 const deleteProjectScriptSpy = vi.fn(async () => undefined);
 const deleteFileVersionsForSessionSpy = vi.fn(async () => undefined);
+const updateSessionMountLifecycleSpy = vi.fn(async () => true);
+const inspectWorktreeSpy = vi.fn(async ({ worktreePath }: { worktreePath: string }) => ({
+  kind: 'registered' as string,
+  path: worktreePath,
+  isMain: false,
+  isLocked: false,
+  lockReason: null,
+}));
 const listPendingResolutionsForSessionSpy = vi.fn(
   async () => [] as ReadonlyArray<PendingResolution>,
 );
@@ -121,6 +129,10 @@ vi.mock('@goodboy/db', async () => {
     listTelemetryForSession: vi.fn(async () => []),
     listWorkspaces: vi.fn(async () => []),
     listWorktreesForSession: vi.fn(async () => []),
+    listSessionMounts: vi.fn(async () => []),
+    purgeSessionMounts: vi.fn(async () => undefined),
+    getSessionMount: vi.fn(async () => null),
+    updateSessionMountLifecycle: updateSessionMountLifecycleSpy,
     listWorktreesForSessions: vi.fn(async () => new Map()),
     listAgentsForSessions: vi.fn(async () => new Map()),
     deleteWorktreesForSession: vi.fn(async () => undefined),
@@ -305,6 +317,26 @@ vi.mock('../../../features/worktree/worktree', () => ({
   createWorktree: createWorktreeSpy,
   createSessionDir: createSessionDirSpy,
   removeWorktree: removeWorktreeSpy,
+  removeWorktreeChecked: vi.fn(async ({ worktreePath }: { worktreePath: string }) => ({
+    kind: 'removed',
+    path: worktreePath,
+  })),
+  worktreeWriterStatus: vi.fn(async ({ path }: { path: string }) => ({
+    path,
+    holder: null,
+    token: null,
+    runId: null,
+    isGranted: false,
+    hasExited: false,
+    waiting: [],
+  })),
+  worktreeDirectorySize: vi.fn(async ({ path }: { path: string }) => ({
+    path,
+    sizeBytes: 1024,
+    isPartial: false,
+    exists: true,
+  })),
+  inspectWorktree: inspectWorktreeSpy,
   changeWorktreeBranch: changeWorktreeBranchSpy,
   sessionDirExists: vi.fn(async () => true),
   worktreeChangedFiles: vi.fn(async () => []),
@@ -883,6 +915,67 @@ describe('store contract', () => {
       const s = store.getState();
       expect(invokeWorkflowsForSessionSpy).toHaveBeenCalledWith(SESSION_ID);
       expect(s.sessionWorkflows[SESSION_ID]).toEqual([workflow]);
+    });
+
+    it('unarchiveTask hides a mount whose folder is gone and clears its path', async () => {
+      const store = await getStore();
+      const db = await import('@goodboy/db');
+      const archived: Session = { ...buildSession(), archivedAt: NOW } as Session;
+      vi.mocked(db.listWorktreesForSession).mockResolvedValueOnce([
+        {
+          id: 'mount-gone',
+          sessionId: SESSION_ID,
+          projectId: PROJECT_ID,
+          worktreePath: '/tmp/repo/.goodboy/worktrees/gone',
+          branch: 'ak/gone',
+          parallelIndex: 1,
+          mountName: 'repo',
+          createdAt: Date.now(),
+        },
+      ] as never);
+      vi.mocked(db.getSessionMount).mockResolvedValueOnce({ revision: 7 } as never);
+      inspectWorktreeSpy.mockResolvedValueOnce({
+        kind: 'missing',
+        path: '/tmp/repo/.goodboy/worktrees/gone',
+      } as never);
+      store.setState({
+        workspaces: [buildWorkspace()],
+        projects: [buildProject()],
+        currentWorkspaceId: WS_ID,
+        archivedSessions: { [WS_ID]: [archived] },
+      });
+
+      await store.getState().unarchiveTask(SESSION_ID);
+
+      expect(store.getState().sessionProjectMounts[SESSION_ID]).toEqual([]);
+      expect(updateSessionMountLifecycleSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          mountId: 'mount-gone',
+          worktreePath: null,
+          diskState: 'missing',
+          expectedRevision: 7,
+        }),
+      );
+    });
+
+    it('archiveTask keeps the worktrees unless the user asks to clean them', async () => {
+      const store = await getStore();
+      const cleanupSessionMounts = vi.fn(async () => []);
+      store.setState({
+        workspaces: [buildWorkspace()],
+        currentWorkspaceId: WS_ID,
+        sessions: [buildSession()],
+        cleanupSessionMounts,
+      } as never);
+
+      await store.getState().archiveTask(SESSION_ID);
+      await store.getState().archiveTask(SESSION_ID, { cleanWorktrees: true });
+
+      expect(cleanupSessionMounts).toHaveBeenNthCalledWith(1, {
+        sessionId: SESSION_ID,
+        reason: 'archive',
+        keepDirectories: true,
+      });
     });
 
     it('deleteTask removes an archived session from the archived cache', async () => {

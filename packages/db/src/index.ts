@@ -198,11 +198,16 @@ export {
   updateSessionWorktreePath,
   updateSessionWorktreeRepoSlug,
   listAllSessionWorktrees,
+  listArchivedSessionMounts,
+  listMountPathOwnership,
+  purgeSessionMounts,
+  type MountPathOwnership,
   type SessionWorktree,
 } from './queries/session-worktree';
 export {
   getMountOperation,
   listMountOperations,
+  listUnsettledMountOperations,
   upsertMountOperation,
 } from './queries/mount-operation';
 export {
@@ -211,7 +216,11 @@ export {
   upsertMountPullRequestLink,
 } from './queries/mount-pr-link';
 export {
+  deleteRetainedWorktreePath,
+  insertRetainedWorktreePath,
+  listAllRetainedWorktreePaths,
   listRetainedWorktreePaths,
+  markRetainedWorktreePathChecked,
   transferMountPathToRetained,
 } from './queries/retained-worktree-path';
 export {

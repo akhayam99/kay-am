@@ -214,14 +214,6 @@ export const removeWorktreeChecked = async ({
   return invoke<WorktreeRemovalResult>('worktree_remove_checked', { repoPath, worktreePath });
 };
 
-export const removeWorktree = async (repoPath: string, worktreePath: string): Promise<void> => {
-  const result = await removeWorktreeChecked({ repoPath, worktreePath });
-  if (result.kind !== 'kept') {
-    return;
-  }
-  throw new Error(`Worktree kept: ${result.reasons.join(', ')}`);
-};
-
 type WorktreeDirectorySizeParams = {
   readonly path: string;
 };
@@ -244,6 +236,7 @@ export type OrphanWorktree = {
   readonly path: string;
   readonly name: string;
   readonly sizeBytes: number;
+  readonly isRegistered: boolean;
 };
 
 type ScanOrphanWorktreesParams = {

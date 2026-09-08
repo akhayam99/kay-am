@@ -4,30 +4,40 @@ import type { AppStore } from '../../store';
 
 const {
   listArchivedSessionRefs,
-  listWorktreesForSessions,
+  listArchivedSessionMounts,
+  listAllRetainedWorktreePaths,
   deleteTurnEventsForSessions,
   getTurnEventStatsForSessions,
   getDatabaseSizeBytes,
+  updateSessionMountLifecycle,
   vacuumDatabase,
-  removeWorktree,
+  removeWorktreeChecked,
+  worktreeWriterStatus,
+  worktreeDirectorySize,
   worktreeList,
 } = vi.hoisted(() => ({
   listArchivedSessionRefs: vi.fn(),
-  listWorktreesForSessions: vi.fn(),
+  listArchivedSessionMounts: vi.fn(),
+  listAllRetainedWorktreePaths: vi.fn(),
   deleteTurnEventsForSessions: vi.fn(),
   getTurnEventStatsForSessions: vi.fn(),
   getDatabaseSizeBytes: vi.fn(),
+  updateSessionMountLifecycle: vi.fn(),
   vacuumDatabase: vi.fn(),
-  removeWorktree: vi.fn(),
+  removeWorktreeChecked: vi.fn(),
+  worktreeWriterStatus: vi.fn(),
+  worktreeDirectorySize: vi.fn(),
   worktreeList: vi.fn(),
 }));
 
 vi.mock('@goodboy/db', () => ({
   listArchivedSessionRefs,
-  listWorktreesForSessions,
+  listArchivedSessionMounts,
+  listAllRetainedWorktreePaths,
   deleteTurnEventsForSessions,
   getTurnEventStatsForSessions,
   getDatabaseSizeBytes,
+  updateSessionMountLifecycle,
   vacuumDatabase,
 }));
 
@@ -36,7 +46,9 @@ vi.mock('../../../shared/lib/db', () => ({
 }));
 
 vi.mock('../../../features/worktree/worktree', () => ({
-  removeWorktree,
+  removeWorktreeChecked,
+  worktreeWriterStatus,
+  worktreeDirectorySize,
   worktreeList,
 }));
 
@@ -58,50 +70,84 @@ const project = {
   kind: 'repo',
 } as Project;
 
-const archivedWorktree = {
+type StoredMount = {
+  readonly id: string;
+  readonly sessionId: SessionId;
+  readonly projectId: ProjectId;
+  readonly worktreePath: string;
+  readonly branch: string;
+  readonly revision: number;
+} & Record<string, unknown>;
+
+const mount = (overrides: Record<string, unknown>): StoredMount =>
+  ({
+    sessionId: ARCHIVED_SESSION,
+    projectId: PROJECT_ID,
+    lastWorktreePath: null,
+    baseBranch: null,
+    parallelIndex: 0,
+    mountName: 'project',
+    repoSlug: null,
+    isAttached: true,
+    diskState: 'present',
+    revision: 3,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  }) as unknown as StoredMount;
+
+const archivedWorktree = mount({
   id: 'wt-archived',
-  sessionId: ARCHIVED_SESSION,
-  projectId: PROJECT_ID,
   worktreePath: '/repo/.goodboy/worktrees/archived',
   branch: 'ak/archived',
-  parallelIndex: 0,
-  createdAt: 0,
-};
+});
 
-const liveWorktree = {
+const liveWorktree = mount({
   id: 'wt-live',
   sessionId: LIVE_SESSION,
-  projectId: PROJECT_ID,
   worktreePath: '/repo/.goodboy/worktrees/live',
   branch: 'ak/live',
-  parallelIndex: 0,
-  createdAt: 0,
-};
+});
 
 const makeGet =
   (loadStats = vi.fn(async () => undefined)) =>
   () =>
-    ({ projects: [project], loadStorageStats: loadStats }) as unknown as AppStore;
+    ({
+      projects: [project],
+      sessions: [],
+      terminalTabs: {},
+      loadStorageStats: loadStats,
+      reconcileOrphanWorktrees: vi.fn(async () => undefined),
+    }) as unknown as AppStore;
 
 beforeEach(() => {
-  listArchivedSessionRefs.mockReset();
-  listWorktreesForSessions.mockReset();
-  deleteTurnEventsForSessions.mockReset();
-  getTurnEventStatsForSessions.mockReset();
-  getDatabaseSizeBytes.mockReset();
-  vacuumDatabase.mockReset();
-  removeWorktree.mockReset();
-  worktreeList.mockReset();
+  vi.clearAllMocks();
 
   listArchivedSessionRefs.mockResolvedValue([
     { sessionId: ARCHIVED_SESSION, workspaceId: WORKSPACE_ID },
   ]);
-  listWorktreesForSessions.mockResolvedValue(
-    new Map([
-      [ARCHIVED_SESSION, [archivedWorktree]],
-      [LIVE_SESSION, [liveWorktree]],
-    ]),
-  );
+  listArchivedSessionMounts.mockResolvedValue([archivedWorktree]);
+  listAllRetainedWorktreePaths.mockResolvedValue([]);
+  updateSessionMountLifecycle.mockResolvedValue(true);
+  removeWorktreeChecked.mockImplementation(async ({ worktreePath }: { worktreePath: string }) => ({
+    kind: 'removed',
+    path: worktreePath,
+  }));
+  worktreeWriterStatus.mockImplementation(async ({ path }: { path: string }) => ({
+    path,
+    holder: null,
+    token: null,
+    runId: null,
+    isGranted: false,
+    hasExited: false,
+    waiting: [],
+  }));
+  worktreeDirectorySize.mockImplementation(async ({ path }: { path: string }) => ({
+    path,
+    sizeBytes: 1024,
+    isPartial: false,
+    exists: true,
+  }));
   worktreeList.mockResolvedValue([
     { path: '/repo', branch: 'main', head: 'a', isMain: true },
     {
@@ -124,14 +170,27 @@ describe('collectArchivedWorktrees', () => {
     expect(targets).toEqual([
       {
         sessionId: ARCHIVED_SESSION,
+        mountId: 'wt-archived',
         repoPath: '/repo',
         worktreePath: archivedWorktree.worktreePath,
+        branch: 'ak/archived',
+        revision: 3,
+        sizeBytes: 1024,
       },
     ]);
   });
 
   it('drops worktrees git no longer reports', async () => {
     worktreeList.mockResolvedValue([{ path: '/repo', branch: 'main', head: 'a', isMain: true }]);
+
+    await expect(collectArchivedWorktrees({ projects: [project] })).resolves.toEqual([]);
+  });
+
+  it('never claims a checkout whose branch matches but whose path does not', async () => {
+    worktreeList.mockResolvedValue([
+      { path: '/repo', branch: 'main', head: 'a', isMain: true },
+      { path: '/elsewhere/checkout', branch: 'ak/archived', head: 'b', isMain: false },
+    ]);
 
     await expect(collectArchivedWorktrees({ projects: [project] })).resolves.toEqual([]);
   });
@@ -142,22 +201,36 @@ describe('removeArchivedWorktrees', () => {
     const loadStats = vi.fn(async () => undefined);
     const result = await removeArchivedWorktrees(vi.fn(), makeGet(loadStats))();
 
-    expect(removeWorktree.mock.calls).toEqual([['/repo', archivedWorktree.worktreePath]]);
+    expect(removeWorktreeChecked.mock.calls).toEqual([
+      [{ repoPath: '/repo', worktreePath: archivedWorktree.worktreePath }],
+    ]);
+    expect(updateSessionMountLifecycle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mountId: 'wt-archived',
+        worktreePath: null,
+        isAttached: false,
+        expectedRevision: 3,
+      }),
+    );
     expect(result).toEqual({ removed: 1, failed: 0 });
     expect(loadStats).toHaveBeenCalled();
   });
 
-  it('counts failures without aborting the remaining removals', async () => {
-    listWorktreesForSessions.mockResolvedValue(
-      new Map([
-        [ARCHIVED_SESSION, [archivedWorktree, { ...liveWorktree, sessionId: ARCHIVED_SESSION }]],
-      ]),
-    );
-    removeWorktree.mockRejectedValueOnce(new Error('worktree locked'));
+  it('keeps a mount the guard refuses and counts it as a failure', async () => {
+    listArchivedSessionMounts.mockResolvedValue([
+      archivedWorktree,
+      { ...liveWorktree, sessionId: ARCHIVED_SESSION },
+    ]);
+    removeWorktreeChecked.mockResolvedValueOnce({
+      kind: 'kept',
+      path: archivedWorktree.worktreePath,
+      reasons: ['locked'],
+    });
 
     const result = await removeArchivedWorktrees(vi.fn(), makeGet())();
 
-    expect(removeWorktree).toHaveBeenCalledTimes(2);
+    expect(removeWorktreeChecked).toHaveBeenCalledTimes(2);
+    expect(updateSessionMountLifecycle).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ removed: 1, failed: 1 });
   });
 });
@@ -198,12 +271,54 @@ describe('loadStorageStats', () => {
         archivedWorktrees: [
           {
             sessionId: ARCHIVED_SESSION,
+            mountId: 'wt-archived',
             repoPath: '/repo',
             worktreePath: archivedWorktree.worktreePath,
+            branch: 'ak/archived',
+            revision: 3,
+            sizeBytes: 1024,
+          },
+        ],
+        retainedWorktrees: [],
+      },
+      storageStatsLoading: false,
+    });
+  });
+
+  it('publishes the retained folders with their measured size', async () => {
+    listAllRetainedWorktreePaths.mockResolvedValue([
+      {
+        id: 'retained-1',
+        workspaceId: WORKSPACE_ID,
+        projectId: PROJECT_ID,
+        sourceSessionId: ARCHIVED_SESSION,
+        sourceMountId: 'wt-archived',
+        repoRoot: '/repo',
+        worktreePath: '/repo/.goodboy/worktrees/kept',
+        branch: 'ak/kept',
+        reason: 'session_delete',
+        lastCheckedAt: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+    ]);
+    const set = vi.fn();
+
+    await loadStorageStats(set, makeGet())();
+
+    expect(set.mock.calls[1]?.[0]).toMatchObject({
+      storageStats: {
+        retainedWorktrees: [
+          {
+            id: 'retained-1',
+            repoRoot: '/repo',
+            worktreePath: '/repo/.goodboy/worktrees/kept',
+            branch: 'ak/kept',
+            reason: 'session_delete',
+            sizeBytes: 1024,
           },
         ],
       },
-      storageStatsLoading: false,
     });
   });
 });

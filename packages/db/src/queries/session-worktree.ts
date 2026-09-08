@@ -3,8 +3,10 @@ import type {
   MountDiskState,
   MountId,
   ProjectId,
+  RetainedWorktreePath,
   SessionId,
   SessionMount,
+  WorkspaceId,
 } from '@goodboy/types';
 import type { Database } from '../client';
 import { UniqueViolationError } from '../shared/errors';
@@ -491,4 +493,122 @@ export const listAllSessionWorktrees = async (
     const worktree = toPresentWorktree(row);
     return worktree === null ? [] : [worktree];
   });
+};
+
+export type MountPathOwnership = {
+  readonly mountId: MountId;
+  readonly sessionId: SessionId;
+  readonly workspaceId: WorkspaceId;
+  readonly projectId: ProjectId | null;
+  readonly worktreePath: string;
+  readonly branch: string;
+  readonly revision: number;
+  readonly isSessionDeleted: boolean;
+  readonly isSessionArchived: boolean;
+};
+
+type OwnershipRow = {
+  readonly mountId: string;
+  readonly sessionId: string;
+  readonly workspaceId: string;
+  readonly projectId: string | null;
+  readonly worktreePath: string;
+  readonly branch: string;
+  readonly revision: number;
+  readonly isSessionDeleted: number;
+  readonly isSessionArchived: number;
+};
+
+export const listArchivedSessionMounts = async (
+  db: Database,
+): Promise<ReadonlyArray<SessionMount>> => {
+  const rows = await db.select<SessionWorktreeRow>(
+    `SELECT mount.* FROM session_worktrees mount
+     JOIN sessions s ON s.id = mount.session_id
+     WHERE s.archived_at IS NOT NULL AND s.deleted_at IS NULL AND mount.worktree_path IS NOT NULL
+     ORDER BY mount.session_id, mount.parallel_index, mount.created_at, mount.id`,
+    [],
+  );
+  return rows.map(toMount);
+};
+
+export const listMountPathOwnership = async (
+  db: Database,
+): Promise<ReadonlyArray<MountPathOwnership>> => {
+  const rows = await db.select<OwnershipRow>(
+    `SELECT mount.id AS mountId, mount.session_id AS sessionId, s.workspace_id AS workspaceId,
+            mount.project_id AS projectId, mount.worktree_path AS worktreePath,
+            mount.branch AS branch, mount.revision AS revision,
+            CASE WHEN s.deleted_at IS NULL THEN 0 ELSE 1 END AS isSessionDeleted,
+            CASE WHEN s.archived_at IS NULL THEN 0 ELSE 1 END AS isSessionArchived
+     FROM session_worktrees mount
+     JOIN sessions s ON s.id = mount.session_id
+     WHERE mount.worktree_path IS NOT NULL
+     ORDER BY mount.worktree_path`,
+    [],
+  );
+  return rows.map((row) => ({
+    mountId: row.mountId as MountId,
+    sessionId: row.sessionId as SessionId,
+    workspaceId: row.workspaceId as WorkspaceId,
+    projectId: row.projectId === null ? null : (row.projectId as ProjectId),
+    worktreePath: row.worktreePath,
+    branch: row.branch,
+    revision: row.revision,
+    isSessionDeleted: row.isSessionDeleted !== 0,
+    isSessionArchived: row.isSessionArchived !== 0,
+  }));
+};
+
+type PurgeSessionMountsParams = {
+  readonly db: Database;
+  readonly sessionId: SessionId;
+  readonly retained: ReadonlyArray<RetainedWorktreePath>;
+};
+
+export const purgeSessionMounts = async ({
+  db,
+  sessionId,
+  retained,
+}: PurgeSessionMountsParams): Promise<void> => {
+  await db.exec('BEGIN IMMEDIATE');
+  try {
+    await db.execute('UPDATE sessions SET active_mount_id = NULL WHERE id = ?', [sessionId]);
+    for (const path of retained) {
+      await db.execute('DELETE FROM retained_worktree_paths WHERE worktree_path = ?', [
+        path.worktreePath,
+      ]);
+      await db.execute(
+        `INSERT INTO retained_worktree_paths
+          (id, workspace_id, project_id, source_session_id, source_mount_id, repo_root,
+           worktree_path, branch, reason, last_checked_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          path.id,
+          path.workspaceId,
+          path.projectId,
+          path.sourceSessionId,
+          path.sourceMountId,
+          path.repoRoot,
+          path.worktreePath,
+          path.branch,
+          path.reason,
+          path.lastCheckedAt === null ? null : Date.parse(path.lastCheckedAt),
+          Date.parse(path.createdAt),
+          Date.parse(path.updatedAt),
+        ],
+      );
+    }
+    await db.execute(
+      `DELETE FROM mount_pr_links
+       WHERE mount_id IN (SELECT id FROM session_worktrees WHERE session_id = ?)`,
+      [sessionId],
+    );
+    await db.execute('DELETE FROM mount_operations WHERE session_id = ?', [sessionId]);
+    await db.execute('DELETE FROM session_worktrees WHERE session_id = ?', [sessionId]);
+    await db.exec('COMMIT');
+  } catch (error) {
+    await db.exec('ROLLBACK');
+    throw error;
+  }
 };

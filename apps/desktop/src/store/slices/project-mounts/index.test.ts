@@ -72,6 +72,15 @@ vi.mock('../../../features/worktree/worktree', () => ({
   listBranchNames: h.listBranchNames,
   inspectWorktree: h.inspectWorktree,
   removeWorktreeChecked: h.removeWorktreeChecked,
+  worktreeWriterStatus: vi.fn(async ({ path }: { path: string }) => ({
+    path,
+    holder: null,
+    token: null,
+    runId: null,
+    isGranted: false,
+    hasExited: false,
+    waiting: [],
+  })),
   removeWorktree: vi.fn(async () => undefined),
   removeSessionDirectory: vi.fn(async () => undefined),
   sessionDirExists: h.sessionDirExists,
@@ -193,7 +202,9 @@ const makeState = (): State => ({
   sessionGithub: {},
   sessionProjectPrs: {},
   sessionSelectedPrNumber: {},
+  terminalTabs: {},
   recordSessionEvent: vi.fn(async () => undefined),
+  reconcileOrphanWorktrees: vi.fn(async () => undefined),
 });
 
 const makeSlice = () => {

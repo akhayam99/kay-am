@@ -365,7 +365,10 @@ describe('story: the user detaches a project from the mounted strip', () => {
       .getState()
       .detachProject({ sessionId: SESSION_ID, projectId: WEB_PROJECT_ID });
 
-    expect(storySpies.removeWorktree).toHaveBeenCalledWith('/tmp/web', WEB_MOUNT_PATH);
+    expect(storySpies.removeWorktreeChecked).toHaveBeenCalledWith({
+      repoPath: '/tmp/web',
+      worktreePath: WEB_MOUNT_PATH,
+    });
     expect(storySpies.deleteSessionWorktreeForProject).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: SESSION_ID, projectId: WEB_PROJECT_ID }),
     );
@@ -379,19 +382,20 @@ describe('story: the user detaches a project from the mounted strip', () => {
 
   it('keeps a dirty worktree on disk and says why in the event', async () => {
     seedMountedWeb();
-    storySpies.worktreeStatus.mockResolvedValueOnce({
-      workingTree: { kind: 'known', staged: 0, unstaged: 2, untracked: 0, unmerged: 0 },
+    storySpies.removeWorktreeChecked.mockResolvedValueOnce({
+      kind: 'kept',
+      path: WEB_MOUNT_PATH,
+      reasons: ['unstaged-changes'],
     } as never);
 
     await useAppStore
       .getState()
       .detachProject({ sessionId: SESSION_ID, projectId: WEB_PROJECT_ID });
 
-    expect(storySpies.removeWorktree).not.toHaveBeenCalled();
     expect(useAppStore.getState().sessionProjectMounts[SESSION_ID]).toEqual([appMount]);
     expect(recordedEvent('project_detached')?.payload).toMatchObject({
       kept: true,
-      reason: 'uncommitted changes in the worktree',
+      reason: 'unstaged-changes',
     });
   });
 });

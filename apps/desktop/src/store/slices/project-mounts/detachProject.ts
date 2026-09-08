@@ -1,34 +1,16 @@
-import type { ProjectId, SessionId, SessionProjectMount } from '@goodboy/types';
-import { deleteSessionWorktreeForProject, updateSessionActiveProject } from '@goodboy/db';
-import { formatError } from '@goodboy/ui';
-import { tauriDatabase } from '../../../shared/lib/db';
+import type { IsoDateTime, ProjectId, SessionId } from '@goodboy/types';
 import {
-  removeSessionDirectory,
-  removeWorktree,
-  worktreeStatus,
-} from '../../../features/worktree/worktree';
+  deleteSessionWorktreeForProject,
+  updateSessionActiveProject,
+  updateSessionMountLifecycle,
+} from '@goodboy/db';
+import { tauriDatabase } from '../../../shared/lib/db';
+import { cleanupMountDirectory } from '../mount-cleanup';
 import type { GetFn, SetFn } from './types';
 
 export type DetachProjectInput = {
   readonly sessionId: SessionId;
   readonly projectId: ProjectId;
-};
-
-type MountParams = {
-  readonly mount: SessionProjectMount;
-};
-
-const hasUncommittedWork = async ({ mount }: MountParams): Promise<boolean> => {
-  try {
-    const status = await worktreeStatus({ worktreePath: mount.worktreePath });
-    if (status.workingTree.kind !== 'known') {
-      return true;
-    }
-    const { staged, unstaged, untracked, unmerged } = status.workingTree;
-    return staged + unstaged + untracked + unmerged > 0;
-  } catch {
-    return true;
-  }
 };
 
 export const detachProject = (set: SetFn, get: GetFn) => {
@@ -40,24 +22,38 @@ export const detachProject = (set: SetFn, get: GetFn) => {
     }
     const project = get().projects.find((candidate) => candidate.id === projectId);
     const projectName = project?.name ?? mount.mountName;
-    let kept = true;
-    let keptReason: string | null = null;
-    if (project?.kind !== 'repo') {
-      keptReason = 'folder projects keep their directory';
-    } else {
-      const dirty = await hasUncommittedWork({ mount });
-      if (dirty) {
-        keptReason = 'uncommitted changes in the worktree';
-      } else {
-        try {
-          await removeWorktree(mount.repoRoot, mount.worktreePath);
-          kept = false;
-        } catch (error) {
-          keptReason = formatError(error);
-        }
-      }
+    const result = await cleanupMountDirectory({
+      get,
+      target: {
+        sessionId,
+        mountId: mount.mountId ?? null,
+        projectId,
+        repoRoot: mount.repoRoot,
+        worktreePath: mount.worktreePath,
+        branch: mount.branch,
+        diskState: mount.diskState ?? 'unchecked',
+        isRepoProject: project?.kind === 'repo',
+      },
+    });
+    const kept = result.decision.kind === 'kept';
+    const keptReason = result.decision.kind === 'kept' ? result.decision.reason : null;
+    const mountId = mount.mountId;
+    const revision = mount.revision;
+    if (kept && mountId !== undefined && revision !== undefined) {
+      await updateSessionMountLifecycle({
+        db: tauriDatabase,
+        sessionId,
+        mountId,
+        worktreePath: mount.worktreePath,
+        isAttached: false,
+        diskState: result.diskState,
+        expectedRevision: revision,
+        updatedAt: new Date().toISOString() as IsoDateTime,
+      });
     }
-    await deleteSessionWorktreeForProject({ db: tauriDatabase, sessionId, projectId });
+    if (!kept) {
+      await deleteSessionWorktreeForProject({ db: tauriDatabase, sessionId, projectId });
+    }
     const remaining = mounts.filter((candidate) => candidate.projectId !== projectId);
     const activeId = get().sessionActiveProject[sessionId] ?? null;
     const nextActiveId =

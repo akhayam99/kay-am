@@ -68,11 +68,13 @@ type RecordParams = {
 };
 
 const record = vi.fn(async (_params: RecordParams) => undefined);
-const get = (() => ({ recordSessionEventOnce: record })) as unknown as GetFn;
+const proposeMountCleanup = vi.fn(async () => null);
+const get = (() => ({ recordSessionEventOnce: record, proposeMountCleanup })) as unknown as GetFn;
 
 describe('observeMountRequestTransition', () => {
   beforeEach(() => {
     record.mockClear();
+    proposeMountCleanup.mockClear();
   });
 
   it('records an approval observed between two polls', async () => {
@@ -115,6 +117,13 @@ describe('observeMountRequestTransition', () => {
     });
 
     expect(record.mock.calls[0]?.[0]).toMatchObject({ kind: 'pr_merged' });
+    expect(proposeMountCleanup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mountId,
+        reason: 'merge_cleanup',
+        expectedBranch: 'ak/feat-session-events',
+      }),
+    );
   });
 
   it('stays quiet when the state did not move', async () => {

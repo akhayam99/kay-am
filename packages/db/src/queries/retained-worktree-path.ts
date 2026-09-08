@@ -142,3 +142,92 @@ export const transferMountPathToRetained = async ({
     throw error;
   }
 };
+
+type InsertRetainedWorktreePathParams = {
+  readonly db: Database;
+  readonly retained: RetainedWorktreePath;
+};
+
+type RetainedKeyParams = {
+  readonly db: Database;
+  readonly id: string;
+};
+
+type MarkRetainedCheckedParams = RetainedKeyParams & {
+  readonly lastCheckedAt: IsoDateTime;
+};
+
+const SELECT_COLUMNS = `id, workspace_id AS workspaceId, project_id AS projectId,
+            source_session_id AS sourceSessionId, source_mount_id AS sourceMountId,
+            repo_root AS repoRoot, worktree_path AS worktreePath, branch, reason,
+            last_checked_at AS lastCheckedAt, created_at AS createdAt, updated_at AS updatedAt`;
+
+export const listAllRetainedWorktreePaths = async ({
+  db,
+}: {
+  readonly db: Database;
+}): Promise<ReadonlyArray<RetainedWorktreePath>> => {
+  const rows = await db.select<Row>(
+    `SELECT ${SELECT_COLUMNS} FROM retained_worktree_paths ORDER BY created_at, id`,
+    [],
+  );
+  return rows.map(toDomain);
+};
+
+export const insertRetainedWorktreePath = async ({
+  db,
+  retained,
+}: InsertRetainedWorktreePathParams): Promise<void> => {
+  await db.exec('BEGIN IMMEDIATE');
+  try {
+    const owners = await db.select<{ readonly id: string }>(
+      'SELECT id FROM session_worktrees WHERE worktree_path = ? LIMIT 1',
+      [retained.worktreePath],
+    );
+    if (owners.length > 0) {
+      throw new UniqueViolationError('retained worktree path', 'worktreePath');
+    }
+    await db.execute('DELETE FROM retained_worktree_paths WHERE worktree_path = ?', [
+      retained.worktreePath,
+    ]);
+    await db.execute(
+      `INSERT INTO retained_worktree_paths
+        (id, workspace_id, project_id, source_session_id, source_mount_id, repo_root,
+         worktree_path, branch, reason, last_checked_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        retained.id,
+        retained.workspaceId,
+        retained.projectId,
+        retained.sourceSessionId,
+        retained.sourceMountId,
+        retained.repoRoot,
+        retained.worktreePath,
+        retained.branch,
+        retained.reason,
+        retained.lastCheckedAt === null ? null : Date.parse(retained.lastCheckedAt),
+        Date.parse(retained.createdAt),
+        Date.parse(retained.updatedAt),
+      ],
+    );
+    await db.exec('COMMIT');
+  } catch (error) {
+    await db.exec('ROLLBACK');
+    throw error;
+  }
+};
+
+export const deleteRetainedWorktreePath = async ({ db, id }: RetainedKeyParams): Promise<void> => {
+  await db.execute('DELETE FROM retained_worktree_paths WHERE id = ?', [id]);
+};
+
+export const markRetainedWorktreePathChecked = async ({
+  db,
+  id,
+  lastCheckedAt,
+}: MarkRetainedCheckedParams): Promise<void> => {
+  await db.execute(
+    'UPDATE retained_worktree_paths SET last_checked_at = ?, updated_at = ? WHERE id = ?',
+    [Date.parse(lastCheckedAt), Date.parse(lastCheckedAt), id],
+  );
+};

@@ -907,6 +907,8 @@ pub struct OrphanWorktree {
     pub name: String,
     #[serde(rename = "sizeBytes")]
     pub size_bytes: u64,
+    #[serde(rename = "isRegistered")]
+    pub is_registered: bool,
 }
 
 fn worktrees_parent(repo_path: &Path) -> PathBuf {
@@ -1015,22 +1017,48 @@ pub(crate) fn collect_orphans(
     known_paths: &[String],
 ) -> Vec<OrphanWorktree> {
     let parent = worktrees_parent(repo_path);
-    let Ok(entries) = std::fs::read_dir(&parent) else {
-        return Vec::new();
-    };
-    let claimed: std::collections::HashSet<String> = registered
+    let parent_key = canonical_key(&parent);
+    let claimed: std::collections::HashSet<String> = known_paths
         .iter()
-        .chain(known_paths.iter())
         .map(|p| canonical_key(Path::new(p)))
         .collect();
-    let mut orphans: Vec<OrphanWorktree> = entries
-        .flatten()
-        .filter(|entry| entry.path().is_dir())
-        .filter(|entry| !claimed.contains(&canonical_key(&entry.path())))
-        .map(|entry| OrphanWorktree {
-            path: entry.path().to_string_lossy().into_owned(),
-            name: entry.file_name().to_string_lossy().into_owned(),
-            size_bytes: directory_size(&entry.path()).0.unwrap_or(0),
+    let registered_keys: std::collections::HashSet<String> = registered
+        .iter()
+        .map(|p| canonical_key(Path::new(p)))
+        .collect();
+    let mut candidates: Vec<PathBuf> = std::fs::read_dir(&parent)
+        .map(|entries| {
+            entries
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|path| path.is_dir())
+                .collect()
+        })
+        .unwrap_or_default();
+    for path in registered.iter().map(PathBuf::from) {
+        let inside = path
+            .parent()
+            .map(|dir| canonical_key(dir) == parent_key)
+            .unwrap_or(false);
+        if !inside || !path.is_dir() {
+            continue;
+        }
+        if candidates.iter().any(|known| canonical_key(known) == canonical_key(&path)) {
+            continue;
+        }
+        candidates.push(path);
+    }
+    let mut orphans: Vec<OrphanWorktree> = candidates
+        .into_iter()
+        .filter(|path| !claimed.contains(&canonical_key(path)))
+        .map(|path| OrphanWorktree {
+            name: path
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            size_bytes: directory_size(&path).0.unwrap_or(0),
+            is_registered: registered_keys.contains(&canonical_key(&path)),
+            path: path.to_string_lossy().into_owned(),
         })
         .collect();
     orphans.sort_by(|a, b| a.path.cmp(&b.path));
@@ -1051,6 +1079,7 @@ pub async fn worktree_orphans(
             .map(|stdout| {
                 parse_porcelain(&stdout)
                     .into_iter()
+                    .filter(|entry| !entry.is_main)
                     .map(|entry| entry.path)
                     .collect()
             })
@@ -3586,10 +3615,14 @@ mod teardown_tests {
 
         assert_eq!(
             found.iter().map(|o| o.name.as_str()).collect::<Vec<_>>(),
-            vec!["gb-ghost"]
+            vec!["gb-ghost", "gb-live"]
         );
         assert_eq!(found[0].size_bytes, 4096);
+        assert!(!found[0].is_registered);
+        assert!(found[1].is_registered);
         assert!(orphan.exists());
+        assert!(registered.exists());
+        assert!(claimed.exists());
     }
 
     #[test]

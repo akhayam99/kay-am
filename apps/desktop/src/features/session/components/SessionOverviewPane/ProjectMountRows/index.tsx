@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { Session, SessionProjectMount } from '@goodboy/types';
 import type { LensKind } from '../../../../../store';
 import { EMPTY_ARRAY, useAppStore, useMountDiffStats } from '../../../../../store';
+import { MountCleanupProposals } from '../MountCleanupProposals';
 import { MountProjectAction } from './MountProjectAction';
 import { ProjectMountRow } from './ProjectMountRow';
 import { useWorktreeStatusPending, useWorktreeStatuses } from '../../../hooks/useWorktreeStatuses';
@@ -65,6 +66,7 @@ export const ProjectMountRows = ({ session, onSelectLens }: Props) => {
           />
         ))
       )}
+      <MountCleanupProposals sessionId={session.id} />
     </section>
   );
 };

@@ -60,6 +60,7 @@ import type {
   WorkspaceProfile,
   IntegrationBinding,
   WorkspaceIntegrationProvider,
+  MountCleanupProposal,
   MountId,
   ProjectScriptId,
   GhTokenStatus,
@@ -177,6 +178,15 @@ import type { AddProjectsResult } from './slices/projects/addProjects';
 import type { AdoptProjectResult } from './slices/projects/adoptProject';
 import { createProjectMountsSlice } from './slices/project-mounts';
 import { projectMountsInitialState } from './slices/project-mounts/state';
+import { createMountCleanupSlice, mountCleanupInitialState } from './slices/mount-cleanup';
+import type { ArchiveTaskOptions } from './slices/sessions/types';
+import type {
+  CleanupSessionMountsInput,
+  ProposeMountCleanupInput,
+  ResolveMountCleanupInput,
+  SessionCleanupKeyInput,
+  SessionCleanupOutcome,
+} from './slices/mount-cleanup';
 import type {
   AttachMountInput,
   ForkMountInput,
@@ -422,6 +432,14 @@ type AppActions = {
   recoverMountOperations(input: SessionKeyInput): Promise<number>;
   resolveMountBranchMismatch(input: ResolveMountBranchInput): Promise<SessionMountView>;
   setSessionActiveMount(input: MountKeyInput): Promise<void>;
+  cleanupSessionMounts(
+    input: CleanupSessionMountsInput,
+  ): Promise<ReadonlyArray<SessionCleanupOutcome>>;
+  proposeMountCleanup(input: ProposeMountCleanupInput): Promise<MountCleanupProposal | null>;
+  loadMountCleanupProposals(
+    input: SessionCleanupKeyInput,
+  ): Promise<ReadonlyArray<MountCleanupProposal>>;
+  resolveMountCleanup(input: ResolveMountCleanupInput): Promise<void>;
   linkSessionExternalTask(
     sessionId: SessionId,
     task: Omit<SessionExternalTask, 'sessionId'>,
@@ -672,7 +690,7 @@ type AppActions = {
   autoTitleSession(sessionId: SessionId, title: string): Promise<void>;
   deleteTask(sessionId: SessionId): Promise<void>;
   bulkDeleteTask(ids: ReadonlyArray<SessionId>): Promise<void>;
-  archiveTask(sessionId: SessionId): Promise<void>;
+  archiveTask(sessionId: SessionId, options?: ArchiveTaskOptions): Promise<void>;
   bulkArchiveTask(ids: ReadonlyArray<SessionId>): Promise<void>;
   unarchiveTask(sessionId: SessionId): Promise<void>;
   bulkUnarchiveTask(ids: ReadonlyArray<SessionId>): Promise<void>;
@@ -968,6 +986,7 @@ export const initialState: AppState = {
   orphanWorktrees: {},
   sessionProjectMounts: {},
   ...projectMountsInitialState,
+  ...mountCleanupInitialState,
   sessionLanguageAnchor: {},
   sessionActiveProject: {},
   sessionBranches: {},
@@ -1097,6 +1116,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   ...createWorkspacesSlice(set, get),
   ...createProjectsSlice(set, get),
   ...createProjectMountsSlice(set, get),
+  ...createMountCleanupSlice(set, get),
   ...createPresenceSlice(set, get),
   ...createTurnSlice(set, get),
   ...createWorktreesSlice(set, get),

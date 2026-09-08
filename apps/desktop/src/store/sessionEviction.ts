@@ -18,6 +18,7 @@ export const SESSION_EVICTION = [
   { key: 'sessionMounts', keyedBy: 'session', evictOn: 'archive' },
   { key: 'mountBranchObservations', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionActiveMount', keyedBy: 'session', evictOn: 'archive' },
+  { key: 'mountCleanupProposals', keyedBy: 'session', evictOn: 'delete' },
   { key: 'sessionLanguageAnchor', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionActiveProject', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionBranches', keyedBy: 'session', evictOn: 'archive' },
@@ -173,6 +174,7 @@ export const NON_SESSION_STATE_KEYS = [
   'slackUsers',
   'slackThreadHeads',
   'slackThreads',
+  'retainedWorktreePaths',
 ] as const satisfies ReadonlyArray<keyof AppState>;
 
 type RegisteredKey =

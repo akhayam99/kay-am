@@ -34,6 +34,9 @@ vi.mock('../../../hooks/useWorktreeStatuses', () => ({
 vi.mock('./MountProjectAction', () => ({
   MountProjectAction: () => <button>Mount project</button>,
 }));
+vi.mock('../MountCleanupProposals', () => ({
+  MountCleanupProposals: () => null,
+}));
 
 import { ProjectMountRows } from '.';
 

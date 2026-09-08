@@ -112,6 +112,12 @@ vi.mock('@goodboy/db', () => ({
   deleteWorktreesForSession: vi.fn(async () => undefined),
   updateSessionWorktreeBranch: vi.fn(async () => undefined),
   listAllSessionWorktrees: vi.fn(async () => []),
+  listMountPathOwnership: vi.fn(async () => []),
+  listAllRetainedWorktreePaths: vi.fn(async () => []),
+  listUnsettledMountOperations: vi.fn(async () => []),
+  purgeSessionMounts: vi.fn(async () => undefined),
+  deleteRetainedWorktreePath: vi.fn(async () => undefined),
+  markRetainedWorktreePathChecked: vi.fn(async () => undefined),
   renameSession: vi.fn(async () => undefined),
   deleteSession: vi.fn(async () => undefined),
   archiveSession: vi.fn(async () => undefined),
@@ -280,7 +286,13 @@ const createWorktreeSpy = vi.fn();
 const removeWorktreeSpy = vi.fn(async () => undefined);
 const changeWorktreeBranchSpy = vi.fn(async () => undefined);
 const scanOrphanWorktreesSpy = vi.fn(
-  async () => [] as ReadonlyArray<{ path: string; name: string; sizeBytes: number }>,
+  async () =>
+    [] as ReadonlyArray<{
+      path: string;
+      name: string;
+      sizeBytes: number;
+      isRegistered: boolean;
+    }>,
 );
 const removeOrphanWorktreeSpy = vi.fn(async () => undefined);
 
@@ -291,6 +303,12 @@ vi.mock('../../../features/worktree/worktree', () => ({
   worktreeChangedFiles: vi.fn(async () => []),
   scanOrphanWorktrees: scanOrphanWorktreesSpy,
   removeOrphanWorktree: removeOrphanWorktreeSpy,
+  worktreeDirectorySize: vi.fn(async ({ path }: { path: string }) => ({
+    path,
+    sizeBytes: 0,
+    isPartial: false,
+    exists: true,
+  })),
 }));
 
 vi.mock('../../../shared/lib/repo', () => ({
@@ -825,7 +843,12 @@ describe('store contract', () => {
         },
       ]);
       scanOrphanWorktreesSpy.mockResolvedValueOnce([
-        { path: '/repo/.goodboy/worktrees/gb-ghost', name: 'gb-ghost', sizeBytes: 2048 },
+        {
+          path: '/repo/.goodboy/worktrees/gb-ghost',
+          name: 'gb-ghost',
+          sizeBytes: 2048,
+          isRegistered: false,
+        },
       ]);
 
       await store.getState().hydrate();

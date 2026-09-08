@@ -4,10 +4,12 @@ const {
   archiveSession,
   changeWorktreeBranch,
   removeSessionDirectory,
-  removeWorktree,
+  removeWorktreeChecked,
+  worktreeWriterStatus,
   scratchDirRemove,
   tidyRepoGoodboyDir,
   listWorktreesForSession,
+  purgeSessionMounts,
   updateSessionWorktreeBranch,
   listSessionMounts,
   updateSessionMountBranch,
@@ -24,10 +26,28 @@ const {
   archiveSession: vi.fn(async () => undefined),
   changeWorktreeBranch: vi.fn(async () => undefined),
   removeSessionDirectory: vi.fn(async () => undefined),
-  removeWorktree: vi.fn(async () => undefined),
+  removeWorktreeChecked: vi.fn(async ({ worktreePath }: { worktreePath: string }) => ({
+    kind: 'removed',
+    path: worktreePath,
+  })),
+  worktreeWriterStatus: vi.fn(async ({ path }: { path: string }) => ({
+    path,
+    holder: null,
+    token: null,
+    runId: null,
+    isGranted: false,
+    hasExited: false,
+    waiting: [],
+  })),
   scratchDirRemove: vi.fn(async () => undefined),
   tidyRepoGoodboyDir: vi.fn(async () => undefined),
   listWorktreesForSession: vi.fn(async () => [] as ReadonlyArray<unknown>),
+  purgeSessionMounts: vi.fn(
+    async (_params: {
+      sessionId: string;
+      retained: ReadonlyArray<{ worktreePath: string }>;
+    }): Promise<void> => undefined,
+  ),
   updateSessionWorktreeBranch: vi.fn(async () => undefined),
   listSessionMounts: vi.fn(async () => [] as ReadonlyArray<unknown>),
   updateSessionMountBranch: vi.fn(async () => true),
@@ -45,11 +65,16 @@ const {
 vi.mock('@goodboy/db', () => ({
   archiveSession,
   listWorktreesForSession,
+  purgeSessionMounts,
   updateSessionWorktreeBranch,
   listSessionMounts,
   updateSessionMountBranch,
+  updateSessionMountLifecycle: vi.fn(async () => true),
+  updateSessionActiveMount: vi.fn(async () => true),
+  updateSessionActiveProject: vi.fn(async () => undefined),
   getMountOperation,
   upsertMountOperation,
+  listMountOperations: vi.fn(async () => []),
   deleteSession,
   purgeSessionForDelete,
   deleteFileVersionsForSession,
@@ -71,7 +96,14 @@ vi.mock('../shared/lib/db', () => ({ tauriDatabase: {} }));
 vi.mock('../features/worktree/worktree', () => ({
   changeWorktreeBranch,
   removeSessionDirectory,
-  removeWorktree,
+  removeWorktreeChecked,
+  worktreeWriterStatus,
+  worktreeDirectorySize: vi.fn(async ({ path }: { path: string }) => ({
+    path,
+    sizeBytes: 1024,
+    isPartial: false,
+    exists: true,
+  })),
   scratchDirRemove,
   tidyRepoGoodboyDir,
   invalidateLocalBranchesCache: vi.fn(),
@@ -82,7 +114,10 @@ vi.mock('../features/file-versions/fileVersions', () => ({
   fileVersionsDelete: vi.fn(async () => undefined),
 }));
 
-vi.mock('../features/chat/turn', () => ({ cancelTurn: vi.fn(async () => undefined) }));
+vi.mock('../features/chat/turn', () => ({
+  cancelTurn: vi.fn(async () => undefined),
+  listLiveRunIds: vi.fn(async () => new Set<string>()),
+}));
 
 vi.mock('../features/github/github', () => ({
   createTauriPrCacheStore: vi.fn(() => ({})),
@@ -149,10 +184,14 @@ type Store = {
   sessionSelectedPrNumber: Record<string, number | null>;
   sessionExternalTasks: Record<string, ReadonlyArray<{ readonly branch?: string }>>;
   sessionPhaseRuns: Record<string, ReadonlyArray<unknown>>;
+  terminalTabs: Record<string, ReadonlyArray<unknown>>;
+  mountCleanupProposals: Record<string, ReadonlyArray<unknown>>;
   closeSessionTerminals: () => Promise<void>;
   evictSession: () => void;
   emitNotification: () => void;
   recordSessionEvent: () => Promise<void>;
+  reconcileOrphanWorktrees: () => Promise<void>;
+  cleanupSessionMounts: () => Promise<ReadonlyArray<unknown>>;
 };
 
 type MakeStoreParams = {
@@ -188,10 +227,14 @@ const makeStore = ({ projects, mounts, branch, activeProjectId }: MakeStoreParam
   sessionSelectedPrNumber: {},
   sessionExternalTasks: {},
   sessionPhaseRuns: {},
+  terminalTabs: {},
+  mountCleanupProposals: {},
   closeSessionTerminals: vi.fn(async () => undefined),
   evictSession: vi.fn(),
   emitNotification: vi.fn(),
   recordSessionEvent: vi.fn(async () => undefined),
+  reconcileOrphanWorktrees: vi.fn(async () => undefined),
+  cleanupSessionMounts: vi.fn(async () => []),
 });
 
 const rowsFor = (mounts: ReadonlyArray<Mount>, containerBranch: string): Array<MountRow> => [
@@ -204,6 +247,27 @@ const rowsFor = (mounts: ReadonlyArray<Mount>, containerBranch: string): Array<M
     mountName: mount.mountName,
   })),
 ];
+
+const storedMount = (row: MountRow, index: number): Record<string, unknown> => ({
+  id: `mount-${index}`,
+  sessionId: SESSION_ID,
+  projectId: row.projectId ?? null,
+  worktreePath: row.worktreePath,
+  lastWorktreePath: row.worktreePath,
+  branch: row.branch,
+  baseBranch: null,
+  parallelIndex: row.parallelIndex,
+  mountName: row.mountName ?? null,
+  repoSlug: null,
+  isAttached: true,
+  diskState: 'present',
+  revision: 0,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+});
+
+const storedMountsFor = (rows: ReadonlyArray<MountRow>): Array<Record<string, unknown>> =>
+  rows.map(storedMount);
 
 const mountRowsFor = (mounts: ReadonlyArray<Mount>): Array<Record<string, unknown>> =>
   mounts.map((mount, index) => ({
@@ -317,6 +381,11 @@ const twoProjectStore = (activeProjectId?: string) =>
 beforeEach(() => {
   vi.clearAllMocks();
   listWorktreesForSession.mockReset();
+  listSessionMounts.mockResolvedValue([]);
+  removeWorktreeChecked.mockImplementation(async ({ worktreePath }: { worktreePath: string }) => ({
+    kind: 'removed',
+    path: worktreePath,
+  }));
 });
 
 describe('story: deleting a session that never did any work', () => {
@@ -334,11 +403,11 @@ describe('story: deleting a session that never did any work', () => {
       mounts: [],
       branch: '',
     });
-    listWorktreesForSession.mockResolvedValueOnce([]);
+    listSessionMounts.mockResolvedValueOnce([]);
 
     await deleteTask(vi.fn(), (() => store) as never)(SESSION_ID);
 
-    expect(removeWorktree).not.toHaveBeenCalled();
+    expect(removeWorktreeChecked).not.toHaveBeenCalled();
     expect(removeSessionDirectory).not.toHaveBeenCalled();
     expect(scratchDirRemove).toHaveBeenCalledWith({ sessionId: SESSION_ID });
     const notificationKinds = (store.emitNotification as ReturnType<typeof vi.fn>).mock.calls.map(
@@ -364,13 +433,11 @@ describe('story: a branchless folder session lives and dies without git', () => 
 
   it('deletes without removing a git worktree, purging file versions instead', async () => {
     const store = folderStore();
-    listWorktreesForSession.mockResolvedValueOnce(
-      rowsFor(store.sessionProjectMounts[SESSION_ID]!, ''),
-    );
+    listSessionMounts.mockResolvedValueOnce(rowsFor(store.sessionProjectMounts[SESSION_ID]!, ''));
 
     await deleteTask(vi.fn(), (() => store) as never)(SESSION_ID);
 
-    expect(removeWorktree).not.toHaveBeenCalled();
+    expect(removeWorktreeChecked).not.toHaveBeenCalled();
     expect(removeSessionDirectory).toHaveBeenCalledWith({
       basePath: CONTAINER_PATH,
       path: `${CONTAINER_PATH}/project`,
@@ -412,13 +479,16 @@ describe('story: a repo-backed session keeps its git lifecycle', () => {
 
   it('removes its mount worktree and the container on delete', async () => {
     const store = repoStore();
-    listWorktreesForSession.mockResolvedValueOnce(
-      rowsFor(store.sessionProjectMounts[SESSION_ID]!, API_BRANCH),
+    listSessionMounts.mockResolvedValueOnce(
+      storedMountsFor(rowsFor(store.sessionProjectMounts[SESSION_ID]!, API_BRANCH)),
     );
 
     await deleteTask(vi.fn(), (() => store) as never)(SESSION_ID);
 
-    expect(removeWorktree).toHaveBeenCalledWith(API_REPO_ROOT, API_WORKTREE_PATH);
+    expect(removeWorktreeChecked).toHaveBeenCalledWith({
+      repoPath: API_REPO_ROOT,
+      worktreePath: API_WORKTREE_PATH,
+    });
     expect(removeSessionDirectory).toHaveBeenCalledWith({
       basePath: '/tmp/sessions',
       path: CONTAINER_PATH,
@@ -499,15 +569,21 @@ describe('story: a two-project session routes git work through the active mount'
 
   it('removes every mount worktree and the container directory on delete', async () => {
     const store = twoProjectStore(WEB_PROJECT_ID);
-    listWorktreesForSession.mockResolvedValueOnce(
-      rowsFor(store.sessionProjectMounts[SESSION_ID]!, API_BRANCH),
+    listSessionMounts.mockResolvedValueOnce(
+      storedMountsFor(rowsFor(store.sessionProjectMounts[SESSION_ID]!, API_BRANCH)),
     );
 
     await deleteTask(vi.fn(), (() => store) as never)(SESSION_ID);
 
-    expect(removeWorktree).toHaveBeenCalledTimes(2);
-    expect(removeWorktree).toHaveBeenNthCalledWith(1, API_REPO_ROOT, API_WORKTREE_PATH);
-    expect(removeWorktree).toHaveBeenNthCalledWith(2, WEB_REPO_ROOT, WEB_WORKTREE_PATH);
+    expect(removeWorktreeChecked).toHaveBeenCalledTimes(2);
+    expect(removeWorktreeChecked).toHaveBeenNthCalledWith(1, {
+      repoPath: API_REPO_ROOT,
+      worktreePath: API_WORKTREE_PATH,
+    });
+    expect(removeWorktreeChecked).toHaveBeenNthCalledWith(2, {
+      repoPath: WEB_REPO_ROOT,
+      worktreePath: WEB_WORKTREE_PATH,
+    });
     expect(tidyRepoGoodboyDir).toHaveBeenCalledWith({ repoPath: API_REPO_ROOT });
     expect(tidyRepoGoodboyDir).toHaveBeenCalledWith({ repoPath: WEB_REPO_ROOT });
     expect(removeSessionDirectory).toHaveBeenCalledWith({
@@ -523,38 +599,45 @@ describe('story: a two-project session routes git work through the active mount'
     await archiveTask(vi.fn(), (() => store) as never)(SESSION_ID);
 
     expect(archiveSession).toHaveBeenCalledOnce();
-    expect(removeWorktree).not.toHaveBeenCalled();
+    expect(removeWorktreeChecked).not.toHaveBeenCalled();
     expect(removeSessionDirectory).not.toHaveBeenCalled();
     expect(tidyRepoGoodboyDir).not.toHaveBeenCalled();
     expect(deleteSession).not.toHaveBeenCalled();
   });
 
-  it('continues container cleanup when one mount removal fails, and tells the user', async () => {
+  it('continues container cleanup when one mount removal fails, and retains its path', async () => {
     const store = twoProjectStore(WEB_PROJECT_ID);
-    listWorktreesForSession.mockResolvedValueOnce(
-      rowsFor(store.sessionProjectMounts[SESSION_ID]!, API_BRANCH),
+    listSessionMounts.mockResolvedValueOnce(
+      storedMountsFor(rowsFor(store.sessionProjectMounts[SESSION_ID]!, API_BRANCH)),
     );
-    removeWorktree.mockRejectedValueOnce(new Error('project removal failed'));
+    removeWorktreeChecked.mockRejectedValueOnce(new Error('project removal failed'));
 
     await deleteTask(vi.fn(), (() => store) as never)(SESSION_ID);
 
-    expect(removeWorktree).toHaveBeenCalledTimes(2);
+    expect(removeWorktreeChecked).toHaveBeenCalledTimes(2);
     expect(removeSessionDirectory).toHaveBeenCalledOnce();
     expect(store.emitNotification).toHaveBeenCalled();
+    const call = purgeSessionMounts.mock.calls[0]?.[0];
+    expect(call?.retained.map((entry) => entry.worktreePath)).toEqual([API_WORKTREE_PATH]);
   });
 });
 
 describe('story: deleting a session created before project mounts existed', () => {
   it('removes a legacy mount row through its project name', async () => {
     const store = repoStore();
-    listWorktreesForSession.mockResolvedValueOnce([
-      { worktreePath: CONTAINER_PATH, branch: API_BRANCH, parallelIndex: 0 },
-      { worktreePath: API_WORKTREE_PATH, branch: API_BRANCH, parallelIndex: 1, mountName: 'api' },
-    ]);
+    listSessionMounts.mockResolvedValueOnce(
+      storedMountsFor([
+        { worktreePath: CONTAINER_PATH, branch: API_BRANCH, parallelIndex: 0 },
+        { worktreePath: API_WORKTREE_PATH, branch: API_BRANCH, parallelIndex: 1, mountName: 'api' },
+      ]),
+    );
 
     await deleteTask(vi.fn(), (() => store) as never)(SESSION_ID);
 
-    expect(removeWorktree).toHaveBeenCalledWith(API_REPO_ROOT, API_WORKTREE_PATH);
+    expect(removeWorktreeChecked).toHaveBeenCalledWith({
+      repoPath: API_REPO_ROOT,
+      worktreePath: API_WORKTREE_PATH,
+    });
     expect(removeSessionDirectory).toHaveBeenCalledWith({
       basePath: '/tmp/sessions',
       path: CONTAINER_PATH,
@@ -564,14 +647,16 @@ describe('story: deleting a session created before project mounts existed', () =
 
   it('falls back to a plain directory removal when no project matches the row', async () => {
     const store = repoStore();
-    listWorktreesForSession.mockResolvedValueOnce([
-      { worktreePath: CONTAINER_PATH, branch: '', parallelIndex: 0 },
-      { worktreePath: `${CONTAINER_PATH}/mystery`, branch: '', parallelIndex: 1 },
-    ]);
+    listSessionMounts.mockResolvedValueOnce(
+      storedMountsFor([
+        { worktreePath: CONTAINER_PATH, branch: '', parallelIndex: 0 },
+        { worktreePath: `${CONTAINER_PATH}/mystery`, branch: '', parallelIndex: 1 },
+      ]),
+    );
 
     await deleteTask(vi.fn(), (() => store) as never)(SESSION_ID);
 
-    expect(removeWorktree).not.toHaveBeenCalled();
+    expect(removeWorktreeChecked).not.toHaveBeenCalled();
     expect(removeSessionDirectory).toHaveBeenCalledWith({
       basePath: CONTAINER_PATH,
       path: `${CONTAINER_PATH}/mystery`,

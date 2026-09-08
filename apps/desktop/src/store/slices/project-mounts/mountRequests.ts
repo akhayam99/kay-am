@@ -275,4 +275,21 @@ export const observeMountRequestTransition = async ({
     return;
   }
   await get().recordSessionEventOnce({ sessionId, kind, payload });
+  if (next.state !== 'merged') {
+    return;
+  }
+  await get()
+    .proposeMountCleanup({
+      sessionId,
+      mountId: next.mountId,
+      reason: 'merge_cleanup',
+      expectedBranch: next.headBranch,
+      request: {
+        provider: next.provider,
+        host: next.host,
+        repoSlug: next.repoSlug,
+        prNumber: next.prNumber,
+      },
+    })
+    .catch(() => undefined);
 };

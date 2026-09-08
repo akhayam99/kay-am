@@ -1,18 +1,14 @@
-import {
-  listArchivedSessionRefs,
-  listWorktreesForSessions,
-  type SessionWorktree,
-} from '@goodboy/db';
-import type { Project } from '@goodboy/types';
+import { listArchivedSessionMounts } from '@goodboy/db';
+import type { Project, SessionMount } from '@goodboy/types';
 import { tauriDatabase } from '../../../shared/lib/db';
-import { worktreeList } from '../../../features/worktree/worktree';
+import { worktreeDirectorySize, worktreeList } from '../../../features/worktree/worktree';
 import type { ArchivedWorktreeTarget } from './types';
 
 type Params = {
   readonly projects: ReadonlyArray<Project>;
 };
 
-const isBranchless = (row: SessionWorktree): boolean => row.branch.trim() === '';
+const isBranchless = (mount: SessionMount): boolean => mount.branch.trim() === '';
 
 const listLiveWorktrees = async (
   repoPaths: ReadonlySet<string>,
@@ -27,9 +23,6 @@ const listLiveWorktrees = async (
           continue;
         }
         known.add(entry.path);
-        if (entry.branch != null) {
-          known.add(entry.branch);
-        }
       }
       live.set(repoPath, known);
     } catch {
@@ -42,41 +35,37 @@ const listLiveWorktrees = async (
 export const collectArchivedWorktrees = async ({
   projects,
 }: Params): Promise<ReadonlyArray<ArchivedWorktreeTarget>> => {
-  const refs = await listArchivedSessionRefs({ db: tauriDatabase });
-  if (refs.length === 0) {
+  const mounts = await listArchivedSessionMounts(tauriDatabase);
+  if (mounts.length === 0) {
     return [];
   }
   const projectById = new Map(projects.map((project) => [project.id, project]));
-  const rowsBySession = await listWorktreesForSessions(
-    tauriDatabase,
-    refs.map((ref) => ref.sessionId),
-  );
-
-  const candidates: ArchivedWorktreeTarget[] = [];
-  const branchByPath = new Map<string, string>();
-  for (const ref of refs) {
-    const rows = rowsBySession.get(ref.sessionId) ?? [];
-    for (const row of rows) {
-      const project = row.projectId === undefined ? undefined : projectById.get(row.projectId);
-      if (isBranchless(row) || project?.kind !== 'repo') {
-        continue;
-      }
-      candidates.push({
-        sessionId: ref.sessionId,
-        repoPath: project.rootPath,
-        worktreePath: row.worktreePath,
-      });
-      branchByPath.set(row.worktreePath, row.branch);
+  const candidates: Array<ArchivedWorktreeTarget> = [];
+  for (const mount of mounts) {
+    const project = mount.projectId === null ? undefined : projectById.get(mount.projectId);
+    const worktreePath = mount.worktreePath;
+    if (worktreePath === null || isBranchless(mount) || project?.kind !== 'repo') {
+      continue;
     }
+    candidates.push({
+      sessionId: mount.sessionId,
+      mountId: mount.id,
+      repoPath: project.rootPath,
+      worktreePath,
+      branch: mount.branch,
+      revision: mount.revision,
+      sizeBytes: null,
+    });
   }
 
   const live = await listLiveWorktrees(new Set(candidates.map((target) => target.repoPath)));
-  return candidates.filter((target) => {
-    const known = live.get(target.repoPath);
-    if (known == null) {
-      return false;
-    }
-    const branch = branchByPath.get(target.worktreePath);
-    return known.has(target.worktreePath) || (branch != null && known.has(branch));
-  });
+  const present = candidates.filter((target) =>
+    (live.get(target.repoPath) ?? new Set<string>()).has(target.worktreePath),
+  );
+  return Promise.all(
+    present.map(async (target) => {
+      const size = await worktreeDirectorySize({ path: target.worktreePath }).catch(() => null);
+      return { ...target, sizeBytes: size?.sizeBytes ?? null };
+    }),
+  );
 };

@@ -106,3 +106,21 @@ export const listMountOperations = async ({
   );
   return rows.map(toDomain);
 };
+
+export const listUnsettledMountOperations = async ({
+  db,
+}: {
+  readonly db: Database;
+}): Promise<ReadonlyArray<MountOperation>> => {
+  const rows = await db.select<Row>(
+    `SELECT id, session_id AS sessionId, mount_id AS mountId, request_id AS requestId,
+            kind, status, expected_revision AS expectedRevision, input_json AS input,
+            result_json AS result, error_code AS errorCode,
+            created_at AS createdAt, updated_at AS updatedAt
+     FROM mount_operations
+     WHERE status IN ('pending', 'running', 'uncertain')
+     ORDER BY created_at, id`,
+    [],
+  );
+  return rows.map(toDomain);
+};

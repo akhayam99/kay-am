@@ -121,3 +121,24 @@ export type MountRecoveryCode =
   | 'unknown-state';
 
 export type MountBranchResolution = 'adopt-observed' | 'keep-both';
+
+export type MountCleanupDisposition = 'removed' | 'missing' | 'kept';
+
+export type MountCleanupDecision =
+  | { readonly kind: 'removed'; readonly path: string }
+  | { readonly kind: 'missing'; readonly path: string }
+  | { readonly kind: 'kept'; readonly path: string; readonly reason: string };
+
+export type MountCleanupProposal = Readonly<{
+  requestId: string;
+  sessionId: SessionId;
+  mountId: MountId;
+  projectId: ProjectId | null;
+  reason: RetainedWorktreeReason;
+  repoRoot: string;
+  worktreePath: string;
+  branch: string;
+  sizeBytes: number | null;
+  request: MountPullRequestIdentity | null;
+  createdAt: IsoDateTime;
+}>;
