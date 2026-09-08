@@ -9,10 +9,39 @@ if it can't find a matching `## Goodboy vX.Y.Z` heading.
 
 ## Goodboy v0.2.22
 
-Mounting a branch works again. v0.2.21 shipped the multi mount feature with a
-defect that made every new mount fail on the spot, and made an agent that
-asked for one loop through turn after turn. Both are fixed, and continuation
-turns are now bounded so nothing in that family can run away again.
+Review comments are now a queue you work through, and nothing you skipped
+leaves with what you accepted. Mounting a branch works again too: v0.2.21
+shipped the multi mount feature with a defect that made every new mount fail
+on the spot, and made an agent that asked for one loop through turn after
+turn.
+
+### [#1699, #1702, #1701, #1704, #1705] Work through review comments in one queue
+
+Every comment waiting on you sits in one list, oldest first, each row leading
+with the reviewer's own words and the agent's proposal underneath.
+
+Skipping a comment used to be a lie. An agent working through several comments
+commits as it goes, and one commit can touch two comments' files, so accepting
+one fix and skipping the next sent the skipped change out anyway. Nothing
+leaves without your approval now. A publication refuses any commit no
+acceptance covers, a deferred item never counts as resolved, and an acceptance
+made against work that has since moved is invalidated rather than honored.
+
+Before you accept you see what you are accepting. Every comment the proposal
+answers is quoted with its file and its line, and a change of up to 40 lines
+renders each hunk whole, with old and new line numbers. Green means two runs
+really happened, one on your current code and one on the proposal, and when
+only one of them did the block says which. The agent's own account of its work
+is labelled a claim, not a result. A short change with green checks can be
+accepted from the row itself, and `Accept all` shows up only when every listed
+item qualifies, never preselected.
+
+Publishing is three lines in the dock that expand in place: the commits going
+out, the replies being posted, the notes marked done, one button. A reply is
+recorded before it is attempted, and an answer Goodboy cannot read hands the
+thread back to you rather than risk posting it twice. One deliberate change of
+behavior: publishing no longer closes threads on GitHub. Resolution is kept on
+your machine and the thread stays open for the reviewer to close.
 
 ### [#1706] Fork a mount without hijacking the one you forked from
 
