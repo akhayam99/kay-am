@@ -1054,7 +1054,10 @@ pub(crate) fn collect_orphans(
         if !inside || !path.is_dir() {
             continue;
         }
-        if candidates.iter().any(|known| canonical_key(known) == canonical_key(&path)) {
+        if candidates
+            .iter()
+            .any(|known| canonical_key(known) == canonical_key(&path))
+        {
             continue;
         }
         candidates.push(path);
