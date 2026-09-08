@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import type { SessionId, WorkspaceId } from '@goodboy/types';
+import type { IsoDateTime, MountId, SessionId, WorkspaceId } from '@goodboy/types';
 import type { Database } from '../client';
 import { makeTestDatabase } from '../test-helpers/test-db';
 import { migrations } from '../migrations';
 import { migrate } from '../migrations/runner';
+import { deleteSession } from './session';
 import {
+  deleteWorktreesForSession,
   insertSessionWorktree,
+  listSessionMounts,
   listWorktreesForSession,
+  updateSessionMountBranch,
   updateSessionWorktreeRepoSlug,
 } from './session-worktree';
 
@@ -120,5 +124,104 @@ describe('insertSessionWorktree', () => {
     const rows = await listWorktreesForSession(db, sessionId);
     expect(rows.find((row) => row.id === 'wt-stamped')?.repoSlug).toBe('acme/stamped');
     expect(rows.find((row) => row.id === 'wt-bare')?.repoSlug).toBeUndefined();
+  });
+});
+
+describe('updateSessionMountBranch', () => {
+  it('updates only the mount addressed by session, id, and revision', async () => {
+    const db = await seed();
+    await insertSessionWorktree(db, {
+      id: 'mount-one',
+      sessionId,
+      worktreePath: '/tmp/wt/one',
+      branch: 'old-one',
+      parallelIndex: 0,
+      createdAt: Date.now(),
+    });
+    await insertSessionWorktree(db, {
+      id: 'mount-two',
+      sessionId,
+      worktreePath: '/tmp/wt/two',
+      branch: 'old-two',
+      parallelIndex: 1,
+      createdAt: Date.now(),
+    });
+
+    const updated = await updateSessionMountBranch({
+      db,
+      sessionId,
+      mountId: 'mount-one' as MountId,
+      branch: 'new-one',
+      expectedRevision: 0,
+      updatedAt: new Date().toISOString() as IsoDateTime,
+    });
+    const stale = await updateSessionMountBranch({
+      db,
+      sessionId,
+      mountId: 'mount-one' as MountId,
+      branch: 'stale',
+      expectedRevision: 0,
+      updatedAt: new Date().toISOString() as IsoDateTime,
+    });
+    const mounts = await listSessionMounts({ db, sessionId });
+
+    expect(updated).toBe(true);
+    expect(stale).toBe(false);
+    expect(mounts.map((mount) => [mount.id, mount.branch, mount.revision])).toEqual([
+      ['mount-one', 'new-one', 1],
+      ['mount-two', 'old-two', 0],
+    ]);
+  });
+});
+
+describe('deleteWorktreesForSession', () => {
+  it('releases physical paths without deleting logical mount history', async () => {
+    const db = await seed();
+    await insertSessionWorktree(db, {
+      id: 'mount',
+      sessionId,
+      worktreePath: '/tmp/wt/mount',
+      branch: 'feature',
+      parallelIndex: 0,
+      createdAt: Date.now(),
+    });
+    await db.execute('UPDATE sessions SET active_mount_id = ? WHERE id = ?', ['mount', sessionId]);
+
+    await deleteWorktreesForSession(db, sessionId);
+
+    const mounts = await listSessionMounts({ db, sessionId });
+    const sessions = await db.select<{ readonly active_mount_id: string | null }>(
+      'SELECT active_mount_id FROM sessions WHERE id = ?',
+      [sessionId],
+    );
+    expect(await listWorktreesForSession(db, sessionId)).toEqual([]);
+    expect(mounts[0]).toMatchObject({
+      id: 'mount',
+      worktreePath: null,
+      lastWorktreePath: '/tmp/wt/mount',
+      isAttached: false,
+      diskState: 'removed',
+    });
+    expect(sessions[0]?.active_mount_id).toBeNull();
+  });
+});
+
+describe('deleteSession', () => {
+  it('clears the active mount reference before cascading mount deletion', async () => {
+    const db = await seed();
+    await insertSessionWorktree(db, {
+      id: 'mount',
+      sessionId,
+      worktreePath: '/tmp/wt/mount',
+      branch: 'feature',
+      parallelIndex: 0,
+      createdAt: Date.now(),
+    });
+    await db.execute('UPDATE sessions SET active_mount_id = ? WHERE id = ?', ['mount', sessionId]);
+
+    await deleteSession(db, sessionId);
+
+    expect(await db.select('SELECT id FROM sessions WHERE id = ?', [sessionId])).toEqual([]);
+    expect(await listSessionMounts({ db, sessionId })).toEqual([]);
   });
 });

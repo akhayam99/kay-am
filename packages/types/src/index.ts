@@ -5,6 +5,7 @@ export type {
   IntegrationCredentialId,
   IsoDateTime,
   MessageId,
+  MountId,
   OpenQuestionId,
   ProjectId,
   ProjectScriptId,
@@ -22,6 +23,18 @@ export type {
   WorkspaceId,
   IntegrationBindingId,
 } from './ids';
+export type {
+  MountDiskState,
+  MountOperation,
+  MountOperationKind,
+  MountOperationStatus,
+  MountPullRequestLink,
+  MountPullRequestProvider,
+  MountPullRequestState,
+  RetainedWorktreePath,
+  RetainedWorktreeReason,
+  SessionMount,
+} from './mount';
 export type { FileVersion, FileVersionChangeKind, FileVersionSnapshotSource } from './file-version';
 export type { IntegrationCredential, IntegrationCredentialUsage } from './integration-credential';
 export type { OpenQuestion, OpenQuestionSelectMode, OpenQuestionStatus } from './open-question';

@@ -295,9 +295,15 @@ fn mount_for(
     }
     let mount: Option<(String, String, Option<String>, Option<String>)> = conn
         .query_row(
-            "SELECT worktree_path, branch, repo_slug, project_id FROM session_worktrees
-             WHERE session_id = ?1 AND (?2 IS NULL OR project_id = ?2)
-             ORDER BY parallel_index ASC, created_at ASC
+            "SELECT sw.worktree_path, sw.branch, sw.repo_slug, sw.project_id
+             FROM session_worktrees sw
+             JOIN sessions s ON s.id = sw.session_id
+             WHERE sw.session_id = ?1
+               AND (?2 IS NULL OR sw.project_id = ?2)
+               AND sw.worktree_path IS NOT NULL
+               AND sw.is_attached = 1
+             ORDER BY CASE WHEN sw.id = s.active_mount_id THEN 0 ELSE 1 END,
+                      sw.parallel_index ASC, sw.created_at ASC, sw.id ASC
              LIMIT 1",
             rusqlite::params![session_id, project_id],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),

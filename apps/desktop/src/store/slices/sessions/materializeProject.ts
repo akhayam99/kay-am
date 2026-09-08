@@ -1,4 +1,4 @@
-import type { ProjectId, SessionId, SessionProjectMount } from '@goodboy/types';
+import type { MountId, ProjectId, SessionId, SessionProjectMount } from '@goodboy/types';
 import {
   insertSessionWorktree,
   listWorktreesForSession,
@@ -111,6 +111,7 @@ export const materializeProject = (set: SetFn, get: GetFn) => {
     );
     if (persistedRow !== undefined) {
       const persistedMount: SessionProjectMount = {
+        mountId: persistedRow.id as MountId,
         projectId,
         mountName: persistedRow.mountName ?? project.name,
         worktreePath: persistedRow.worktreePath,
@@ -236,6 +237,7 @@ export const materializeProject = (set: SetFn, get: GetFn) => {
       },
     });
     const mount: SessionProjectMount = {
+      mountId: record.id as MountId,
       projectId,
       mountName: project.name,
       worktreePath: created.worktreePath,

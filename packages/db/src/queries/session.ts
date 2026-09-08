@@ -3,6 +3,7 @@ import type {
   ClaudePermissionMode,
   IsoDateTime,
   ModelEffort,
+  MountId,
   ProjectId,
   ProviderId,
   Session,
@@ -34,6 +35,7 @@ type SessionRow = {
   auto_run: number;
   title_user_edited: number;
   active_project_id: string | null;
+  active_mount_id: string | null;
   archived_at: number | null;
   deleted_at: number | null;
   verbosity: string | null;
@@ -121,6 +123,9 @@ const toDomain = (
     titleUserEdited: row.title_user_edited !== 0,
     ...(row.active_project_id != null && {
       activeProjectId: row.active_project_id as ProjectId,
+    }),
+    ...(row.active_mount_id != null && {
+      activeMountId: row.active_mount_id as MountId,
     }),
     ...(row.archived_at != null && {
       archivedAt: new Date(row.archived_at).toISOString() as IsoDateTime,
@@ -287,6 +292,29 @@ export const updateSessionActiveProject = async ({
   await db.execute('UPDATE sessions SET active_project_id = ? WHERE id = ?', [projectId, id]);
 };
 
+type UpdateSessionActiveMountParams = {
+  readonly db: Database;
+  readonly sessionId: SessionId;
+  readonly mountId: MountId | null;
+};
+
+export const updateSessionActiveMount = async ({
+  db,
+  sessionId,
+  mountId,
+}: UpdateSessionActiveMountParams): Promise<boolean> => {
+  const result = await db.execute(
+    `UPDATE sessions
+     SET active_mount_id = ?
+     WHERE id = ?
+       AND (? IS NULL OR EXISTS (
+         SELECT 1 FROM session_worktrees WHERE session_id = ? AND id = ?
+       ))`,
+    [mountId, sessionId, mountId, sessionId, mountId],
+  );
+  return result.rowsAffected > 0;
+};
+
 export const updateSessionState = async (
   db: Database,
   id: SessionId,
@@ -406,7 +434,15 @@ export const renameSession = async (
 };
 
 export const deleteSession = async (db: Database, id: SessionId): Promise<void> => {
-  await db.execute('DELETE FROM sessions WHERE id = ?', [id]);
+  await db.exec('BEGIN IMMEDIATE');
+  try {
+    await db.execute('UPDATE sessions SET active_mount_id = NULL WHERE id = ?', [id]);
+    await db.execute('DELETE FROM sessions WHERE id = ?', [id]);
+    await db.exec('COMMIT');
+  } catch (error) {
+    await db.exec('ROLLBACK');
+    throw error;
+  }
 };
 
 export const purgeSessionForDelete = async ({

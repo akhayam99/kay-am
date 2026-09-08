@@ -1139,6 +1139,7 @@ describe('store contract', () => {
       );
       expect(store.getState().sessionProjectMounts[session.id]).toEqual([
         {
+          mountId: expect.any(String),
           projectId: PROJECT_ID,
           mountName: 'repo',
           worktreePath: MOUNT_PATH,

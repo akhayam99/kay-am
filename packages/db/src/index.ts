@@ -69,6 +69,7 @@ export {
   updateSessionAutoRun,
   updateSessionTitleUserEdited,
   updateSessionActiveProject,
+  updateSessionActiveMount,
   getSessionById,
   listSessionsForWorkspace,
   listArchivedSessionsForWorkspace,
@@ -183,16 +184,36 @@ export {
 } from './queries/agent';
 export {
   insertSessionWorktree,
+  insertSessionMount,
+  getSessionMount,
+  listSessionMounts,
   listWorktreesForSession,
   listWorktreesForSessions,
   deleteWorktreesForSession,
+  deleteSessionMount,
   deleteSessionWorktreeForProject,
   updateSessionWorktreeBranch,
+  updateSessionMountBranch,
+  updateSessionMountLifecycle,
   updateSessionWorktreePath,
   updateSessionWorktreeRepoSlug,
   listAllSessionWorktrees,
   type SessionWorktree,
 } from './queries/session-worktree';
+export {
+  getMountOperation,
+  listMountOperations,
+  upsertMountOperation,
+} from './queries/mount-operation';
+export {
+  hydrateGithubMountPullRequestLink,
+  listMountPullRequestLinks,
+  upsertMountPullRequestLink,
+} from './queries/mount-pr-link';
+export {
+  listRetainedWorktreePaths,
+  transferMountPathToRetained,
+} from './queries/retained-worktree-path';
 export {
   insertSessionEvent,
   listSessionEvents,

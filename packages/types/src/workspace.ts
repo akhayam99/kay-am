@@ -9,6 +9,7 @@ import type {
   WorkflowRunId,
   WorkspaceId,
   IntegrationBindingId,
+  MountId,
 } from './ids';
 import type { SessionProviderPreference } from './provider-preference';
 import type { ModelEffort, ProviderId } from './provider-registry';
@@ -47,6 +48,7 @@ export type Project = Readonly<{
 }>;
 
 export type SessionProjectMount = Readonly<{
+  mountId?: MountId;
   projectId: ProjectId;
   mountName: string;
   worktreePath: string;
@@ -149,6 +151,7 @@ export type Session = Readonly<{
   autoRun: boolean;
   titleUserEdited: boolean;
   activeProjectId?: ProjectId;
+  activeMountId?: MountId;
   archivedAt?: IsoDateTime;
   deletedAt?: IsoDateTime;
   verbosity?: 'brief' | 'normal' | 'verbose';

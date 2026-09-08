@@ -1,6 +1,7 @@
 export type WorkspaceId = string & { readonly __brand: 'WorkspaceId' };
 export type ProjectId = string & { readonly __brand: 'ProjectId' };
 export type SessionId = string & { readonly __brand: 'SessionId' };
+export type MountId = string & { readonly __brand: 'MountId' };
 export type MessageId = string & { readonly __brand: 'MessageId' };
 export type ProviderRunId = string & { readonly __brand: 'ProviderRunId' };
 export type FileVersionId = string & { readonly __brand: 'FileVersionId' };

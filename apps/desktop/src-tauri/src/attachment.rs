@@ -289,7 +289,8 @@ pub fn attachment_cleanup_orphans(state: State<'_, Db>) -> Result<u64, Attachmen
                  SELECT workflow_run_id
                  FROM session_workflows
                  WHERE session_id = sw.session_id
-               )",
+               )
+             WHERE sw.worktree_path IS NOT NULL AND sw.is_attached = 1",
         )?;
         let rows = stmt.query_map([], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
