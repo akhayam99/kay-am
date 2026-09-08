@@ -1,10 +1,12 @@
 import type {
+  MountPullRequestLink,
+  ProjectId,
   PullRequestState,
   PullRequestStateKind,
   SessionEventKind,
   SessionId,
 } from '@goodboy/types';
-import { prEventPayload } from './prEventPayload';
+import { mountPrEventPayload } from './mountPrLink';
 import type { GetFn } from './types';
 
 const OBSERVED_KIND: Partial<Record<PullRequestStateKind, SessionEventKind>> = {
@@ -16,17 +18,30 @@ const OBSERVED_KIND: Partial<Record<PullRequestStateKind, SessionEventKind>> = {
 type Params = {
   readonly get: GetFn;
   readonly sessionId: SessionId;
-  readonly previous: PullRequestState | null;
-  readonly next: PullRequestState | null;
+  readonly projectId: ProjectId;
+  readonly previous: MountPullRequestLink | null;
+  readonly next: MountPullRequestLink;
+  readonly pr: PullRequestState;
 };
 
 export const observePrTransition = async ({
   get,
   sessionId,
+  projectId,
   previous,
   next,
+  pr,
 }: Params): Promise<void> => {
-  if (previous == null || next == null || previous.number !== next.number) {
+  const payload = mountPrEventPayload({
+    mountId: next.mountId,
+    projectId,
+    identity: next,
+    title: pr.title,
+    url: pr.url,
+    branch: next.headBranch,
+  });
+  if (previous === null) {
+    await get().recordSessionEventOnce({ sessionId, kind: 'pr_discovered', payload });
     return;
   }
   if (previous.state === next.state) {
@@ -36,9 +51,5 @@ export const observePrTransition = async ({
   if (kind === undefined) {
     return;
   }
-  await get().recordSessionEventOnce({
-    sessionId,
-    kind,
-    payload: prEventPayload({ number: next.number, pr: next }),
-  });
+  await get().recordSessionEventOnce({ sessionId, kind, payload });
 };

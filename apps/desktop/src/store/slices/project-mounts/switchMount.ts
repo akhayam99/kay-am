@@ -5,6 +5,7 @@ import {
   changeWorktreeBranch,
   invalidateLocalBranchesCache,
 } from '../../../features/worktree/worktree';
+import { deriveGithubProjection } from '../github/mountGithub';
 import { mountError } from './mountErrors';
 import { withRepositoryAndMountLock } from './mountLocks';
 import {
@@ -96,17 +97,33 @@ export const switchMount = (set: SetFn, get: GetFn) => {
         const nextViews = await loadMountViews({ get, sessionId });
         applyMountViews({ set, sessionId, views: nextViews });
         set((state) => {
-          const sessionPrs = { ...state.sessionProjectPrs[sessionId] };
-          delete sessionPrs[view.projectId];
-          const nextGithub = { ...state.sessionGithub };
-          delete nextGithub[sessionId];
-          const nextSelected = { ...state.sessionSelectedPrNumber };
-          delete nextSelected[sessionId];
           const isPrimary = nextViews[0]?.id === mountId;
+          const github = state.mountGithub?.[mountId];
+          const next = {
+            ...state,
+            mountGithub:
+              github === undefined
+                ? (state.mountGithub ?? {})
+                : {
+                    ...state.mountGithub,
+                    [mountId]: {
+                      ...github,
+                      branch: target,
+                      pr: null,
+                      linkedIssues: [],
+                      fetchedAt: null,
+                      detail: null,
+                      detailFetchedAt: null,
+                      detailLoading: false,
+                      detailError: null,
+                    },
+                  },
+            mountSelectedPr: { ...state.mountSelectedPr, [mountId]: null },
+          };
           return {
-            sessionProjectPrs: { ...state.sessionProjectPrs, [sessionId]: sessionPrs },
-            sessionGithub: nextGithub,
-            sessionSelectedPrNumber: nextSelected,
+            mountGithub: next.mountGithub,
+            mountSelectedPr: next.mountSelectedPr,
+            ...deriveGithubProjection({ state: next, sessionId }),
             sessionBranches: isPrimary
               ? { ...state.sessionBranches, [sessionId]: target }
               : state.sessionBranches,

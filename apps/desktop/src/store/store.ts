@@ -92,6 +92,8 @@ import { createFileVersionsSlice } from './slices/file-versions';
 import { createSessionEventsSlice } from './slices/session-events';
 import { createAttachmentsSlice } from './slices/attachments';
 import { createGithubSlice } from './slices/github';
+import type { CreatePrInput } from './slices/github/createPrForSession';
+import type { RefreshPrOptions } from './slices/github/refreshMountPr';
 import { createGitlabMrSlice } from './slices/gitlab-mr';
 import {
   createBitbucketPrSlice,
@@ -682,15 +684,12 @@ type AppActions = {
   refreshGithubStatus(): Promise<void>;
   setGithubPat(token: string): Promise<GhTokenStatus>;
   clearGithubToken(): Promise<void>;
-  refreshSessionPr(
-    sessionId: SessionId,
-    opts?: { force?: boolean; silent?: boolean; retries?: number },
-  ): Promise<void>;
+  refreshSessionPr(sessionId: SessionId, opts?: RefreshPrOptions): Promise<void>;
   refreshSessionPrDetail(
     sessionId: SessionId,
-    opts?: { force?: boolean; silent?: boolean; retries?: number },
+    opts?: { mountId?: MountId; force?: boolean; silent?: boolean; retries?: number },
   ): Promise<void>;
-  selectSessionPr(sessionId: SessionId, prNumber: number): Promise<void>;
+  selectSessionPr(sessionId: SessionId, prNumber: number, mountId?: MountId): Promise<void>;
   sweepGithub(opts?: { skipUnknownPr?: boolean }): void;
   resolveGithubThread(
     sessionId: SessionId,
@@ -716,10 +715,7 @@ type AppActions = {
   pushSessionBranch(
     sessionId: SessionId,
   ): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: string }>;
-  createPrForSession(
-    sessionId: SessionId,
-    opts?: { title?: string; body?: string; base?: string; draft?: boolean },
-  ): Promise<void>;
+  createPrForSession(input: CreatePrInput): Promise<void>;
   markPrReady(sessionId: SessionId, prNumber?: number): Promise<void>;
   convertPrToDraft(sessionId: SessionId, prNumber?: number): Promise<void>;
   mergePr(sessionId: SessionId, prNumber?: number, method?: PrMergeMethod): Promise<void>;
@@ -1010,6 +1006,8 @@ export const initialState: AppState = {
   unreadWorkspaceIds: new Set<WorkspaceId>(),
   sessionPanelExpanded: {},
   githubStatus: null,
+  mountGithub: {},
+  mountSelectedPr: {},
   sessionGithub: {},
   sessionProjectPrs: {},
   sessionSelectedPrNumber: {},

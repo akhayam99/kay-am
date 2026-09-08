@@ -17,6 +17,7 @@ const EVENT_TARGET: Record<SessionEventKind, EventTarget | null> = {
   issue_linked: { lens: null, label: 'Open overview' },
   issue_unlinked: { lens: null, label: 'Open overview' },
   pr_created: { lens: 'pr', label: 'Open PR' },
+  pr_discovered: { lens: 'pr', label: 'Open PR' },
   pr_ready: { lens: 'pr', label: 'Open PR' },
   pr_approved: { lens: 'pr', label: 'Open PR' },
   pr_merged: { lens: 'pr', label: 'Open PR' },

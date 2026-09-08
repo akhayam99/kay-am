@@ -31,6 +31,7 @@ export type {
   MountOperation,
   MountOperationKind,
   MountOperationStatus,
+  MountPullRequestIdentity,
   MountPullRequestLink,
   MountPullRequestProvider,
   MountPullRequestState,

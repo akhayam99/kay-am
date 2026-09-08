@@ -10,6 +10,7 @@ import type {
   DiffComment,
   GhTokenStatus,
   IsoDateTime,
+  MountId,
   PlanConsumption,
   PlanConsumptionId,
   PlanId,
@@ -170,6 +171,8 @@ vi.mock('@goodboy/db', async () => {
     insertTurnEvent: vi.fn(async () => undefined),
     getGithubPrCache: vi.fn(async () => null),
     upsertGithubPrCache: vi.fn(async () => undefined),
+    listMountPullRequestLinks: vi.fn(async () => []),
+    upsertMountPullRequestLink: vi.fn(async () => true),
     deleteGithubPrCache: vi.fn(async () => undefined),
   };
 });
@@ -393,6 +396,8 @@ const AGENT_ID_2 = 'agent-2' as AgentId;
 const RUN_ID = 'run-1' as ProviderRunId;
 const PLAN_ID = 'plan-1' as PlanId;
 const PROJECT_ID = 'project-1' as ProjectId;
+const MOUNT_ID = 'mount-1' as MountId;
+const MOUNT_ID_2 = 'mount-2' as MountId;
 const NOW = '2026-05-28T00:00:00.000Z' as IsoDateTime;
 
 function buildWorkspace(overrides: Partial<Workspace> = {}): Workspace {
@@ -545,6 +550,7 @@ describe('store contract', () => {
         sessionProjectMounts: {
           [SESSION_ID]: [
             {
+              mountId: MOUNT_ID,
               projectId: PROJECT_ID,
               mountName: 'repo',
               worktreePath: '/tmp/repo',
@@ -580,6 +586,8 @@ describe('store contract', () => {
         unreadWorkspaceIds: new Set<WorkspaceId>(),
         githubStatus: null,
         sessionGithub: {},
+        mountGithub: {},
+        mountSelectedPr: {},
         sessionResolvedThreads: {},
         sessionResolveThreads: {},
         sessionResolveAttempts: {},
@@ -649,23 +657,35 @@ describe('store contract', () => {
       expect(store.getState().githubStatus?.user).toBe('me');
     });
 
-    it('refreshSessionPr noops without a session branch', async () => {
+    it('refreshSessionPr noops for a session with no mount', async () => {
       const store = await getStore();
       store.setState({
         workspaces: [buildWorkspace()],
         sessions: [buildSession()],
+        sessionProjectMounts: {},
       });
       await store.getState().refreshSessionPr(SESSION_ID);
       expect(store.getState().sessionGithub[SESSION_ID]).toBeUndefined();
     });
 
-    it('refreshSessionPr noops for a folder project even with a branch', async () => {
+    it('refreshSessionPr noops for a folder mount, which carries no branch', async () => {
       const store = await getStore();
       store.setState({
         workspaces: [buildWorkspace()],
         projects: [buildProject({ kind: 'folder' })],
         sessions: [buildSession()],
-        sessionBranches: { [SESSION_ID]: 'goodboy/topic' },
+        sessionProjectMounts: {
+          [SESSION_ID]: [
+            {
+              mountId: MOUNT_ID,
+              projectId: PROJECT_ID,
+              mountName: 'repo',
+              worktreePath: '/tmp/repo',
+              repoRoot: '/tmp/repo',
+              branch: '',
+            },
+          ],
+        },
       });
       await store.getState().refreshSessionPr(SESSION_ID);
       expect(store.getState().sessionGithub[SESSION_ID]).toBeUndefined();
@@ -696,6 +716,7 @@ describe('store contract', () => {
         sessionProjectMounts: {
           [SESSION_ID]: [
             {
+              mountId: MOUNT_ID,
               projectId: PROJECT_ID,
               mountName: 'repo',
               worktreePath: '/tmp/repo/.wt/topic',
@@ -704,8 +725,16 @@ describe('store contract', () => {
             },
           ],
         },
-        sessionGithub: {
-          [SESSION_ID]: {
+        mountGithub: {
+          [MOUNT_ID]: {
+            mountId: MOUNT_ID,
+            projectId: PROJECT_ID,
+            revision: 0,
+            repository: 'acme/goodboy',
+            host: 'github.com',
+            branch: 'goodboy/topic',
+            prs: [selectedPr],
+            links: [],
             pr: selectedPr,
             linkedIssues: [],
             fetchedAt: null,
@@ -718,8 +747,14 @@ describe('store contract', () => {
             detailError: null,
           },
         },
-        sessionProjectPrs: { [SESSION_ID]: { [PROJECT_ID]: [selectedPr] } },
-        sessionSelectedPrNumber: { [SESSION_ID]: selectedPr.number },
+        mountSelectedPr: {
+          [MOUNT_ID]: {
+            provider: 'github',
+            host: 'github.com',
+            repoSlug: 'acme/goodboy',
+            prNumber: selectedPr.number,
+          },
+        },
       });
 
       await store.getState().refreshSessionPr(SESSION_ID, { force: true });
@@ -762,6 +797,7 @@ describe('store contract', () => {
         sessionProjectMounts: {
           [SESSION_ID]: [
             {
+              mountId: MOUNT_ID,
               projectId: PROJECT_ID,
               mountName: 'repo',
               worktreePath: '/tmp/repo/.wt/topic',
@@ -769,6 +805,7 @@ describe('store contract', () => {
               branch: 'goodboy/topic',
             },
             {
+              mountId: MOUNT_ID_2,
               projectId: otherProjectId,
               mountName: 'api',
               worktreePath: '/tmp/api/.wt/topic',
@@ -779,7 +816,7 @@ describe('store contract', () => {
         },
       });
 
-      await store.getState().refreshSessionPr(SESSION_ID, { force: true });
+      await store.getState().refreshSessionPr(SESSION_ID, { force: true, mountId: MOUNT_ID });
 
       expect(store.getState().sessionGithub[SESSION_ID]).toBeUndefined();
       expect(store.getState().sessionProjectPrs[SESSION_ID]?.[PROJECT_ID]).toEqual([fetchedPr]);
@@ -812,6 +849,7 @@ describe('store contract', () => {
         sessionProjectMounts: {
           [SESSION_ID]: [
             {
+              mountId: MOUNT_ID,
               projectId: PROJECT_ID,
               mountName: 'repo',
               worktreePath: '/tmp/repo/.wt/topic',
@@ -824,13 +862,6 @@ describe('store contract', () => {
 
       await store.getState().refreshSessionPr(SESSION_ID, { force: true });
 
-      expect(vi.mocked(db.updateSessionWorktreeRepoSlug)).toHaveBeenCalledWith(
-        expect.objectContaining({
-          sessionId: SESSION_ID,
-          worktreePath: '/tmp/repo/.wt/topic',
-          repoSlug: 'acme/goodboy',
-        }),
-      );
       const entry = vi.mocked(db.upsertGithubPrCache).mock.calls[0]?.[1];
       expect(entry).toMatchObject({ branch: 'goodboy/topic', repoSlug: 'acme/goodboy' });
       expect(Object.keys(entry?.pr ?? {}).sort()).toEqual([
@@ -857,8 +888,36 @@ describe('store contract', () => {
         sessions: [buildSession()],
         sessionBranches: { [SESSION_ID]: 'goodboy/topic' },
         sessionWorktrees: { [SESSION_ID]: ['/tmp/repo/.wt/topic'] },
-        sessionProjectPrs: { [SESSION_ID]: { [PROJECT_ID]: [previousPr] } },
-        sessionSelectedPrNumber: { [SESSION_ID]: previousPr.number },
+        mountGithub: {
+          [MOUNT_ID]: {
+            mountId: MOUNT_ID,
+            projectId: PROJECT_ID,
+            revision: 0,
+            repository: 'acme/goodboy',
+            host: 'github.com',
+            branch: 'goodboy/topic',
+            prs: [previousPr],
+            links: [],
+            pr: null,
+            linkedIssues: [],
+            fetchedAt: '2026-07-29T10:00:00.000Z' as IsoDateTime,
+            failedAt: null,
+            loading: false,
+            error: null,
+            detail: null,
+            detailFetchedAt: null,
+            detailLoading: false,
+            detailError: null,
+          },
+        },
+        mountSelectedPr: {
+          [MOUNT_ID]: {
+            provider: 'github',
+            host: 'github.com',
+            repoSlug: 'acme/goodboy',
+            prNumber: previousPr.number,
+          },
+        },
       });
 
       await store.getState().refreshSessionPr(SESSION_ID, { force: true });
@@ -926,6 +985,7 @@ describe('store contract', () => {
         sessionProjectMounts: {
           [SESSION_ID]: [
             {
+              mountId: MOUNT_ID,
               projectId: PROJECT_ID,
               mountName: 'repo',
               worktreePath: '/tmp/repo/.wt/x',

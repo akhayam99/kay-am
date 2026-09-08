@@ -192,6 +192,61 @@ describe('recordSessionEventOnce', () => {
 
     expect(record).toHaveBeenCalledTimes(1);
   });
+
+  it('records the same request number again when it belongs to another repository', async () => {
+    const { get, record } = makeOnceStore([
+      {
+        id: 'ev-1' as SessionEvent['id'],
+        sessionId,
+        kind: 'pr_merged',
+        payload: {
+          mountId: 'mount-1',
+          provider: 'github',
+          host: 'github.com',
+          repository: 'acme/web',
+          number: 12,
+        },
+        createdAt: '2026-08-21T10:00:00.000Z' as SessionEvent['createdAt'],
+      },
+    ]);
+
+    await recordSessionEventOnce(get)({
+      sessionId,
+      kind: 'pr_merged',
+      payload: {
+        mountId: 'mount-2',
+        provider: 'github',
+        host: 'github.com',
+        repository: 'acme/api',
+        number: 12,
+      },
+    });
+
+    expect(record).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips a repeat of the same request on the same mount', async () => {
+    const payload = {
+      mountId: 'mount-1',
+      provider: 'github',
+      host: 'github.com',
+      repository: 'acme/web',
+      number: 12,
+    };
+    const { get, record } = makeOnceStore([
+      {
+        id: 'ev-1' as SessionEvent['id'],
+        sessionId,
+        kind: 'pr_discovered',
+        payload,
+        createdAt: '2026-08-21T10:00:00.000Z' as SessionEvent['createdAt'],
+      },
+    ]);
+
+    await recordSessionEventOnce(get)({ sessionId, kind: 'pr_discovered', payload });
+
+    expect(record).not.toHaveBeenCalled();
+  });
 });
 
 describe('decisionsDelta', () => {

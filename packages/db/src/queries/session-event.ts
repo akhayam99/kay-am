@@ -72,6 +72,9 @@ const parsePayload = ({ raw }: ParsePayloadParams): SessionEventPayload | null =
   const workflowName = stringAt({ source, key: 'workflowName' });
   const runId = stringAt({ source, key: 'runId' });
   const projectId = stringAt({ source, key: 'projectId' });
+  const mountId = stringAt({ source, key: 'mountId' });
+  const host = stringAt({ source, key: 'host' });
+  const repository = stringAt({ source, key: 'repository' });
   const projectName = stringAt({ source, key: 'projectName' });
   const reason = stringAt({ source, key: 'reason' });
   const agentId = stringAt({ source, key: 'agentId' });
@@ -92,6 +95,9 @@ const parsePayload = ({ raw }: ParsePayloadParams): SessionEventPayload | null =
     ...(workflowName != null ? { workflowName } : {}),
     ...(runId != null ? { runId } : {}),
     ...(projectId != null ? { projectId } : {}),
+    ...(mountId != null ? { mountId } : {}),
+    ...(host != null ? { host } : {}),
+    ...(repository != null ? { repository } : {}),
     ...(projectName != null ? { projectName } : {}),
     ...(reason != null ? { reason } : {}),
     ...(agentId != null ? { agentId } : {}),

@@ -53,6 +53,9 @@ vi.mock('@goodboy/db', () => ({
   deleteSession,
   purgeSessionForDelete,
   deleteFileVersionsForSession,
+  listMountPullRequestLinks: vi.fn(async () => []),
+  upsertMountPullRequestLink: vi.fn(async () => true),
+  upsertGithubPrCache: vi.fn(async () => undefined),
 }));
 
 vi.mock('@goodboy/core', () => ({
@@ -60,6 +63,7 @@ vi.mock('@goodboy/core', () => ({
   fetchLinkedIssues: vi.fn(async () => []),
   getPrForBranch: vi.fn(async () => null),
   listPrsForBranch: vi.fn(async () => []),
+  toCachedPullRequest: vi.fn(() => null),
 }));
 
 vi.mock('../shared/lib/db', () => ({ tauriDatabase: {} }));
@@ -467,7 +471,7 @@ describe('story: a two-project session routes git work through the active mount'
 
     expect(detectRepoSlug).toHaveBeenCalledWith(
       tauriGhRunner,
-      WEB_REPO_ROOT,
+      WEB_WORKTREE_PATH,
       WORKSPACE_ID,
       WEB_PROJECT_ID,
     );

@@ -142,7 +142,7 @@ export const CreatePrPanel = ({
     setBusy('create');
     setError(null);
     try {
-      await createPrForSession(sessionId, { title, body, base, draft });
+      await createPrForSession({ sessionId, title, body, base, draft });
       onCreated();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

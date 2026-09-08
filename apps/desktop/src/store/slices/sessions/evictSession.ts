@@ -49,6 +49,7 @@ export const evictSession = ({ set, get }: Params) => {
       session: [sessionId],
       agent: agentIds,
       workflowRun: workflowRunIds,
+      mount: (state.sessionMounts[sessionId] ?? []).map((view) => view.id),
     } satisfies Record<EvictionScope, ReadonlyArray<string>>;
     const changes = Object.fromEntries(
       SESSION_EVICTION.filter((rule) => mode === 'delete' || rule.evictOn === 'archive').map(

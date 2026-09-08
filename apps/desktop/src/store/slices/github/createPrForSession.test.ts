@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   IsoDateTime,
+  MountId,
   PullRequestState,
   SessionExternalTask,
   SessionId,
@@ -15,10 +16,19 @@ type GhRun = (
 
 const h = vi.hoisted(() => ({
   run: vi.fn<GhRun>(async () => ({ stdout: '', stderr: '', exitCode: 0 })),
+  upsertMountPullRequestLink: vi.fn(async () => true),
 }));
 
 vi.mock('../../../features/github/github', () => ({
   tauriGhRunner: { run: h.run },
+}));
+
+vi.mock('../../../shared/lib/db', () => ({
+  tauriDatabase: {},
+}));
+
+vi.mock('@goodboy/db', () => ({
+  upsertMountPullRequestLink: h.upsertMountPullRequestLink,
 }));
 
 import { createPrForSession } from './createPrForSession';
@@ -27,8 +37,13 @@ import type { GetFn, SetFn } from './types';
 const SESSION_ID = 'sess-1' as SessionId;
 const WORKSPACE_ID = 'ws-1' as WorkspaceId;
 const PROJECT_ID = 'project-1' as ProjectId;
+const OTHER_PROJECT_ID = 'project-2' as ProjectId;
+const MOUNT_ID = 'mount-1' as MountId;
+const OTHER_MOUNT_ID = 'mount-2' as MountId;
 const BRANCH = 'ak/cards';
+const OTHER_BRANCH = 'ak/cards-part-two';
 const NOW = '2026-08-04T00:00:00.000Z' as IsoDateTime;
+const CREATED_URL = 'https://github.com/acme/web/pull/7';
 
 const githubIssue = (overrides: Partial<SessionExternalTask> = {}): SessionExternalTask => ({
   sessionId: SESSION_ID,
@@ -42,16 +57,42 @@ const githubIssue = (overrides: Partial<SessionExternalTask> = {}): SessionExter
   ...overrides,
 });
 
+type MountParams = {
+  readonly id: MountId;
+  readonly projectId: ProjectId;
+  readonly branch: string;
+  readonly worktreePath: string;
+};
+
+const mountView = ({ id, projectId, branch, worktreePath }: MountParams): unknown => ({
+  id,
+  sessionId: SESSION_ID,
+  projectId,
+  mountName: 'repo',
+  worktreePath,
+  lastWorktreePath: worktreePath,
+  repoRoot: '/repo',
+  branch,
+  baseBranch: 'main',
+  parallelIndex: 0,
+  repoSlug: 'acme/web',
+  isAttached: true,
+  diskState: 'present',
+  revision: 1,
+  createdAt: NOW,
+  updatedAt: NOW,
+});
+
 type FakeState = {
   sessions: ReadonlyArray<unknown>;
   workspaces: ReadonlyArray<unknown>;
   projects: ReadonlyArray<unknown>;
-  sessionBranches: Record<string, string>;
-  sessionWorktrees: Record<string, ReadonlyArray<string>>;
   sessionProjectMounts: Record<string, ReadonlyArray<unknown>>;
+  sessionMounts: Record<string, ReadonlyArray<unknown>>;
+  sessionActiveMount: Record<string, MountId | null>;
   sessionActiveProject: Record<string, string>;
   sessionExternalTasks: Record<string, ReadonlyArray<SessionExternalTask>>;
-  sessionGithub: Record<string, { pr: PullRequestState | null }>;
+  mountGithub: Record<string, { pr: PullRequestState | null }>;
   refreshSessionPr: ReturnType<typeof vi.fn>;
   editPr: ReturnType<typeof vi.fn>;
   emitNotification: ReturnType<typeof vi.fn>;
@@ -64,34 +105,36 @@ const buildState = (overrides: Partial<FakeState> = {}): FakeState => ({
       id: SESSION_ID,
       workspaceId: WORKSPACE_ID,
       activeProjectId: PROJECT_ID,
+      activeMountId: MOUNT_ID,
       goal: 'Fix the cards',
     },
   ],
   workspaces: [{ id: WORKSPACE_ID }],
   projects: [
-    {
-      id: PROJECT_ID,
-      workspaceId: WORKSPACE_ID,
-      rootPath: '/repo',
-      kind: 'repo',
-    },
+    { id: PROJECT_ID, workspaceId: WORKSPACE_ID, rootPath: '/repo', kind: 'repo' },
+    { id: OTHER_PROJECT_ID, workspaceId: WORKSPACE_ID, rootPath: '/repo', kind: 'repo' },
   ],
-  sessionBranches: { [SESSION_ID]: BRANCH },
-  sessionWorktrees: { [SESSION_ID]: ['/repo/.goodboy/worktrees/cards'] },
-  sessionProjectMounts: {
+  sessionProjectMounts: {},
+  sessionMounts: {
     [SESSION_ID]: [
-      {
+      mountView({
+        id: MOUNT_ID,
         projectId: PROJECT_ID,
-        mountName: 'repo',
-        repoRoot: '/repo',
-        worktreePath: '/repo/.goodboy/worktrees/cards',
         branch: BRANCH,
-      },
+        worktreePath: '/repo/.goodboy/worktrees/cards',
+      }),
+      mountView({
+        id: OTHER_MOUNT_ID,
+        projectId: OTHER_PROJECT_ID,
+        branch: OTHER_BRANCH,
+        worktreePath: '/repo/.goodboy/worktrees/cards-2',
+      }),
     ],
   },
+  sessionActiveMount: { [SESSION_ID]: MOUNT_ID },
   sessionActiveProject: { [SESSION_ID]: PROJECT_ID },
   sessionExternalTasks: {},
-  sessionGithub: {},
+  mountGithub: {},
   refreshSessionPr: vi.fn(async () => undefined),
   editPr: vi.fn(async () => undefined),
   emitNotification: vi.fn(async () => undefined),
@@ -105,14 +148,19 @@ const buildCreate = (state: FakeState) => {
   return createPrForSession(set, get);
 };
 
+const createArgs = (): ReadonlyArray<string> => h.run.mock.calls[0]![0];
+
+const createOpts = (): Readonly<Record<string, unknown>> => h.run.mock.calls[0]![1];
+
 const bodyArg = (): string => {
-  const args = h.run.mock.calls[0]![0];
+  const args = createArgs();
   return args[args.indexOf('--body') + 1] ?? '';
 };
 
 beforeEach(() => {
   h.run.mockClear();
-  h.run.mockImplementation(async () => ({ stdout: '', stderr: '', exitCode: 0 }));
+  h.upsertMountPullRequestLink.mockClear();
+  h.run.mockImplementation(async () => ({ stdout: `${CREATED_URL}\n`, stderr: '', exitCode: 0 }));
 });
 
 describe('createPrForSession, issue references', () => {
@@ -121,7 +169,11 @@ describe('createPrForSession, issue references', () => {
       sessionExternalTasks: { [SESSION_ID]: [githubIssue()] },
     });
 
-    await buildCreate(state)(SESSION_ID, { title: 'Fix cards', body: 'Documents the change.' });
+    await buildCreate(state)({
+      sessionId: SESSION_ID,
+      title: 'Fix cards',
+      body: 'Documents the change.',
+    });
 
     expect(bodyArg()).toBe('Documents the change.\n\nCloses #41');
   });
@@ -133,7 +185,7 @@ describe('createPrForSession, issue references', () => {
       },
     });
 
-    await buildCreate(state)(SESSION_ID, { title: 'Fix cards', body: '' });
+    await buildCreate(state)({ sessionId: SESSION_ID, title: 'Fix cards', body: '' });
 
     expect(bodyArg()).toBe('Closes #41\nCloses #52');
   });
@@ -145,7 +197,11 @@ describe('createPrForSession, issue references', () => {
       },
     });
 
-    await buildCreate(state)(SESSION_ID, { title: 'Fix cards', body: 'Documents the change.' });
+    await buildCreate(state)({
+      sessionId: SESSION_ID,
+      title: 'Fix cards',
+      body: 'Documents the change.',
+    });
 
     expect(bodyArg()).toBe('Documents the change.');
   });
@@ -159,25 +215,41 @@ describe('createPrForSession, issue references', () => {
       },
     });
 
-    await buildCreate(state)(SESSION_ID, { title: 'Fix cards', body: 'Documents the change.' });
+    await buildCreate(state)({
+      sessionId: SESSION_ID,
+      title: 'Fix cards',
+      body: 'Documents the change.',
+    });
 
     expect(bodyArg()).toBe('Documents the change.');
-    expect(h.run.mock.calls[0]![0]).not.toContain('--fill');
+    expect(createArgs()).not.toContain('--fill');
+  });
+
+  it('leaves every reference out when the caller asks for none', async () => {
+    const state = buildState({
+      sessionExternalTasks: { [SESSION_ID]: [githubIssue()] },
+    });
+
+    await buildCreate(state)({
+      sessionId: SESSION_ID,
+      title: 'Fix cards',
+      body: 'Documents the change.',
+      referenceMode: 'none',
+    });
+
+    expect(bodyArg()).toBe('Documents the change.');
   });
 
   it('patches the body gh generated with --fill so the reference still lands', async () => {
-    const created = {
-      number: 7,
-      body: 'Generated from the commits.',
-    } as PullRequestState;
+    const created = { number: 7, body: 'Generated from the commits.' } as PullRequestState;
     const state = buildState({
       sessionExternalTasks: { [SESSION_ID]: [githubIssue()] },
-      sessionGithub: { [SESSION_ID]: { pr: created } },
+      mountGithub: { [MOUNT_ID]: { pr: created } },
     });
 
-    await buildCreate(state)(SESSION_ID);
+    await buildCreate(state)({ sessionId: SESSION_ID });
 
-    expect(h.run.mock.calls[0]![0]).toContain('--fill');
+    expect(createArgs()).toContain('--fill');
     expect(state.editPr).toHaveBeenCalledWith(SESSION_ID, 7, {
       body: 'Generated from the commits.\n\nCloses #41',
     });
@@ -187,11 +259,72 @@ describe('createPrForSession, issue references', () => {
     const created = { number: 7, body: 'fix #41' } as PullRequestState;
     const state = buildState({
       sessionExternalTasks: { [SESSION_ID]: [githubIssue()] },
-      sessionGithub: { [SESSION_ID]: { pr: created } },
+      mountGithub: { [MOUNT_ID]: { pr: created } },
     });
 
-    await buildCreate(state)(SESSION_ID);
+    await buildCreate(state)({ sessionId: SESSION_ID });
 
     expect(state.editPr).not.toHaveBeenCalled();
+  });
+});
+
+describe('createPrForSession, mount targeting', () => {
+  it('creates from the worktree cwd with an explicit repository and head branch', async () => {
+    const state = buildState();
+
+    await buildCreate(state)({ sessionId: SESSION_ID, title: 'Fix cards', body: '' });
+
+    const args = createArgs();
+    expect(args.slice(0, 6)).toEqual(['pr', 'create', '--repo', 'acme/web', '--head', BRANCH]);
+    expect(createOpts()).toMatchObject({ cwd: '/repo/.goodboy/worktrees/cards' });
+  });
+
+  it('creates for a mount that is not the active one', async () => {
+    const state = buildState();
+
+    await buildCreate(state)({
+      sessionId: SESSION_ID,
+      mountId: OTHER_MOUNT_ID,
+      title: 'Part two',
+      body: '',
+    });
+
+    expect(createArgs()).toContain(OTHER_BRANCH);
+    expect(createOpts()).toMatchObject({
+      cwd: '/repo/.goodboy/worktrees/cards-2',
+      projectId: OTHER_PROJECT_ID,
+    });
+  });
+
+  it('persists the created request identity before any refresh', async () => {
+    const state = buildState();
+
+    await buildCreate(state)({ sessionId: SESSION_ID, title: 'Fix cards', body: '' });
+
+    expect(h.upsertMountPullRequestLink).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: SESSION_ID,
+        link: expect.objectContaining({
+          mountId: MOUNT_ID,
+          provider: 'github',
+          host: 'github.com',
+          repoSlug: 'acme/web',
+          prNumber: 7,
+          headBranch: BRANCH,
+        }),
+      }),
+    );
+    expect(state.recordSessionEventOnce).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'pr_created' }),
+    );
+  });
+
+  it('captures the base branch of the mount when the caller gives none', async () => {
+    const state = buildState();
+
+    await buildCreate(state)({ sessionId: SESSION_ID, title: 'Fix cards', body: '' });
+
+    const args = createArgs();
+    expect(args[args.indexOf('--base') + 1]).toBe('main');
   });
 });

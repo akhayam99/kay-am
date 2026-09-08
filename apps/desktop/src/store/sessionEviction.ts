@@ -1,6 +1,6 @@
 import type { AppState } from './types';
 
-export type EvictionScope = 'session' | 'agent' | 'workflowRun';
+export type EvictionScope = 'session' | 'agent' | 'workflowRun' | 'mount';
 export type EvictionMode = 'archive' | 'delete';
 
 export type SessionEvictionRule = {
@@ -22,6 +22,8 @@ export const SESSION_EVICTION = [
   { key: 'sessionActiveProject', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionBranches', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionPhaseRuns', keyedBy: 'session', evictOn: 'archive' },
+  { key: 'mountGithub', keyedBy: 'mount', evictOn: 'archive' },
+  { key: 'mountSelectedPr', keyedBy: 'mount', evictOn: 'archive' },
   { key: 'sessionGithub', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionProjectPrs', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionSelectedPrNumber', keyedBy: 'session', evictOn: 'archive' },

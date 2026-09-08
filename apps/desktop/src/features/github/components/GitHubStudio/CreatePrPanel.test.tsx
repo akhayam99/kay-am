@@ -15,15 +15,13 @@ type SpawnAgent = (
   args: Readonly<Record<string, unknown>>,
 ) => Promise<string>;
 
-type CreatePr = (
-  sessionId: SessionId,
-  opts: {
-    readonly title: string;
-    readonly body: string;
-    readonly base: string;
-    readonly draft: boolean;
-  },
-) => Promise<void>;
+type CreatePr = (input: {
+  readonly sessionId: SessionId;
+  readonly title: string;
+  readonly body: string;
+  readonly base: string;
+  readonly draft: boolean;
+}) => Promise<void>;
 
 type Store = {
   readonly createPrForSession: ReturnType<typeof vi.fn<CreatePr>>;
@@ -191,7 +189,8 @@ describe('CreatePrPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create PR' }));
 
     await waitFor(() =>
-      expect(h.store.createPrForSession).toHaveBeenCalledWith(SESSION_ID, {
+      expect(h.store.createPrForSession).toHaveBeenCalledWith({
+        sessionId: SESSION_ID,
         title: 'Ship the card refactor',
         body: 'Documents the change.',
         base: 'main',
@@ -208,8 +207,7 @@ describe('CreatePrPanel', () => {
 
     await waitFor(() =>
       expect(h.store.createPrForSession).toHaveBeenCalledWith(
-        SESSION_ID,
-        expect.objectContaining({ draft: false }),
+        expect.objectContaining({ sessionId: SESSION_ID, draft: false }),
       ),
     );
   });
@@ -377,7 +375,7 @@ describe('CreatePrPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create PR' }));
 
     await waitFor(() => expect(h.store.createPrForSession).toHaveBeenCalledOnce());
-    const sent = h.store.createPrForSession.mock.calls[0]![1];
+    const sent = h.store.createPrForSession.mock.calls[0]![0];
     const stored = appendClosingReferences({
       body: sent.body,
       references: closingIssueReferences({

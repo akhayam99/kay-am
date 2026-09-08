@@ -41,6 +41,8 @@ import type {
   SessionId,
   MountBranchObservation,
   MountId,
+  MountPullRequestIdentity,
+  MountPullRequestLink,
   SessionMountView,
   SessionProjectMount,
   SessionViewPrefs,
@@ -155,6 +157,17 @@ export type SessionGithubState = {
   readonly detailFetchedAt: IsoDateTime | null;
   readonly detailLoading: boolean;
   readonly detailError: string | null;
+};
+
+export type MountGithubState = SessionGithubState & {
+  readonly mountId: MountId;
+  readonly projectId: ProjectId;
+  readonly revision: number;
+  readonly repository: string | null;
+  readonly host: string | null;
+  readonly branch: string;
+  readonly prs: ReadonlyArray<PullRequestState>;
+  readonly links: ReadonlyArray<MountPullRequestLink>;
 };
 
 export type SummarizerSessionStatus = {
@@ -275,6 +288,8 @@ export type AppState = AppSliceState & {
     Record<SessionId, Partial<Record<PanelSection, boolean>>>
   >;
   readonly githubStatus: GhTokenStatus | null;
+  readonly mountGithub: Readonly<Record<MountId, MountGithubState>>;
+  readonly mountSelectedPr: Readonly<Record<MountId, MountPullRequestIdentity | null>>;
   readonly sessionGithub: Readonly<Record<SessionId, SessionGithubState>>;
   readonly sessionProjectPrs: Readonly<
     Record<SessionId, Readonly<Record<ProjectId, ReadonlyArray<PullRequestState>>>>

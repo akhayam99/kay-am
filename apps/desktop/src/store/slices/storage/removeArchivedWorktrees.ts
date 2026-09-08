@@ -1,6 +1,4 @@
-import { deleteGithubPrCacheForWorktreePath } from '@goodboy/db';
 import { removeWorktree } from '../../../features/worktree/worktree';
-import { tauriDatabase } from '../../../shared/lib/db';
 import { collectArchivedWorktrees } from './collectArchivedWorktrees';
 import type { GetFn, SetFn, WorktreeRemovalResult } from './types';
 
@@ -12,10 +10,6 @@ export const removeArchivedWorktrees = (_set: SetFn, get: GetFn) => {
     for (const target of targets) {
       try {
         await removeWorktree(target.repoPath, target.worktreePath);
-        await deleteGithubPrCacheForWorktreePath({
-          db: tauriDatabase,
-          worktreePath: target.worktreePath,
-        });
         removed += 1;
       } catch {
         failed += 1;

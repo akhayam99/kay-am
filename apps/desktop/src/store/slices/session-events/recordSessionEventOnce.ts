@@ -9,10 +9,19 @@ type Params = Readonly<{
   payload?: SessionEventPayload;
 }>;
 
+const subjectOf = (payload: SessionEventPayload | null | undefined): string =>
+  [
+    payload?.mountId ?? '',
+    payload?.provider ?? '',
+    payload?.host ?? '',
+    payload?.repository ?? '',
+    payload?.number ?? '',
+  ].join(':');
+
 export const recordSessionEventOnce = (get: GetFn) => {
   return async ({ sessionId, kind, payload }: Params): Promise<void> => {
-    const subject = payload?.number ?? null;
-    const guardKey = `${sessionId}:${kind}:${subject ?? ''}`;
+    const subject = subjectOf(payload);
+    const guardKey = `${sessionId}:${kind}:${subject}`;
     if (sessionEventsOnceInFlight.has(guardKey)) {
       return;
     }
@@ -20,7 +29,7 @@ export const recordSessionEventOnce = (get: GetFn) => {
     try {
       const recorded = await listSessionEvents({ db: tauriDatabase, sessionId });
       const isAlreadyRecorded = recorded.some(
-        (event) => event.kind === kind && (event.payload?.number ?? null) === subject,
+        (event) => event.kind === kind && subjectOf(event.payload) === subject,
       );
       if (isAlreadyRecorded) {
         return;

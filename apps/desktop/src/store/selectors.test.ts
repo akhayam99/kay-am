@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   Agent,
   AgentId,
+  MountId,
   Session,
   SessionId,
   StepId,
@@ -84,6 +85,7 @@ const SESSION_ID = 'session-1' as SessionId;
 const AGENT_ID = 'agent-1' as AgentId;
 const WORKSPACE_ID = 'workspace-1' as WorkspaceId;
 const PROJECT_ID = 'project-1' as ProjectId;
+const MOUNT_ID = 'mount-1' as MountId;
 
 const createSession = (id: SessionId): Session =>
   ({
@@ -114,6 +116,7 @@ const setProjectScope = ({ kind = 'repo' }: { readonly kind?: Project['kind'] } 
   store.state.sessionProjectMounts = {
     [SESSION_ID]: [
       {
+        mountId: MOUNT_ID,
         projectId: PROJECT_ID,
         mountName: 'project',
         repoRoot: '/tmp/ws',
@@ -252,8 +255,9 @@ describe('useSessionStageInfo pull request freshness', () => {
     expect(result.current.reason).toBe('GitHub unreachable');
   });
 
-  it('claims no PR for a session with no branch, which no fetch will ever cover', () => {
+  it('claims no PR for a mount with no branch, which no fetch will ever cover', () => {
     const session = repoSession();
+    setProjectScope({ kind: 'folder' });
     store.state.sessionBranches = {};
     store.state.githubStatus = { available: true };
 
@@ -328,8 +332,9 @@ describe('useSessionPrFetchState', () => {
     expect(result.current).toBe('known');
   });
 
-  it('reports known for a session with no branch, which the sweep skips', () => {
+  it('reports known for a mount with no branch, which the sweep skips', () => {
     fetchableSession();
+    setProjectScope({ kind: 'folder' });
     store.state.sessionBranches = {};
 
     const { result } = renderHook(() => useSessionPrFetchState(SESSION_ID));

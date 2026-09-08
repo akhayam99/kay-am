@@ -22,24 +22,28 @@ export type SessionMount = Readonly<{
 
 export type MountPullRequestProvider = 'github' | 'gitlab' | 'bitbucket';
 
-export type MountPullRequestState = 'draft' | 'open' | 'approved' | 'queued' | 'merged' | 'closed';
-
-export type MountPullRequestLink = Readonly<{
-  id: string;
-  mountId: MountId;
+export type MountPullRequestIdentity = Readonly<{
   provider: MountPullRequestProvider;
   host: string;
   repoSlug: string;
   prNumber: number;
-  headBranch: string;
-  baseBranch: string | null;
-  url: string;
-  state: MountPullRequestState;
-  snapshot: unknown;
-  lastObservedAt: IsoDateTime;
-  createdAt: IsoDateTime;
-  updatedAt: IsoDateTime;
 }>;
+
+export type MountPullRequestState = 'draft' | 'open' | 'approved' | 'queued' | 'merged' | 'closed';
+
+export type MountPullRequestLink = MountPullRequestIdentity &
+  Readonly<{
+    id: string;
+    mountId: MountId;
+    headBranch: string;
+    baseBranch: string | null;
+    url: string;
+    state: MountPullRequestState;
+    snapshot: unknown;
+    lastObservedAt: IsoDateTime;
+    createdAt: IsoDateTime;
+    updatedAt: IsoDateTime;
+  }>;
 
 export type MountOperationKind =
   'attach' | 'unmount' | 'switch' | 'fork' | 'remove' | 'restore' | 'retain';
