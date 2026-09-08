@@ -3,6 +3,7 @@ import type {
   AgentId,
   ResolveAttemptPhase,
   ResolveCheckBreadth,
+  ResolvePublicationDrift,
   ResolvePublicationPreview,
   ResolveThread,
   ResolveUncapturedWork,
@@ -83,6 +84,7 @@ export type BatchUpdateParams = SessionParams & {
 export type PreparePublicationParams = SessionParams & {
   readonly threadIds?: ReadonlyArray<string>;
   readonly scopeId?: string;
+  readonly drift?: ReadonlyArray<ResolvePublicationDrift>;
 };
 export type PublishParams = SessionParams & {
   readonly publicationId: string;

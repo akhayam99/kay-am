@@ -7,14 +7,19 @@ import type {
 import type { Database } from '../client';
 import { resolveStringArray } from './resolve-json';
 
-type PublicationRow = Omit<ResolvePublication, 'commitShas' | 'requiresPush'> & {
+type PublicationRow = Omit<
+  ResolvePublication,
+  'commitShas' | 'candidateIds' | 'approvedItemIds' | 'requiresPush'
+> & {
   readonly commitShas: string;
+  readonly candidateIds: string;
+  readonly approvedItemIds: string;
   readonly requiresPush: number;
 };
 
-const PUBLICATION_COLUMNS = `id, session_id AS sessionId, repo, pr_number AS prNumber, branch, local_head AS localHead, remote_head AS remoteHead, commit_shas_json AS commitShas, requires_push AS requiresPush, phase, pushed_head AS pushedHead, confirmed_at AS confirmedAt, completed_at AS completedAt, error, created_at AS createdAt`;
+const PUBLICATION_COLUMNS = `id, session_id AS sessionId, repo, pr_number AS prNumber, branch, target_ref AS targetRef, local_head AS localHead, remote_head AS remoteHead, commit_shas_json AS commitShas, candidate_ids_json AS candidateIds, approved_item_ids_json AS approvedItemIds, requires_push AS requiresPush, phase, pushed_head AS pushedHead, confirmed_at AS confirmedAt, completed_at AS completedAt, error, created_at AS createdAt`;
 
-const THREAD_COLUMNS = `publication_id AS publicationId, thread_id AS threadId, revision, prior_state AS priorState, reply_body AS replyBody, reply_phase AS replyPhase, reply_id AS replyId, reply_posted_at AS replyPostedAt, resolve_phase AS resolvePhase, resolved_at AS resolvedAt, error`;
+const THREAD_COLUMNS = `publication_id AS publicationId, thread_id AS threadId, revision, prior_state AS priorState, source_fingerprint AS sourceFingerprint, operation_id AS operationId, reply_body AS replyBody, reply_phase AS replyPhase, reply_id AS replyId, reply_attempted_at AS replyAttemptedAt, reply_posted_at AS replyPostedAt, resolve_phase AS resolvePhase, resolved_at AS resolvedAt, error`;
 
 const ACTIVE_PHASES: ReadonlyArray<ResolvePublicationPhase> = [
   'confirmed',
@@ -26,6 +31,8 @@ const ACTIVE_PHASES: ReadonlyArray<ResolvePublicationPhase> = [
 const hydrate = (row: PublicationRow): ResolvePublication => ({
   ...row,
   commitShas: resolveStringArray({ json: row.commitShas }),
+  candidateIds: resolveStringArray({ json: row.candidateIds }),
+  approvedItemIds: resolveStringArray({ json: row.approvedItemIds }),
   requiresPush: row.requiresPush === 1,
 });
 
@@ -37,17 +44,20 @@ export const insertResolvePublication = async ({
   readonly publication: ResolvePublication;
 }): Promise<void> => {
   await db.execute(
-    `INSERT INTO resolve_publications (id, session_id, repo, pr_number, branch, local_head, remote_head, commit_shas_json, requires_push, phase, pushed_head, confirmed_at, completed_at, error, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO resolve_publications (id, session_id, repo, pr_number, branch, target_ref, local_head, remote_head, commit_shas_json, candidate_ids_json, approved_item_ids_json, requires_push, phase, pushed_head, confirmed_at, completed_at, error, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       publication.id,
       publication.sessionId,
       publication.repo,
       publication.prNumber,
       publication.branch,
+      publication.targetRef,
       publication.localHead,
       publication.remoteHead,
       JSON.stringify(publication.commitShas),
+      JSON.stringify(publication.candidateIds),
+      JSON.stringify(publication.approvedItemIds),
       Number(publication.requiresPush),
       publication.phase,
       publication.pushedHead,
@@ -123,14 +133,17 @@ export const upsertResolvePublicationThread = async ({
   readonly thread: ResolvePublicationThread;
 }): Promise<void> => {
   await db.execute(
-    `INSERT INTO resolve_publication_threads (publication_id, thread_id, revision, prior_state, reply_body, reply_phase, reply_id, reply_posted_at, resolve_phase, resolved_at, error)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO resolve_publication_threads (publication_id, thread_id, revision, prior_state, source_fingerprint, operation_id, reply_body, reply_phase, reply_id, reply_attempted_at, reply_posted_at, resolve_phase, resolved_at, error)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (publication_id, thread_id) DO UPDATE SET
        revision = excluded.revision,
        prior_state = excluded.prior_state,
+       source_fingerprint = excluded.source_fingerprint,
+       operation_id = excluded.operation_id,
        reply_body = excluded.reply_body,
        reply_phase = excluded.reply_phase,
        reply_id = excluded.reply_id,
+       reply_attempted_at = excluded.reply_attempted_at,
        reply_posted_at = excluded.reply_posted_at,
        resolve_phase = excluded.resolve_phase,
        resolved_at = excluded.resolved_at,
@@ -140,9 +153,12 @@ export const upsertResolvePublicationThread = async ({
       thread.threadId,
       thread.revision,
       thread.priorState,
+      thread.sourceFingerprint,
+      thread.operationId,
       thread.replyBody,
       thread.replyPhase,
       thread.replyId,
+      thread.replyAttemptedAt,
       thread.replyPostedAt,
       thread.resolvePhase,
       thread.resolvedAt,

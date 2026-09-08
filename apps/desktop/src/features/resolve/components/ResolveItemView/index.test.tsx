@@ -238,7 +238,7 @@ describe('the resolve item view', () => {
     expect(screen.getByText('Agent claim, not checked here')).toBeDefined();
   });
 
-  it('marks a receipt whose tree moved as stale instead of green', () => {
+  it('marks a run whose tree moved as stale instead of green', () => {
     renderView({
       checks: {
         receipts: [
@@ -270,7 +270,7 @@ describe('the resolve item view', () => {
 
     expect(screen.getByText('Stale')).toBeDefined();
     expect(screen.queryByText('Machine verified')).toBeNull();
-    expect(screen.getByText('Every receipt is stale, so nothing here is proven')).toBeDefined();
+    expect(screen.getByText('Every run is stale, so nothing here is proven')).toBeDefined();
   });
 
   it('shows the exact reply that goes back to the reviewer', () => {

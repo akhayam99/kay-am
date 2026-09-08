@@ -16,6 +16,7 @@ const h = vi.hoisted(() => {
     sessionExternalTasks: {} as Record<string, ReadonlyArray<unknown>>,
     branchPrs: [] as ReadonlyArray<unknown>,
     sessionResolveQueueItems: {} as Record<string, ReadonlyArray<unknown>>,
+    sessionResolvePublications: {} as Record<string, ReadonlyArray<unknown>>,
     activePublicationPreview: {} as Record<string, unknown>,
     reviewDrafts: {} as Record<string, ReadonlyArray<unknown>>,
     diffComments: {} as Record<string, ReadonlyArray<unknown>>,
@@ -42,10 +43,11 @@ const h = vi.hoisted(() => {
     publishConversations: vi.fn(
       async (params: { readonly sessionId: string; readonly publicationId: string }) => {
         void params;
-        return { kind: 'done', pushed: true, resolved: 1, commented: 1, failed: 0 };
+        return { kind: 'done', pushed: true, closed: 1, replied: 1, failed: 0 };
       },
     ),
     cancelPublication: vi.fn(async () => undefined),
+    retryPublication: vi.fn(async () => null as unknown),
     spawnAgent: vi.fn(async () => 'agent-new'),
     setActiveLens: vi.fn(),
     publishPrReview: vi.fn(async () => ({ published: 1, stale: [], failed: [], mismatched: [] })),
@@ -168,9 +170,13 @@ const previewOf = (patch: Partial<ResolvePublicationPreview>): ResolvePublicatio
   localHead: 'c3d4e5f0000',
   remoteHead: '9f8e7d60000',
   requiresPush: true,
+  frozenAt: 1_700_000_000_000,
   commits: [],
+  unapproved: [],
   replies: [{ threadId: 't-ready', body: 'Added the early return.', revision: 1, closes: true }],
+  notes: [],
   excluded: [],
+  drift: [],
   blocker: null,
   ...patch,
 });
@@ -207,6 +213,7 @@ const seed = () => {
     [SESSION_ID]: [entryOf({ threadId: 't-ready', approvalState: 'accepted', deliveredAt: null })],
   };
   h.state.activePublicationPreview = {};
+  h.state.sessionResolvePublications = {};
   h.state.reviewDrafts = { [SESSION_ID]: [] };
   h.state.diffComments = { [SESSION_ID]: [] };
   h.state.reviewLensIntent = null;
@@ -264,24 +271,24 @@ describe('ReviewPane', () => {
     );
   });
 
-  it('counts what is accepted but not delivered as ready to publish', () => {
+  it('counts what is accepted but not delivered on the one push button', () => {
     render(<ReviewPane session={SESSION} />);
 
-    expect(screen.getByRole('button', { name: 'Publish all (1)' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Reply 1' })).toBeDefined();
   });
 
-  it('previews a publication, then confirms it', async () => {
+  it('costs one press and one confirmation in the same strip', async () => {
     h.state.preparePublication.mockImplementation(async () => {
       h.state.activePublicationPreview = { [SESSION_ID]: previewOf({}) };
       return h.state.activePublicationPreview[SESSION_ID];
     });
     const { rerender } = render(<ReviewPane session={SESSION} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Publish all (1)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reply 1' }));
     await waitFor(() => expect(h.state.preparePublication).toHaveBeenCalledTimes(1));
     rerender(<ReviewPane session={SESSION} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm publish' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reply 1' }));
 
     await waitFor(() => expect(h.state.publishConversations).toHaveBeenCalledTimes(1));
     expect(h.state.publishConversations.mock.calls[0]?.[0]).toMatchObject({
@@ -323,7 +330,7 @@ describe('ReviewPane', () => {
     });
     const { rerender } = render(<ReviewPane session={SESSION} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Publish all (1)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reply 1' }));
     await waitFor(() => expect(h.state.preparePublication).toHaveBeenCalled());
     rerender(<ReviewPane session={SESSION} />);
     fireEvent.click(screen.getByRole('button', { name: 'PR activity' }));

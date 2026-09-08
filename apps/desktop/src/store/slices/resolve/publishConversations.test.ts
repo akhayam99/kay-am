@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStore } from 'zustand/vanilla';
 import {
   insertResolveQueueItem,
+  listResolvePublicationThreads,
   listResolveThreads,
   setResolveQueueItemApproval,
 } from '@goodboy/db';
@@ -405,9 +406,8 @@ afterEach(() => {
 });
 
 describe('publishConversations over a real git repository', () => {
-  it('pushes every outgoing commit, including one no conversation claims', async () => {
+  it('pushes the approved commit and marks the conversation done without closing it on the remote', async () => {
     const fix = commit({ text: 'export const retry = () => 2;\n', message: 'fix: early return' });
-    commit({ text: 'export const retry = () => 3;\n', message: 'chore: bump lockfile' });
     const { actions, get } = makeStore();
     await seedFixRow({ actions, threadId: 'PRRT_1', shas: [fix], reply: 'Fixed' });
 
@@ -415,28 +415,43 @@ describe('publishConversations over a real git repository', () => {
 
     expect(preview.blocker).toBeNull();
     expect(preview.requiresPush).toBe(true);
-    expect(preview.commits.map((entry) => entry.subject)).toEqual([
-      'chore: bump lockfile',
-      'fix: early return',
-    ]);
+    expect(preview.unapproved).toEqual([]);
+    expect(preview.commits.map((entry) => entry.subject)).toEqual(['fix: early return']);
     expect(preview.commits.find((entry) => entry.sha === fix)?.threadIds).toEqual(['PRRT_1']);
-    expect(
-      preview.commits.find((entry) => entry.subject === 'chore: bump lockfile')?.threadIds,
-    ).toEqual([]);
 
     const result = await actions.publishConversations({
       sessionId: SESSION_ID,
       publicationId: preview.publicationId ?? '',
     });
 
-    expect(result).toMatchObject({ kind: 'done', pushed: true, resolved: 1, failed: 0 });
+    expect(result).toMatchObject({ kind: 'done', pushed: true, closed: 1, failed: 0 });
     expect(git(worktreePath, ['rev-parse', 'origin/feature/retry'])).toBe(
       git(worktreePath, ['rev-parse', 'HEAD']),
+    );
+    expect(h.run.mock.calls.flatMap(([args]) => args).join(' ')).not.toContain(
+      'resolveReviewThread',
     );
     expect(get().sessionResolveThreads[SESSION_ID]?.[0]).toMatchObject({
       state: 'closed',
       closedSource: 'goodboy',
+      githubResolved: false,
     });
+  });
+
+  it('refuses to publish while the branch carries a commit no approval covers', async () => {
+    const fix = commit({ text: 'export const retry = () => 2;\n', message: 'fix: early return' });
+    commit({ text: 'export const retry = () => 3;\n', message: 'chore: bump lockfile' });
+    const { actions } = makeStore();
+    await seedFixRow({ actions, threadId: 'PRRT_1', shas: [fix], reply: 'Fixed' });
+
+    const preview = await actions.preparePublication({ sessionId: SESSION_ID });
+
+    expect(preview.blocker).toBe('unapproved_commit');
+    expect(preview.publicationId).toBeNull();
+    expect(preview.unapproved.map((entry) => entry.subject)).toEqual(['chore: bump lockfile']);
+    expect(git(worktreePath, ['rev-parse', 'origin/feature/retry'])).not.toBe(
+      git(worktreePath, ['rev-parse', 'HEAD']),
+    );
   });
 
   it('blocks with missing_commit when the recorded sha was amended away', async () => {
@@ -546,7 +561,7 @@ describe('publishConversations over a real git repository', () => {
       publicationId: preview.publicationId ?? '',
     });
 
-    expect(result).toMatchObject({ kind: 'done', pushed: false, resolved: 1 });
+    expect(result).toMatchObject({ kind: 'done', pushed: false, closed: 1 });
     expect(git(worktreePath, ['rev-parse', 'origin/feature/retry'])).toBe(before);
   });
 
@@ -576,7 +591,7 @@ describe('publishConversations over a real git repository', () => {
       publicationId: preview.publicationId ?? '',
     });
 
-    expect(result).toMatchObject({ kind: 'done', resolved: 1, failed: 1 });
+    expect(result).toMatchObject({ kind: 'done', closed: 1, failed: 1 });
     const rows = get().sessionResolveThreads[SESSION_ID] ?? [];
     expect(rows.find((row) => row.threadId === 'PRRT_1')?.state).toBe('closed');
     expect(rows.find((row) => row.threadId === 'PRRT_2')).toMatchObject({
@@ -657,9 +672,142 @@ describe('publishConversations over a real git repository', () => {
       publicationId: preview.publicationId ?? '',
     });
 
-    expect(resumed).toMatchObject({ kind: 'done', failed: 0, resolved: 1 });
+    expect(resumed).toMatchObject({ kind: 'done', failed: 0, closed: 1 });
     expect(pushSpy).toHaveBeenCalledTimes(1);
     expect(get().sessionResolveThreads[SESSION_ID]?.[0]?.state).toBe('closed');
+  });
+
+  it('pushes nothing when the remote head moved between the preview and the push', async () => {
+    const fix = commit({ text: 'export const retry = () => 2;\n', message: 'fix: early return' });
+    const { actions } = makeStore();
+    await seedFixRow({ actions, threadId: 'PRRT_1', shas: [fix], reply: 'Fixed' });
+    const preview = await actions.preparePublication({ sessionId: SESSION_ID });
+    expect(preview.blocker).toBeNull();
+
+    const other = join(repoRoot, 'other');
+    git(repoRoot, ['clone', join(repoRoot, 'remote.git'), 'other']);
+    git(other, ['config', 'user.email', 'test@example.com']);
+    git(other, ['config', 'user.name', 'Test']);
+    git(other, ['checkout', 'feature/retry']);
+    writeFileSync(join(other, 'other.ts'), 'export const other = 1;\n');
+    git(other, ['add', '.']);
+    git(other, ['commit', '-m', 'chore: someone else']);
+    git(other, ['push', 'origin', 'feature/retry']);
+    const remoteBefore = git(worktreePath, ['ls-remote', 'origin', 'refs/heads/feature/retry']);
+    const github = await import('../../../features/github/github');
+    const pushSpy = vi.mocked(github.gitPush);
+
+    const result = await actions.publishConversations({
+      sessionId: SESSION_ID,
+      publicationId: preview.publicationId ?? '',
+    });
+
+    expect(result.kind).toBe('stale');
+    expect(pushSpy).not.toHaveBeenCalled();
+    expect(h.run).not.toHaveBeenCalled();
+    expect(git(worktreePath, ['ls-remote', 'origin', 'refs/heads/feature/retry'])).toBe(
+      remoteBefore,
+    );
+    expect(result.kind === 'stale' && result.preview.blocker).toBe('remote_moved');
+  });
+
+  it('keeps the earlier record when a rebase forces a fresh review', async () => {
+    const fix = commit({ text: 'export const retry = () => 2;\n', message: 'fix: early return' });
+    const { actions } = makeStore();
+    await seedFixRow({ actions, threadId: 'PRRT_1', shas: [fix], reply: 'Fixed' });
+    const first = await actions.preparePublication({ sessionId: SESSION_ID });
+    const firstId = first.publicationId ?? '';
+    expect(firstId).not.toBe('');
+
+    git(worktreePath, ['commit', '--amend', '-m', 'fix: early return, reworded']);
+    const result = await actions.publishConversations({
+      sessionId: SESSION_ID,
+      publicationId: firstId,
+    });
+
+    expect(result.kind).toBe('stale');
+    const kept = await listResolvePublicationThreads({
+      db: tauriDatabase,
+      publicationId: firstId,
+    });
+    expect(kept.map((thread) => thread.threadId)).toEqual(['PRRT_1']);
+    expect(kept[0]?.replyBody).toContain('Fixed');
+    expect(result.kind === 'stale' && result.preview.publicationId).not.toBe(firstId);
+  });
+
+  it('never reposts a reply whose first attempt may already have landed', async () => {
+    const { actions, get, store } = makeStore();
+    await seedAnswerRow({ actions, threadId: 'PRRT_1', reply: 'Already handled elsewhere' });
+    h.run.mockImplementation(async (args) => {
+      if (args.join(' ').includes('addPullRequestReviewThreadReply')) {
+        throw new Error('network timeout while contacting github');
+      }
+      return { stdout: resolveOk('PRRT_1'), stderr: '', exitCode: 0 };
+    });
+    const first = await actions.preparePublication({ sessionId: SESSION_ID });
+    await actions.publishConversations({
+      sessionId: SESSION_ID,
+      publicationId: first.publicationId ?? '',
+    });
+    const posted = first.replies[0]?.body ?? '';
+
+    store.setState({
+      sessionGithub: {
+        ...get().sessionGithub,
+        [SESSION_ID]: {
+          ...get().sessionGithub[SESSION_ID],
+          detailFetchedAt: new Date(Date.now() + 60_000).toISOString(),
+          detail: {
+            comments: [
+              { id: 'c1', threadId: 'PRRT_1', body: posted, resolved: false },
+              { id: 'c2', threadId: 'PRRT_1', body: posted, resolved: false },
+            ],
+          },
+        },
+      },
+    } as never);
+    h.run.mockClear();
+    h.run.mockImplementation(async (args) => {
+      if (args.join(' ').includes('addPullRequestReviewThreadReply')) {
+        throw new Error('the reply must not be posted twice');
+      }
+      return { stdout: resolveOk('PRRT_1'), stderr: '', exitCode: 0 };
+    });
+
+    const retry = await actions.retryPublication({ sessionId: SESSION_ID });
+
+    expect(h.run).not.toHaveBeenCalled();
+    expect(retry.publicationId).toBeNull();
+    expect(retry.excluded).toEqual([{ threadId: 'PRRT_1', reason: 'not_ready' }]);
+    expect(get().sessionResolveThreads[SESSION_ID]?.[0]?.stateReason).toContain(
+      'a reply may already be on this conversation',
+    );
+  });
+
+  it('settles a three comment run in one preview and one confirmation', async () => {
+    const { actions, get } = makeStore();
+    await seedAnswerRow({ actions, threadId: 'PRRT_1', reply: 'First' });
+    await seedAnswerRow({ actions, threadId: 'PRRT_2', reply: 'Second' });
+    await seedAnswerRow({ actions, threadId: 'PRRT_3', reply: 'Third' });
+    const github = await import('../../../features/github/github');
+    const pushSpy = vi.mocked(github.gitPush);
+
+    const preview = await actions.preparePublication({ sessionId: SESSION_ID });
+
+    expect(preview.blocker).toBeNull();
+    expect(preview.drift).toEqual([]);
+    expect(preview.replies).toHaveLength(3);
+
+    const result = await actions.publishConversations({
+      sessionId: SESSION_ID,
+      publicationId: preview.publicationId ?? '',
+    });
+
+    expect(result).toMatchObject({ kind: 'done', pushed: false, closed: 3, failed: 0 });
+    expect(pushSpy).not.toHaveBeenCalled();
+    expect(
+      (get().sessionResolveThreads[SESSION_ID] ?? []).every((row) => row.state === 'closed'),
+    ).toBe(true);
   });
 
   it('refuses a second session publishing the same pull request while one is in flight', async () => {
@@ -700,7 +848,7 @@ describe('publishConversations over a real git repository', () => {
     releaseGithub();
 
     expect(refused).toEqual({ kind: 'busy' });
-    expect(await running).toMatchObject({ kind: 'done', resolved: 1 });
+    expect(await running).toMatchObject({ kind: 'done', closed: 1 });
     expect(second.get().sessionResolveThreads[OTHER_SESSION_ID]?.[0]?.state).toBe('answered');
   });
 
@@ -826,6 +974,6 @@ describe('publishConversations over a real git repository', () => {
     expect(firstPreview.repo).toBeNull();
     expect(secondPreview.repo).toBeNull();
     expect(refused).toEqual({ kind: 'busy' });
-    expect(await running).toMatchObject({ kind: 'done', resolved: 1 });
+    expect(await running).toMatchObject({ kind: 'done', closed: 1 });
   });
 });

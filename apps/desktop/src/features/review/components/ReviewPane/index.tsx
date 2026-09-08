@@ -5,7 +5,6 @@ import type {
   PrComment,
   PrReviewDraft,
   PullRequestState,
-  ResolveQueueItemWithThread,
   Session,
   SessionId,
 } from '@goodboy/types';
@@ -21,7 +20,6 @@ import { GithubConnectionEmptyState } from '../../../github/components/GithubCon
 import { useGithubConnection } from '../../../integrations/github/useGithubConnection';
 import { usePrDraftAgentRunning } from '../../../github/usePrDraftAgentRunning';
 import type { ActionBusy } from '../../../github/components/GitHubStudio/PrActionBar';
-import { groupThreads } from '../../../github/comment-threads';
 import { buildCommentAgentArgs } from '../../../chat/spawn-from-comment';
 import { kindRouting } from '../../../session/agent-kind';
 import { useSessionRoleModels } from '../../../../shared/hooks/useSessionRoleModels';
@@ -29,8 +27,7 @@ import type { CommentThread } from '../../../github/comment-threads';
 import type { ReviewMode } from '../../reviewMode';
 import { PrActionsMenu } from './PrActionsMenu';
 import { PrContextRow } from './PrContextRow';
-import { PublishConversationsBar, type PublishScope } from './PublishConversationsBar';
-import type { PreviewBlockerAction } from './PublishConversationsBar/PublicationPreview';
+import { PublishConversationsBar } from './PublishConversationsBar';
 import { NoPullRequestState } from './ReviewEmptyStates';
 import { openDiffComments } from '../../../session/resolve/openDiffComments';
 import { ResolveQueueHome } from '../../../resolve/components/ResolveQueueHome';
@@ -48,18 +45,9 @@ type Props = {
 
 const EMPTY_CHECKS: ReadonlyArray<PrCheckRun> = [];
 const EMPTY_PRS: ReadonlyArray<PullRequestState> = [];
-const EMPTY_QUEUE_ITEMS: ReadonlyArray<ResolveQueueItemWithThread> = [];
-
-const titleOf = ({ body }: { readonly body: string }): string => {
-  const line = body.split('\n').find((candidate) => candidate.trim() !== '') ?? '';
-  return line.length > 80 ? `${line.slice(0, 79)}...` : line;
-};
-
 export const ReviewPane = ({ session, eyebrow }: Props) => {
   const sessionId = session.id as SessionId;
   const [mode, setMode] = useState<ReviewMode>('queue');
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const [staleNote, setStaleNote] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [lifecycleBusy, setLifecycleBusy] = useState<ActionBusy>(null);
   const [listWidth, setListWidth] = useColumnWidth(STORAGE_KEYS.reviewBoardListWidth, 320);
@@ -73,8 +61,6 @@ export const ReviewPane = ({ session, eyebrow }: Props) => {
       s.sessionGithub[sessionId]?.detail?.comments ?? (EMPTY_ARRAY as ReadonlyArray<PrComment>),
   );
   const checks = useAppStore((s) => s.sessionGithub[sessionId]?.detail?.checks ?? EMPTY_CHECKS);
-  const queueItems = useAppStore((s) => s.sessionResolveQueueItems[sessionId] ?? EMPTY_QUEUE_ITEMS);
-  const preview = useAppStore((s) => s.activePublicationPreview[sessionId] ?? null);
   const drafts = useAppStore(
     (s) => s.reviewDrafts[sessionId] ?? (EMPTY_ARRAY as ReadonlyArray<PrReviewDraft>),
   );
@@ -90,9 +76,6 @@ export const ReviewPane = ({ session, eyebrow }: Props) => {
   const mergePr = useAppStore((s) => s.mergePr);
   const closePr = useAppStore((s) => s.closePr);
   const reopenPr = useAppStore((s) => s.reopenPr);
-  const preparePublication = useAppStore((s) => s.preparePublication);
-  const publishConversations = useAppStore((s) => s.publishConversations);
-  const cancelPublication = useAppStore((s) => s.cancelPublication);
   const spawnAgent = useAppStore((s) => s.spawnAgent);
   const setActiveLens = useAppStore((s) => s.setActiveLens);
   const publishPrReview = useAppStore((s) => s.publishPrReview);
@@ -133,25 +116,6 @@ export const ReviewPane = ({ session, eyebrow }: Props) => {
     }
     setReviewLensIntent({ intent: null });
   }, [reviewLensIntent, sessionId, setResolveQueueView, setReviewLensIntent]);
-
-  const titleByThreadId = useMemo(
-    () =>
-      new Map(
-        groupThreads(comments.filter((comment) => comment.source === 'review')).flatMap((thread) =>
-          thread.head.threadId == null
-            ? []
-            : [[thread.head.threadId, titleOf({ body: thread.head.body })] as const],
-        ),
-      ),
-    [comments],
-  );
-  const readyCount = useMemo(
-    () =>
-      queueItems.filter(
-        ({ item }) => item.approvalState === 'accepted' && item.deliveredAt === null,
-      ).length,
-    [queueItems],
-  );
 
   const onMutated = useCallback(() => {
     void refreshSessionPr(sessionId, { force: true });
@@ -209,62 +173,6 @@ export const ReviewPane = ({ session, eyebrow }: Props) => {
     },
     [pr, roleModels, sessionId, showToast, spawnAgent, worktreePath],
   );
-
-  const onPublish = useCallback(
-    (scope: PublishScope) => {
-      void scope;
-      setIsPreviewOpen(true);
-      setStaleNote(null);
-      void preparePublication({ sessionId }).catch((error: unknown) =>
-        showToast('error', formatError(error)),
-      );
-    },
-    [preparePublication, sessionId, showToast],
-  );
-
-  const onConfirmPublish = useCallback(async () => {
-    if (preview === null || preview.publicationId === null) {
-      return;
-    }
-    setIsBusy(true);
-    try {
-      const result = await publishConversations({
-        sessionId,
-        publicationId: preview.publicationId,
-      });
-      if (result.kind === 'stale') {
-        setStaleNote('Something changed, here is the updated preview');
-        return;
-      }
-      setIsPreviewOpen(false);
-      if (result.kind === 'push_failed') {
-        showToast('error', `Publish failed: ${result.error}`);
-        return;
-      }
-      if (result.kind === 'done') {
-        showToast(
-          result.failed > 0 ? 'error' : 'success',
-          result.failed > 0
-            ? `${result.resolved} resolved, ${result.failed} failed`
-            : `${result.resolved} resolved`,
-        );
-      }
-    } catch (error) {
-      showToast('error', formatError(error));
-    } finally {
-      setIsBusy(false);
-    }
-  }, [preview, publishConversations, sessionId, showToast]);
-
-  const onCancelPreview = useCallback(() => {
-    setIsPreviewOpen(false);
-    setStaleNote(null);
-    if (preview?.publicationId != null) {
-      void cancelPublication({ sessionId, publicationId: preview.publicationId });
-      return;
-    }
-    void cancelPublication({ sessionId, publicationId: '' }).catch(() => undefined);
-  }, [cancelPublication, preview, sessionId]);
 
   const onWriteReviewPublish = useCallback(
     async (opts: {
@@ -441,27 +349,9 @@ export const ReviewPane = ({ session, eyebrow }: Props) => {
           />
         ) : (
           <PublishConversationsBar
-            readyCount={readyCount}
-            selectedCount={0}
-            selectedReadyCount={0}
+            sessionId={sessionId}
             draftCount={openDrafts.length}
             mode={mode}
-            preview={isPreviewOpen ? preview : null}
-            titleByThreadId={titleByThreadId}
-            staleNote={staleNote}
-            progress={null}
-            isBusy={isBusy}
-            onPublish={onPublish}
-            onConfirm={() => void onConfirmPublish()}
-            onCancel={onCancelPreview}
-            onViewChanges={() => openDiffLens(sessionId, { kind: 'working', path: null })}
-            onBlockerAction={(action: PreviewBlockerAction) => {
-              if (action === 'refresh') {
-                void refreshSessionPrDetail(sessionId, { force: true });
-                return;
-              }
-              openDiffLens(sessionId, { kind: 'working', path: null });
-            }}
             onSelectMode={setMode}
           />
         )

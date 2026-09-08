@@ -30,9 +30,10 @@ export const postThreadReply = async ({
   if (replyBody === null) {
     return { posted: false, replyId: null };
   }
+  const attemptedAt = Date.now();
   await upsertResolvePublicationThread({
     db: tauriDatabase,
-    thread: { ...frozen, replyPhase: 'sending' },
+    thread: { ...frozen, replyPhase: 'sending', replyAttemptedAt: attemptedAt },
   });
   const pr = get().sessionGithub[sessionId]?.pr ?? null;
   const posted = await addReviewThreadReply(
@@ -50,7 +51,13 @@ export const postThreadReply = async ({
   });
   await upsertResolvePublicationThread({
     db: tauriDatabase,
-    thread: { ...frozen, replyPhase: 'posted', replyId: posted.id, replyPostedAt: postedAt },
+    thread: {
+      ...frozen,
+      replyPhase: 'posted',
+      replyId: posted.id,
+      replyAttemptedAt: attemptedAt,
+      replyPostedAt: postedAt,
+    },
   });
   return { posted: true, replyId: posted.id };
 };
