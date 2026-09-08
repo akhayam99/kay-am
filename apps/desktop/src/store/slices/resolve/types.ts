@@ -4,6 +4,7 @@ import type {
   ResolveAttemptPhase,
   ResolvePublicationPreview,
   ResolveThread,
+  ResolveUncapturedWork,
   SessionId,
 } from '@goodboy/types';
 import type { PublishConversationsResult } from './publishConversations';
@@ -99,6 +100,9 @@ export type ResolveActions = {
   readonly beginResolveCandidate: (params: CandidateBeginParams) => Promise<void>;
   readonly captureResolveCandidate: (params: CandidateCaptureParams) => Promise<string | null>;
   readonly invalidateIntegratedApprovals: (params: SessionParams) => Promise<number>;
+  readonly recoverUncapturedResolveWork: (
+    params: SessionParams,
+  ) => Promise<ResolveUncapturedWork | null>;
   readonly drainResolveQueue: (params: DrainParams) => Promise<void>;
   readonly drainResolveWorktree: (params: WorktreeDrainParams) => Promise<void>;
   readonly reconcileResolveDrains: () => Promise<void>;

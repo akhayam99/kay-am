@@ -55,6 +55,8 @@ export const blockerCopy = ({
   readonly prNumber: number;
 }): BlockerCopy => {
   switch (blocker) {
+    case 'uncaptured_work':
+      return { sentence: 'The branch carries work nobody approved', action: 'view_work' };
     case 'dirty_tree':
       return { sentence: 'Worktree has uncommitted changes', action: 'open_diff' };
     case 'writer_busy':

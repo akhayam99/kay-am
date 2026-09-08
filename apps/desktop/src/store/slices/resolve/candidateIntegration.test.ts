@@ -236,6 +236,9 @@ const makeHarness = () => {
   const store = createStore(() => ({
     ...resolveInitialState,
     sessions: [{ id: SESSION_ID, workspaceId: WORKSPACE_ID, activeProjectId: PROJECT_ID }],
+    workspaces: [{ id: WORKSPACE_ID }],
+    workspaceOverrides: {},
+    projects: [{ id: PROJECT_ID, kind: 'repo' }],
     sessionActiveProject: { [SESSION_ID]: PROJECT_ID },
     sessionProjectMounts: {
       [SESSION_ID]: [
@@ -255,10 +258,12 @@ const seedItem = async ({ threadId }: { readonly threadId: string }): Promise<st
   const rows = await listResolveQueueItems({ db, sessionId: SESSION_ID });
   const itemId = `item-${threadId}`;
   const revision =
-    (await db.select<{ readonly revision: number }>(
-      'SELECT revision FROM resolve_threads WHERE session_id = ? AND thread_id = ?',
-      [SESSION_ID, threadId],
-    ))[0]?.revision ?? 0;
+    (
+      await db.select<{ readonly revision: number }>(
+        'SELECT revision FROM resolve_threads WHERE session_id = ? AND thread_id = ?',
+        [SESSION_ID, threadId],
+      )
+    )[0]?.revision ?? 0;
   expect(rows.some((entry) => entry.item.id === itemId)).toBe(false);
   await insertResolveQueueItem({
     db,
@@ -621,6 +626,70 @@ describe('resolve candidates keep the branch tip approved', () => {
     ).rejects.toThrow('stale');
     expect(git(worktreePath, ['rev-parse', 'HEAD'])).toBe(accepted);
     await expectNoAncestryLeak();
+  });
+
+  it('parks work the crash left on the branch when the run is loaded again', async () => {
+    const crashed = makeHarness();
+    const itemA = await seedItem({ threadId: 'thread-a' });
+    await crashed.actions.beginResolveCandidate({ sessionId: SESSION_ID, attemptId: 'attempt-1' });
+    agentWrites({ files: [['a.txt', 'a\n']], message: 'fix a' });
+    const uncaptured = git(worktreePath, ['rev-parse', 'HEAD']);
+    expect(uncaptured).not.toBe(rootSha);
+
+    const relaunched = makeHarness();
+    const pending = await relaunched.actions.recoverUncapturedResolveWork({
+      sessionId: SESSION_ID,
+    });
+
+    expect(pending).toBeNull();
+    expect(git(worktreePath, ['rev-parse', 'HEAD'])).toBe(rootSha);
+    expect(existsSync(join(worktreePath, 'a.txt'))).toBe(false);
+    expect(git(worktreePath, ['rev-parse', 'refs/goodboy/candidates/attempt-1'])).toBe(uncaptured);
+    expect((await listResolveCandidates({ db, sessionId: SESSION_ID }))[0]).toMatchObject({
+      state: 'ready',
+      candidateSha: uncaptured,
+    });
+    expect(
+      (await listResolveQueueItems({ db, sessionId: SESSION_ID })).find(
+        (entry) => entry.item.id === itemA,
+      )?.item.approvalState,
+    ).toBe('none');
+    await expectNoAncestryLeak();
+  });
+
+  it('refuses integration and publication while uncaptured work cannot be parked', async () => {
+    const live = makeHarness();
+    const itemA = await seedItem({ threadId: 'thread-a' });
+    await live.actions.beginResolveCandidate({ sessionId: SESSION_ID, attemptId: 'attempt-1' });
+    agentWrites({ files: [['a.txt', 'a\n']], message: 'fix a' });
+    await live.actions.captureResolveCandidate({
+      sessionId: SESSION_ID,
+      attemptId: 'attempt-1',
+      threadIds: ['thread-a'],
+    });
+    await live.actions.beginResolveCandidate({ sessionId: SESSION_ID, attemptId: 'attempt-2' });
+    agentWrites({ files: [['b.txt', 'b\n']], message: 'fix b, then the app dies' });
+    const stranded = git(worktreePath, ['rev-parse', 'HEAD']);
+    h.leases.set(worktreePath, 'someone-else');
+
+    const pending = await live.actions.recoverUncapturedResolveWork({ sessionId: SESSION_ID });
+
+    expect(pending).toMatchObject({ candidateId: 'attempt-2', reason: 'quarantine_failed' });
+    expect(live.store.getState().sessionResolveUncapturedWork[SESSION_ID]).toEqual(pending);
+    await expect(
+      live.actions.acceptResolveQueueItem({
+        sessionId: SESSION_ID,
+        itemId: itemA,
+        revision: 0,
+        reply: 'Reply for thread-a',
+      }),
+    ).rejects.toThrow('never captured');
+    expect(git(worktreePath, ['rev-parse', 'HEAD'])).toBe(stranded);
+
+    const preview = await live.actions.preparePublication({ sessionId: SESSION_ID });
+
+    expect(preview.blocker).toBe('uncaptured_work');
+    expect(preview.publicationId).toBeNull();
   });
 
   it('invalidates an approval whose integrated work left the branch', async () => {

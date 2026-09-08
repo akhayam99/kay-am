@@ -16,6 +16,7 @@ import { acceptResolveQueueItem } from './acceptResolveQueueItem';
 import { beginResolveCandidate } from './beginResolveCandidate';
 import { captureResolveCandidate } from './captureResolveCandidate';
 import { invalidateIntegratedApprovals } from './invalidateIntegratedApprovals';
+import { recoverUncapturedResolveWork } from './recoverUncapturedResolveWork';
 import { deferResolveQueueItem } from './deferResolveQueueItem';
 import { reopenResolveQueueItem } from './reopenResolveQueueItem';
 import { takeUpResolveQueueItem } from './takeUpResolveQueueItem';
@@ -74,6 +75,8 @@ export const createResolveSlice = ({ set, get }: SliceParams): ResolveActions =>
       serialize({ run: () => captureResolveCandidate({ set, get, ...params }) }),
     invalidateIntegratedApprovals: (params: SessionParams) =>
       serialize({ run: () => invalidateIntegratedApprovals({ set, get, ...params }) }),
+    recoverUncapturedResolveWork: (params: SessionParams) =>
+      serialize({ run: () => recoverUncapturedResolveWork({ set, get, ...params }) }),
     drainResolveQueue: (params: DrainParams) =>
       serialize({ run: () => drainResolveQueue({ set, get, ...params }) }),
     drainResolveWorktree: (params: WorktreeDrainParams) =>

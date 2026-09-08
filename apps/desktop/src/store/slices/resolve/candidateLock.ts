@@ -1,7 +1,4 @@
-import {
-  acquireWorktreeWriter,
-  releaseWorktreeWriter,
-} from '../../../features/worktree/worktree';
+import { acquireWorktreeWriter, releaseWorktreeWriter } from '../../../features/worktree/worktree';
 
 type RunParams<T> = {
   readonly worktreePath: string;

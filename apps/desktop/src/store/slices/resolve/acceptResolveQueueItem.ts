@@ -10,6 +10,10 @@ import { integrateWorktreeCandidate } from '../../../features/worktree/worktree'
 import { tauriDatabase } from '../../../shared/lib/db';
 import { withCandidateLock } from './candidateLock';
 import { loadResolveQueueItemsInto } from './loadResolveQueueItemsInto';
+import {
+  UNCAPTURED_WORK_ON_BRANCH,
+  recoverUncapturedResolveWork,
+} from './recoverUncapturedResolveWork';
 import type { ItemRevisionParams, SliceParams } from './types';
 
 type Params = SliceParams & ItemRevisionParams;
@@ -30,12 +34,17 @@ const hashReply = async ({ reply }: { readonly reply: string }): Promise<string>
 
 export const acceptResolveQueueItem = async ({
   set,
+  get,
   sessionId,
   itemId,
   revision,
   reply,
 }: Params): Promise<void> => {
   const db = tauriDatabase;
+  const pending = await recoverUncapturedResolveWork({ set, get, sessionId });
+  if (pending !== null) {
+    throw new Error(UNCAPTURED_WORK_ON_BRANCH);
+  }
   const replyHash = await hashReply({ reply });
   const candidate = await getReadyResolveCandidateForItem({ db, queueItemId: itemId });
   if (candidate === null) {

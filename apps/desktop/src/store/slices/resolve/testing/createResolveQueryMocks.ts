@@ -199,6 +199,15 @@ export const createResolveQueryMocks = () => {
         return true;
       },
     ),
+    listResolveCandidates: vi.fn(async () => []),
+    getResolveCandidate: vi.fn(async () => null),
+    getReadyResolveCandidateForItem: vi.fn(async () => null),
+    listResolveCandidateItems: vi.fn(async () => []),
+    insertResolveCandidate: vi.fn(async () => undefined),
+    insertResolveCandidateItem: vi.fn(async () => undefined),
+    markResolveCandidateReady: vi.fn(async () => true),
+    setResolveCandidateState: vi.fn(async () => true),
+    markOverlappingResolveCandidatesStale: vi.fn(async () => undefined),
     hasResolveImport: vi.fn(async () => false),
     commitResolveImport: vi.fn(async ({ rows }: ImportParams) => {
       rows.forEach((row) => threads.set(row.threadId, row));

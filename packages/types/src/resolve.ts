@@ -93,6 +93,17 @@ export type ResolveCandidateItem = Readonly<{
   itemRevision: number;
 }>;
 
+export type ResolveUncapturedWorkReason = 'quarantine_failed' | 'worktree_unavailable';
+
+export type ResolveUncapturedWork = Readonly<{
+  candidateId: string;
+  worktreePath: string;
+  baseSha: string;
+  head: string;
+  reason: ResolveUncapturedWorkReason;
+  detail: string | null;
+}>;
+
 export type ResolvePublicationPhase =
   | 'previewed'
   | 'confirmed'
@@ -141,6 +152,7 @@ export type ResolvePublicationThread = Readonly<{
 }>;
 
 export type PublicationBlocker =
+  | 'uncaptured_work'
   | 'dirty_tree'
   | 'writer_busy'
   | 'publication_in_progress'

@@ -340,6 +340,8 @@ export type {
   ResolveCandidate,
   ResolveCandidateItem,
   ResolveCandidateState,
+  ResolveUncapturedWork,
+  ResolveUncapturedWorkReason,
   ResolvePublication,
   ResolvePublicationExclusion,
   ResolvePublicationPhase,

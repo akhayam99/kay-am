@@ -28,6 +28,7 @@ import { getSessionRepo } from '../worktrees/getSessionRepo';
 import { UNKNOWN_PUBLICATION_REPO, isPublicationTargetBusy } from './publicationLock';
 import { publicationTarget } from './publicationTarget';
 import { loadPublicationsInto } from './publicationState';
+import { recoverUncapturedResolveWork } from './recoverUncapturedResolveWork';
 import { selectPublishableThreads } from './selectPublishableThreads';
 import { threadOutcome } from './threadOutcome';
 import type { PreparePublicationParams, SliceParams } from './types';
@@ -191,6 +192,7 @@ export const preparePublication = async ({
   scopeId,
 }: Params): Promise<ResolvePublicationPreview> => {
   const target = publicationTarget({ get, sessionId });
+  const uncaptured = await recoverUncapturedResolveWork({ set, get, sessionId }).catch(() => null);
   const repo = getSessionRepo({ get, sessionId });
   const rows = await listResolveThreads({ db: tauriDatabase, sessionId });
   const queueItems = await listResolveQueueItems({ db: tauriDatabase, sessionId });
@@ -241,16 +243,18 @@ export const preparePublication = async ({
       prNumber: target.prNumber,
       ...(scopeId !== undefined && { scopeId }),
     }));
-  const blocker =
-    publishable.length === 0
-      ? null
-      : blockerOf({
-          requiresPush,
-          hasWorktree: repo !== null,
-          isTargetBusy,
-          headBranch: get().sessionGithub[sessionId]?.pr?.headBranch ?? null,
-          git,
-        });
+  const blocker: PublicationBlocker | null =
+    uncaptured !== null
+      ? 'uncaptured_work'
+      : publishable.length === 0
+        ? null
+        : blockerOf({
+            requiresPush,
+            hasWorktree: repo !== null,
+            isTargetBusy,
+            headBranch: get().sessionGithub[sessionId]?.pr?.headBranch ?? null,
+            git,
+          });
   const commits = git.commits
     .filter((commit) => !commit.pushed)
     .map((commit) => ({
