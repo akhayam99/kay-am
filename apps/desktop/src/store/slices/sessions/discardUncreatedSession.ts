@@ -21,6 +21,10 @@ export const discardUncreatedSession = async ({ set, sessionId }: Params): Promi
     delete sessionBranches[sessionId];
     const sessionActiveProject = { ...state.sessionActiveProject };
     delete sessionActiveProject[sessionId];
+    const sessionActiveMount = { ...state.sessionActiveMount };
+    delete sessionActiveMount[sessionId];
+    const sessionMounts = { ...state.sessionMounts };
+    delete sessionMounts[sessionId];
     return {
       sessions: state.sessions.filter((candidate) => candidate.id !== sessionId),
       currentSessionId: state.currentSessionId === sessionId ? null : state.currentSessionId,
@@ -28,6 +32,8 @@ export const discardUncreatedSession = async ({ set, sessionId }: Params): Promi
       sessionProjectMounts,
       sessionBranches,
       sessionActiveProject,
+      sessionActiveMount,
+      sessionMounts,
     };
   });
 };

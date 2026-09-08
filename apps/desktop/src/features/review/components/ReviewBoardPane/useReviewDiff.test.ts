@@ -132,6 +132,8 @@ const BASE_STATE: MockStore = {
   sessionExternalTasks: { [SESSION_ID]: [githubTask, gitlabTask] },
   sessions: [],
   projects: [],
+  sessionMounts: {},
+  sessionActiveMount: {},
   sessionProjectMounts: {},
   sessionActiveProject: {},
   sessionProjectPrs: { [SESSION_ID]: {} },

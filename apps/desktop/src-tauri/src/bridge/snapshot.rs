@@ -224,12 +224,15 @@ pub fn build() -> Result<Snapshot, BridgeError> {
         "SELECT workflow_run_id, session_id, workflow_id, ordinal, current_step_ordinal, goal, \
          trigger_mode, discarded_at, created_at FROM session_workflows WHERE discarded_at IS NULL",
     )?;
-    // PR status: the per-session branch (session_worktrees) joined on the phone
-    // to the desktop's cached PR (github_pr_cache.pr_json, parsed inline). The
-    // cache is read-only here — mobile mirrors what the desktop last fetched.
     let session_worktrees = rows(
         &conn,
-        "SELECT session_id, branch, parallel_index FROM session_worktrees",
+        "SELECT id AS mount_id, session_id, project_id, branch, repo_slug, parallel_index, \
+         is_attached, disk_state FROM session_worktrees",
+    )?;
+    let mount_pr_links = rows(
+        &conn,
+        "SELECT mount_id, provider, host, repo_slug, pr_number, head_branch, base_branch, state \
+         FROM mount_pr_links",
     )?;
     let github_pr_cache = embed_json_column(
         rows(
@@ -285,6 +288,7 @@ pub fn build() -> Result<Snapshot, BridgeError> {
             "steps": steps,
             "session_workflows": session_workflows,
             "session_worktrees": session_worktrees,
+            "mount_pr_links": mount_pr_links,
             "github_pr_cache": github_pr_cache,
             "session_costs": session_costs,
             "session_external_tasks": session_external_tasks,

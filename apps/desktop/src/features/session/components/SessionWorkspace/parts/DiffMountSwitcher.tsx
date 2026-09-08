@@ -30,13 +30,15 @@ export const DiffMountSwitcher = ({
           className="inline-flex max-w-full flex-wrap items-center gap-1 rounded-lg border border-border-soft bg-subtle p-1"
         >
           {mounts.map((mount) => {
+            const isNameShared =
+              mounts.filter((candidate) => candidate.mountName === mount.mountName).length > 1;
             const stat = diffStats.get(mount.worktreePath) ?? null;
             const hasChanges = stat != null && (stat.additions > 0 || stat.deletions > 0);
             const statState = stat == null ? 'pending' : hasChanges ? 'changed' : 'quiet';
             const isSelected = mount.worktreePath === selectedWorktreePath;
             return (
               <button
-                key={mount.worktreePath}
+                key={mount.mountId ?? mount.worktreePath}
                 type="button"
                 aria-pressed={isSelected}
                 title={mount.worktreePath}
@@ -53,6 +55,11 @@ export const DiffMountSwitcher = ({
                 )}
               >
                 <span className="min-w-0 truncate">{mount.mountName}</span>
+                {isNameShared && mount.branch !== '' ? (
+                  <span className="min-w-0 shrink truncate font-mono text-3xs text-muted-foreground">
+                    {mount.branch}
+                  </span>
+                ) : null}
                 <span className="flex min-w-16 shrink-0 justify-end">
                   {stat == null ? null : hasChanges ? (
                     <DiffStat additions={stat.additions} deletions={stat.deletions} />

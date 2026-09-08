@@ -14,14 +14,19 @@ type ProjectLineParams = {
   readonly mounts: ReadonlyArray<SessionProjectMount>;
 };
 
+const mountSummary = ({ mount }: { readonly mount: SessionProjectMount }): string => {
+  const branch = mount.branch === '' ? 'no branch' : `branch ${mount.branch}`;
+  return `${mount.worktreePath} (${branch})`;
+};
+
 const projectLine = ({ project, mounts }: ProjectLineParams): string => {
-  const mount = mounts.find((candidate) => candidate.projectId === project.id);
+  const owned = mounts.filter((candidate) => candidate.projectId === project.id);
   const identity = `- ${project.name} (${project.kind}) root: ${project.rootPath}`;
-  if (mount === undefined) {
+  if (owned.length === 0) {
     return `${identity} | NOT materialized: read it freely, mount it only to write`;
   }
-  const branch = mount.branch === '' ? 'no branch' : `branch ${mount.branch}`;
-  return `${identity} | materialized at ${mount.worktreePath} (${branch})`;
+  const summaries = owned.map((mount) => mountSummary({ mount })).join(', ');
+  return `${identity} | materialized at ${summaries}`;
 };
 
 type MaterializeLineParams = {

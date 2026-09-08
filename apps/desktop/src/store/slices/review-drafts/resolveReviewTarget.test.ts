@@ -119,6 +119,8 @@ const buildState = ({
   sessionExternalTasks: { [SESSION_ID]: tasks },
   sessions: [{ id: SESSION_ID, activeProjectId: PROJECT_ID } as Session],
   projects: [{ id: PROJECT_ID, kind: 'repo' } as Project],
+  sessionMounts: {},
+  sessionActiveMount: {},
   sessionProjectMounts: {
     [SESSION_ID]: [
       {

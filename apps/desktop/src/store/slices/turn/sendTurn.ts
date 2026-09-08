@@ -104,6 +104,11 @@ import {
 import { applyHeuristicTitle } from './applyHeuristicTitle';
 import { clusterBoundaryMarker, composeClusterBoundary } from '../workflows/clusterImplementation';
 import { resolveWorktreePath } from '../resolve/resolveWorktreePath';
+import {
+  selectActiveMount,
+  selectMountById,
+  selectWritableMounts,
+} from '../project-mounts/selectors';
 import { createResolveCandidateWriter } from './createResolveCandidateWriter';
 import { completeResolvedAgent } from './completeResolvedAgent';
 import { resolvePhaseAgent } from './resolvePhaseAgent';
@@ -188,10 +193,9 @@ export const sendTurn = (set: SetFn, get: GetFn) => {
     const workspaceProjects = before.projects.filter(
       (project) => project.workspaceId === session.workspaceId,
     );
-    const turnMounts = before.sessionProjectMounts[sessionId] ?? [];
-    const turnActiveProjectId = before.sessionActiveProject[sessionId] ?? session.activeProjectId;
-    const activeMount =
-      turnMounts.find((mount) => mount.projectId === turnActiveProjectId) ?? turnMounts[0];
+    const activeMount = selectActiveMount({ state: before, sessionId }) ?? undefined;
+    const turnMountId = activeMount?.mountId ?? null;
+    const turnMountRevision = activeMount?.revision ?? null;
     const workingDir =
       activeMount !== undefined ? activeMount.worktreePath : await scratchDirPrepare({ sessionId });
     const isPlainSessionDir =
@@ -512,12 +516,25 @@ export const sendTurn = (set: SetFn, get: GetFn) => {
     const resolvedOverride =
       session.providerPreference.allowTurnOverride && override != null ? override : undefined;
 
+    if (turnMountId !== null) {
+      const capturedMount = selectMountById({ state: get(), sessionId, mountId: turnMountId });
+      const isStillCaptured =
+        capturedMount !== null &&
+        capturedMount.worktreePath === workingDir &&
+        (turnMountRevision === null || (capturedMount.revision ?? null) === turnMountRevision);
+      if (!isStillCaptured) {
+        throw new Error('the project mount this turn captured changed before it could start');
+      }
+    }
+
     const isResolverTurn = turnAgentKind === 'resolver';
     const agentRowForLease = isResolverTurn
       ? ((get().sessionPhaseRuns[sessionId] ?? []).find((row) => row.id === activeAgentId) ??
         (await getAgentById(tauriDatabase, activeAgentId)))
       : null;
-    const writerLeasePath = isResolverTurn ? await resolveWorktreePath({ get, sessionId }) : null;
+    const writerLeasePath = isResolverTurn
+      ? await resolveWorktreePath({ get, sessionId, mountId: turnMountId })
+      : null;
     if (isResolverTurn && (writerLeasePath === null || agentRowForLease === null)) {
       throw new Error(
         writerLeasePath === null
@@ -803,7 +820,7 @@ export const sendTurn = (set: SetFn, get: GetFn) => {
 
     const kindSystemPrompt = AGENT_KIND_DEFAULTS[earlyAgentKind].systemPrompt;
 
-    const scopeMounts = get().sessionProjectMounts[sessionId] ?? [];
+    const scopeMounts = selectWritableMounts({ state: get(), sessionId });
     const activeProject =
       activeMount !== undefined
         ? get().projects.find((project) => project.id === activeMount.projectId)

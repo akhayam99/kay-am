@@ -72,7 +72,11 @@ export const ProjectMountRow = ({
   });
 
   const openLens = async ({ lens }: { readonly lens: LensKind }) => {
-    await setSessionActiveProject({ sessionId, projectId: mount.projectId });
+    await setSessionActiveProject({
+      sessionId,
+      projectId: mount.projectId,
+      ...(mount.mountId === undefined ? {} : { mountId: mount.mountId }),
+    });
     if (lens === 'scripts') {
       setScriptsLensScope({ scope: { projectId: mount.projectId } });
     }
@@ -99,6 +103,7 @@ export const ProjectMountRow = ({
         <ProjectBranchChip
           sessionId={sessionId}
           projectId={mount.projectId}
+          {...(mount.mountId === undefined ? {} : { mountId: mount.mountId })}
           branch={mount.branch}
           canSwitch={project?.kind === 'repo'}
         />
@@ -112,6 +117,7 @@ export const ProjectMountRow = ({
           <ProjectSyncControl
             sessionId={sessionId}
             projectId={mount.projectId}
+            {...(mount.mountId === undefined ? {} : { mountId: mount.mountId })}
             status={worktreeStatus}
           />
         )
@@ -149,7 +155,11 @@ export const ProjectMountRow = ({
               : `Create a PR for ${projectName}`
           }
           onClick={() => {
-            void setSessionActiveProject({ sessionId, projectId: mount.projectId }).then(() => {
+            void setSessionActiveProject({
+              sessionId,
+              projectId: mount.projectId,
+              ...(mount.mountId === undefined ? {} : { mountId: mount.mountId }),
+            }).then(() => {
               window.dispatchEvent(
                 new CustomEvent(
                   remoteKind === 'gitlab'

@@ -7,7 +7,16 @@ import type {
   SessionId,
   SessionMountView,
 } from '@goodboy/types';
-import { isMountBranchBlocked, selectWritableMountPath, selectWritableMounts } from './selectors';
+import {
+  isMountBranchBlocked,
+  selectActiveMount,
+  selectActiveMountId,
+  selectMountById,
+  selectMountForPath,
+  selectUnambiguousProjectMount,
+  selectWritableMountPath,
+  selectWritableMounts,
+} from './selectors';
 
 const TIMESTAMP = '2026-01-01T00:00:00.000Z' as IsoDateTime;
 
@@ -96,5 +105,105 @@ describe('project mount selectors', () => {
     expect(
       selectWritableMountPath({ state, sessionId: SESSION_ID, mountId: HISTORICAL }),
     ).toBeNull();
+  });
+});
+
+const SECOND = 'mount-second' as MountId;
+
+const sessionRow = ({ activeMountId }: { activeMountId?: MountId }) =>
+  ({
+    id: SESSION_ID,
+    activeProjectId: PROJECT_ID,
+    ...(activeMountId === undefined ? {} : { activeMountId }),
+  }) as never;
+
+const twoMountState = ({ selected, stored }: { selected?: MountId | null; stored?: MountId }) => ({
+  sessionProjectMounts: {},
+  mountBranchObservations: {},
+  sessions: [sessionRow({ ...(stored === undefined ? {} : { activeMountId: stored }) })],
+  sessionActiveProject: {},
+  sessionActiveMount: selected === undefined ? {} : { [SESSION_ID]: selected },
+  sessionMounts: {
+    [SESSION_ID]: [
+      view({
+        id: ATTACHED,
+        worktreePath: '/repos/goodboy/wt/first',
+        isAttached: true,
+        diskState: 'present',
+      }),
+      {
+        ...view({
+          id: SECOND,
+          worktreePath: '/repos/goodboy/wt/second',
+          isAttached: true,
+          diskState: 'present',
+        }),
+        branch: 'ak/second',
+      },
+    ],
+  },
+});
+
+describe('routing two mounts of one project', () => {
+  it('follows the persisted selection rather than the first mount', () => {
+    const state = twoMountState({ selected: SECOND });
+
+    expect(selectActiveMountId({ state, sessionId: SESSION_ID })).toBe(SECOND);
+    expect(selectActiveMount({ state, sessionId: SESSION_ID })?.worktreePath).toBe(
+      '/repos/goodboy/wt/second',
+    );
+  });
+
+  it('falls back to the session row selection when the store has none', () => {
+    const state = twoMountState({ stored: SECOND });
+
+    expect(selectActiveMountId({ state, sessionId: SESSION_ID })).toBe(SECOND);
+  });
+
+  it('refuses to guess a mount when the project owns several and none is active', () => {
+    const state = twoMountState({ selected: null });
+
+    expect(
+      selectUnambiguousProjectMount({ state, sessionId: SESSION_ID, projectId: PROJECT_ID }),
+    ).toBeNull();
+  });
+
+  it('resolves the project mount once the selection names one of them', () => {
+    const state = twoMountState({ selected: SECOND });
+
+    expect(
+      selectUnambiguousProjectMount({ state, sessionId: SESSION_ID, projectId: PROJECT_ID })
+        ?.mountId,
+    ).toBe(SECOND);
+  });
+
+  it('never makes a removed mount the execution root', () => {
+    const state = {
+      ...twoMountState({ selected: HISTORICAL }),
+      sessionMounts: {
+        [SESSION_ID]: [
+          view({ id: HISTORICAL, worktreePath: null, isAttached: false, diskState: 'removed' }),
+          view({
+            id: ATTACHED,
+            worktreePath: '/repos/goodboy/wt/first',
+            isAttached: true,
+            diskState: 'present',
+          }),
+        ],
+      },
+    };
+
+    expect(selectActiveMountId({ state, sessionId: SESSION_ID })).toBe(ATTACHED);
+    expect(selectMountById({ state, sessionId: SESSION_ID, mountId: HISTORICAL })).toBeNull();
+  });
+
+  it('finds the mount that owns a working directory', () => {
+    const state = twoMountState({ selected: ATTACHED });
+
+    expect(
+      selectMountForPath({ state, sessionId: SESSION_ID, path: '/repos/goodboy/wt/second' })
+        ?.mountId,
+    ).toBe(SECOND);
+    expect(selectMountForPath({ state, sessionId: SESSION_ID, path: '/elsewhere' })).toBeNull();
   });
 });

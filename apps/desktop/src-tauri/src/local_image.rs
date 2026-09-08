@@ -27,29 +27,42 @@ pub async fn local_image_read(
 }
 
 fn resolve_root(conn: &Connection, session_id: &str) -> Result<String, String> {
-    conn.query_row(
-        "SELECT COALESCE(
-            (SELECT sw.worktree_path FROM session_worktrees sw
-             WHERE sw.session_id = s.id AND sw.id = s.active_mount_id
-               AND sw.worktree_path IS NOT NULL AND sw.is_attached = 1
-             LIMIT 1),
-            (SELECT sw.worktree_path FROM session_worktrees sw
-             WHERE sw.session_id = s.id AND sw.project_id = s.active_project_id
-               AND sw.worktree_path IS NOT NULL AND sw.is_attached = 1
-             ORDER BY sw.parallel_index, sw.created_at, sw.id LIMIT 1),
-            (SELECT sw.worktree_path FROM session_worktrees sw
-             WHERE sw.session_id = s.id
-               AND sw.worktree_path IS NOT NULL AND sw.is_attached = 1
-             ORDER BY sw.parallel_index, sw.created_at, sw.id LIMIT 1),
-            (SELECT p.root_path FROM projects p
-             WHERE p.id = s.active_project_id AND p.workspace_id = s.workspace_id)
-         ) FROM sessions s WHERE s.id = ?1",
-        [session_id],
-        |row| row.get::<_, Option<String>>(0),
-    )
-    .map_err(|_| "image root is unavailable".to_string())?
-    .filter(|root| !root.is_empty())
-    .ok_or_else(|| "image root is unavailable".to_string())
+    let (active_mount_id, active_path, fallback_path) = conn
+        .query_row(
+            "SELECT
+                s.active_mount_id,
+                (SELECT sw.worktree_path FROM session_worktrees sw
+                 WHERE sw.session_id = s.id AND sw.id = s.active_mount_id
+                   AND sw.worktree_path IS NOT NULL AND sw.is_attached = 1
+                 LIMIT 1),
+                COALESCE(
+                    (SELECT sw.worktree_path FROM session_worktrees sw
+                     WHERE sw.session_id = s.id AND sw.project_id = s.active_project_id
+                       AND sw.worktree_path IS NOT NULL AND sw.is_attached = 1
+                     ORDER BY sw.parallel_index, sw.created_at, sw.id LIMIT 1),
+                    (SELECT sw.worktree_path FROM session_worktrees sw
+                     WHERE sw.session_id = s.id
+                       AND sw.worktree_path IS NOT NULL AND sw.is_attached = 1
+                     ORDER BY sw.parallel_index, sw.created_at, sw.id LIMIT 1),
+                    (SELECT p.root_path FROM projects p
+                     WHERE p.id = s.active_project_id AND p.workspace_id = s.workspace_id)
+                )
+             FROM sessions s WHERE s.id = ?1",
+            [session_id],
+            |row| {
+                Ok((
+                    row.get::<_, Option<String>>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                ))
+            },
+        )
+        .map_err(|_| "image root is unavailable".to_string())?;
+    let usable = |value: Option<String>| value.filter(|root| !root.is_empty());
+    if active_mount_id.is_some() {
+        return usable(active_path).ok_or_else(|| "the active mount is unavailable".to_string());
+    }
+    usable(fallback_path).ok_or_else(|| "image root is unavailable".to_string())
 }
 
 fn read_image(root: &Path, path: &Path) -> Result<String, String> {
@@ -336,6 +349,22 @@ mod tests {
         )
         .unwrap();
         assert_eq!(resolve_root(&conn, "session").unwrap(), "/active-mount");
+    }
+
+    #[test]
+    fn refuses_to_read_a_sibling_mount_when_the_active_one_is_gone() {
+        let conn = session_db();
+        conn.execute_batch(
+            "INSERT INTO session_worktrees VALUES
+             ('first', 'session', 'active', '/first-mount', 0, '1', 1),
+             ('active', 'session', 'active', NULL, 1, '2', 0);
+             UPDATE sessions SET active_mount_id = 'active' WHERE id = 'session';",
+        )
+        .unwrap();
+        assert_eq!(
+            resolve_root(&conn, "session").unwrap_err(),
+            "the active mount is unavailable"
+        );
     }
 
     #[test]

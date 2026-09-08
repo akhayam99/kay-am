@@ -1,6 +1,7 @@
 import type {
   Agent,
   IsoDateTime,
+  MountId,
   ProjectId,
   ProviderRunId,
   SessionExternalTask,
@@ -38,6 +39,7 @@ import {
 import { buildProviderSpendBreakdown } from '../budget';
 import { reconcileLoadedAgent, reconcileLoadedSessions } from '../sessions/reconcileSessionRuns';
 import { buildSessionProjectMounts } from '../worktrees/buildSessionProjectMounts';
+import { pickActiveMount } from '../project-mounts/activeMount';
 import { clearPendingTurnEvents } from '../transcripts/buffer';
 import type { GetFn, SetFn } from './types';
 
@@ -68,6 +70,7 @@ export const setCurrentWorkspace = (set: SetFn, get: GetFn) => {
       sessionWorktrees: {},
       sessionProjectMounts: {},
       sessionActiveProject: {},
+      sessionActiveMount: {},
       sessionBranches: {},
       sessionExternalTasks: {},
       sessionPhaseRuns: {},
@@ -118,6 +121,7 @@ export const setCurrentWorkspace = (set: SetFn, get: GetFn) => {
       const sessionWorktreeRecords: Record<string, ReadonlyArray<SessionWorktree>> = {};
       const sessionProjectMounts: Record<string, ReturnType<typeof buildSessionProjectMounts>> = {};
       const sessionActiveProject: Record<string, ProjectId> = {};
+      const sessionActiveMount: Record<string, MountId | null> = {};
       const sessionBranches: Record<string, string> = {};
       const sessionPhaseRuns: Record<string, ReadonlyArray<Agent>> = {};
       const kindOverridesFromDb: Record<string, AgentKind> = {};
@@ -144,12 +148,18 @@ export const setCurrentWorkspace = (set: SetFn, get: GetFn) => {
             projectId: null,
           });
         }
+        const activeMount = pickActiveMount({
+          mounts,
+          selectedMountId: null,
+          storedMountId: s.activeMountId,
+          activeProjectId: s.activeProjectId,
+        });
+        sessionActiveMount[s.id] = activeMount?.mountId ?? null;
         if (rows.length > 0) {
           sessionWorktrees[s.id] = rows.map((r) => r.worktreePath);
-          const primaryRow = rows[0];
-          if (primaryRow) {
-            sessionBranches[s.id] = primaryRow.branch;
-          }
+        }
+        if (activeMount !== null) {
+          sessionBranches[s.id] = activeMount.branch;
         }
         const runs = await Promise.all(
           (agentsBySession.get(s.id) ?? []).map((agent) =>
@@ -183,12 +193,13 @@ export const setCurrentWorkspace = (set: SetFn, get: GetFn) => {
         sessionWorktreeRecords,
         sessionProjectMounts,
         sessionActiveProject,
+        sessionActiveMount,
         sessionBranches,
         sessionPhaseRuns,
         agentKindOverride: { ...state.agentKindOverride, ...kindOverridesFromDb },
         sessionExternalTasks: { ...state.sessionExternalTasks, ...externalTasksMap },
       }));
-      if (get().currentWorkspaceId === id && Object.keys(sessionBranches).length === 0) {
+      if (get().currentWorkspaceId === id && Object.keys(sessionWorktrees).length === 0) {
         set({ boardReady: true });
       }
       if (import.meta.env.DEV) {

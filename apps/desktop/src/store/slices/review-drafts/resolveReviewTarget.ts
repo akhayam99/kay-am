@@ -92,6 +92,8 @@ export type ReviewTargetState = Pick<
   | 'sessions'
   | 'projects'
   | 'sessionProjectMounts'
+  | 'sessionMounts'
+  | 'sessionActiveMount'
   | 'sessionActiveProject'
   | 'sessionProjectPrs'
 >;

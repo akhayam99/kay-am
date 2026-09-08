@@ -1,4 +1,4 @@
-import type { ProjectId, SessionId, SessionProjectMount } from '@goodboy/types';
+import type { SessionId, SessionProjectMount } from '@goodboy/types';
 import { invokeTerminalListLive } from '../../../features/terminal/terminal';
 import type { TerminalTab, TerminalTabId } from '../../../shared/types/terminal';
 import type { SetFn } from './types';
@@ -24,16 +24,16 @@ const parseTerminalId = ({ id }: ParseParams): ParsedTerminalId | null => {
   return { sessionId: id.slice(0, separatorIndex) as SessionId, ordinal };
 };
 
-type MountedProjectParams = {
+type OwnerParams = {
   readonly mounts: ReadonlyArray<SessionProjectMount>;
   readonly cwd: string | null;
 };
 
-const mountedProjectId = ({ mounts, cwd }: MountedProjectParams): ProjectId | undefined => {
+const mountForCwd = ({ mounts, cwd }: OwnerParams): SessionProjectMount | null => {
   if (cwd == null || cwd === '') {
-    return undefined;
+    return null;
   }
-  return mounts.find((mount) => mount.worktreePath === cwd)?.projectId;
+  return mounts.find((mount) => mount.worktreePath === cwd) ?? null;
 };
 
 export const reattachTerminalTabs = (set: SetFn) => {
@@ -50,12 +50,14 @@ export const reattachTerminalTabs = (set: SetFn) => {
         }
         const mounts = state.sessionProjectMounts[parsed.sessionId] ?? [];
         const cwd = live.cwd;
+        const owner = mountForCwd({ mounts, cwd });
         const tab: TerminalTab = {
           id: live.id as TerminalTabId,
           sessionId: parsed.sessionId,
           title: `Terminal ${parsed.ordinal}`,
           cwd,
-          projectId: mountedProjectId({ mounts, cwd }),
+          ...(owner === null ? {} : { projectId: owner.projectId }),
+          ...(owner?.mountId === undefined ? {} : { mountId: owner.mountId }),
           status: 'running',
           createdAt: Date.now(),
         };

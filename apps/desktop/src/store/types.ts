@@ -40,6 +40,7 @@ import type {
   SessionExternalTask,
   SessionId,
   MountBranchObservation,
+  MountId,
   SessionMountView,
   SessionProjectMount,
   SessionViewPrefs,
@@ -224,6 +225,7 @@ export type AppState = AppSliceState & {
   readonly sessionProjectMounts: Readonly<Record<string, ReadonlyArray<SessionProjectMount>>>;
   readonly sessionMounts: Readonly<Record<string, ReadonlyArray<SessionMountView>>>;
   readonly mountBranchObservations: Readonly<Record<string, ReadonlyArray<MountBranchObservation>>>;
+  readonly sessionActiveMount: Readonly<Record<string, MountId | null>>;
   readonly sessionLanguageAnchor: Readonly<Record<SessionId, string>>;
   readonly sessionActiveProject: Readonly<Record<string, ProjectId>>;
   readonly sessionBranches: Readonly<Record<string, string>>;

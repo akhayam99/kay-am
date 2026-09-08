@@ -170,6 +170,8 @@ type StageInfoState = Pick<
   | 'sessionBranches'
   | 'sessionWorktrees'
   | 'sessionProjectMounts'
+  | 'sessionMounts'
+  | 'sessionActiveMount'
   | 'sessionActiveProject'
   | 'sessionGithub'
   | 'sessionGitlabMr'
@@ -295,6 +297,12 @@ export const useSortedGroupedSessions = (
   const sessionActiveProject = useAppStore((s) =>
     needsStage ? s.sessionActiveProject : (EMPTY_GITHUB_STATE as typeof s.sessionActiveProject),
   );
+  const sessionMounts = useAppStore((s) =>
+    needsStage ? s.sessionMounts : (EMPTY_GITHUB_STATE as typeof s.sessionMounts),
+  );
+  const sessionActiveMount = useAppStore((s) =>
+    needsStage ? s.sessionActiveMount : (EMPTY_GITHUB_STATE as typeof s.sessionActiveMount),
+  );
   return useMemo(() => {
     const partial: StageInfoState = {
       sessions: filteredSessions,
@@ -303,6 +311,8 @@ export const useSortedGroupedSessions = (
       sessionBranches,
       sessionWorktrees,
       sessionProjectMounts,
+      sessionMounts,
+      sessionActiveMount,
       sessionActiveProject,
       sessionGithub,
       sessionGitlabMr,
@@ -329,6 +339,8 @@ export const useSortedGroupedSessions = (
     sessionBranches,
     sessionWorktrees,
     sessionProjectMounts,
+    sessionMounts,
+    sessionActiveMount,
     sessionActiveProject,
     sessionGithub,
     sessionGitlabMr,
@@ -389,6 +401,8 @@ export const useStageGroupedSessions = (
   const sessionWorktrees = useAppStore((s) => s.sessionWorktrees);
   const sessionProjectMounts = useAppStore((s) => s.sessionProjectMounts);
   const sessionActiveProject = useAppStore((s) => s.sessionActiveProject);
+  const sessionMounts = useAppStore((s) => s.sessionMounts);
+  const sessionActiveMount = useAppStore((s) => s.sessionActiveMount);
   const previousRef = useRef<ReadonlyArray<GroupedSessions> | null>(null);
   const grouped = useMemo(() => {
     const partial: StageInfoState = {
@@ -398,6 +412,8 @@ export const useStageGroupedSessions = (
       sessionBranches,
       sessionWorktrees,
       sessionProjectMounts,
+      sessionMounts,
+      sessionActiveMount,
       sessionActiveProject,
       sessionGithub,
       sessionGitlabMr,
@@ -426,6 +442,8 @@ export const useStageGroupedSessions = (
     sessionBranches,
     sessionWorktrees,
     sessionProjectMounts,
+    sessionMounts,
+    sessionActiveMount,
     sessionActiveProject,
     sessionGithub,
     sessionGitlabMr,

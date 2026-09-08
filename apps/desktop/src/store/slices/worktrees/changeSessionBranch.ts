@@ -1,7 +1,7 @@
 import type { SessionId } from '@goodboy/types';
 import { isBranchlessSession } from '../../../shared/utils/isBranchlessSession';
 import { switchMount } from '../project-mounts/switchMount';
-import { resolveActiveMountId } from './resolveActiveMountId';
+import { selectActiveMountId } from '../project-mounts/selectors';
 import type { GetFn, SetFn } from './types';
 
 type Args = {
@@ -19,7 +19,7 @@ export const changeSessionBranch = (set: SetFn, get: GetFn) => {
     if (target === '') {
       throw new Error('branch name cannot be empty');
     }
-    const mountId = resolveActiveMountId({ state: get(), sessionId });
+    const mountId = selectActiveMountId({ state: get(), sessionId });
     if (mountId === null) {
       throw new Error(`no worktree found for session ${sessionId}`);
     }

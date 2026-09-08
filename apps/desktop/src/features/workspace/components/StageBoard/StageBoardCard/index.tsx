@@ -218,7 +218,7 @@ export const StageBoardCard = memo(function StageBoardCard({
           {showProjectChips
             ? mounts.map((mount) => (
                 <Chip
-                  key={mount.projectId}
+                  key={mount.mountId ?? mount.projectId}
                   tone="neutral"
                   size="3xs"
                   bordered={false}

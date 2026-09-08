@@ -60,6 +60,7 @@ import type {
   WorkspaceProfile,
   IntegrationBinding,
   WorkspaceIntegrationProvider,
+  MountId,
   ProjectScriptId,
   GhTokenStatus,
   PrMergeMethod,
@@ -231,6 +232,7 @@ type SaveScriptParams = {
 type RunScriptParams = {
   readonly sessionId: SessionId;
   readonly scriptId: ProjectScriptId;
+  readonly mountId?: MountId;
   readonly cols?: number;
   readonly rows?: number;
 };
@@ -416,6 +418,7 @@ type AppActions = {
   inspectMount(input: MountKeyInput): Promise<InspectMountResult>;
   recoverMountOperations(input: SessionKeyInput): Promise<number>;
   resolveMountBranchMismatch(input: ResolveMountBranchInput): Promise<SessionMountView>;
+  setSessionActiveMount(input: MountKeyInput): Promise<void>;
   linkSessionExternalTask(
     sessionId: SessionId,
     task: Omit<SessionExternalTask, 'sessionId'>,
@@ -430,7 +433,11 @@ type AppActions = {
     sessionId: SessionId,
     args: { branch: string; createNew: boolean },
   ): Promise<void>;
-  setSessionActiveProject(input: { sessionId: SessionId; projectId: ProjectId }): Promise<void>;
+  setSessionActiveProject(input: {
+    sessionId: SessionId;
+    projectId: ProjectId;
+    mountId?: MountId;
+  }): Promise<void>;
   reconcileSessionBranch(sessionId: SessionId, observedBranch: string): Promise<void>;
   amendSessionCommit(
     sessionId: SessionId,

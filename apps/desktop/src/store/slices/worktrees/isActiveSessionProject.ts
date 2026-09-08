@@ -1,10 +1,14 @@
 import type { ProjectId, SessionId } from '@goodboy/types';
-import { resolveSessionRepo } from './resolveSessionRepo';
 import type { AppState } from '../../types';
+import { selectActiveProjectId } from '../project-mounts/selectors';
 
 type State = Pick<
   AppState,
-  'sessions' | 'projects' | 'sessionProjectMounts' | 'sessionActiveProject'
+  | 'sessions'
+  | 'sessionProjectMounts'
+  | 'sessionMounts'
+  | 'sessionActiveMount'
+  | 'sessionActiveProject'
 >;
 
 type Params = {
@@ -14,4 +18,4 @@ type Params = {
 };
 
 export const isActiveSessionProject = ({ state, sessionId, projectId }: Params): boolean =>
-  resolveSessionRepo({ state, sessionId })?.projectId === projectId;
+  selectActiveProjectId({ state, sessionId }) === projectId;

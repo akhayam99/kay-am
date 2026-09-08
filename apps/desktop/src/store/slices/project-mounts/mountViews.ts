@@ -1,6 +1,7 @@
 import { listSessionMounts } from '@goodboy/db';
 import type { MountId, SessionId, SessionMountView, SessionProjectMount } from '@goodboy/types';
 import { tauriDatabase } from '../../../shared/lib/db';
+import { pickActiveMount } from './activeMount';
 import { mountError } from './mountErrors';
 import type { GetFn, SetFn } from './types';
 
@@ -73,14 +74,32 @@ type ApplyParams = {
 
 export const applyMountViews = ({ set, sessionId, views }: ApplyParams): void => {
   const mounts = toProjectMounts(views);
-  set((state) => ({
-    sessionMounts: { ...state.sessionMounts, [sessionId]: views },
-    sessionProjectMounts: { ...state.sessionProjectMounts, [sessionId]: mounts },
-    sessionWorktrees: {
-      ...state.sessionWorktrees,
-      [sessionId]: mounts.map((mount) => mount.worktreePath),
-    },
-  }));
+  set((state) => {
+    const session = state.sessions.find((candidate) => candidate.id === sessionId);
+    const activeMount = pickActiveMount({
+      mounts,
+      selectedMountId: state.sessionActiveMount?.[sessionId],
+      storedMountId: session?.activeMountId,
+      activeProjectId: state.sessionActiveProject?.[sessionId] ?? session?.activeProjectId,
+    });
+    const activeMountId = activeMount?.mountId ?? null;
+    const sessionBranches = { ...state.sessionBranches };
+    if (activeMount === null) {
+      delete sessionBranches[sessionId];
+    } else {
+      sessionBranches[sessionId] = activeMount.branch;
+    }
+    return {
+      sessionMounts: { ...state.sessionMounts, [sessionId]: views },
+      sessionProjectMounts: { ...state.sessionProjectMounts, [sessionId]: mounts },
+      sessionActiveMount: { ...state.sessionActiveMount, [sessionId]: activeMountId },
+      sessionBranches,
+      sessionWorktrees: {
+        ...state.sessionWorktrees,
+        [sessionId]: mounts.map((mount) => mount.worktreePath),
+      },
+    };
+  });
 };
 
 type RequireParams = {

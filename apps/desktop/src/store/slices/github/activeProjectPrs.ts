@@ -6,7 +6,13 @@ const EMPTY_PRS: ReadonlyArray<PullRequestState> = [];
 
 type State = Pick<
   AppState,
-  'sessions' | 'projects' | 'sessionProjectMounts' | 'sessionActiveProject' | 'sessionProjectPrs'
+  | 'sessions'
+  | 'projects'
+  | 'sessionProjectMounts'
+  | 'sessionMounts'
+  | 'sessionActiveMount'
+  | 'sessionActiveProject'
+  | 'sessionProjectPrs'
 >;
 
 type Params = {

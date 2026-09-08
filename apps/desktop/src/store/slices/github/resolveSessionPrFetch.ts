@@ -9,6 +9,8 @@ type State = Pick<
   | 'workspaces'
   | 'projects'
   | 'sessionProjectMounts'
+  | 'sessionMounts'
+  | 'sessionActiveMount'
   | 'sessionActiveProject'
   | 'sessionWorktrees'
   | 'sessionBranches'

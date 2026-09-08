@@ -63,6 +63,8 @@ describe('resolveSessionRepo', () => {
       state: {
         sessions: [SESSION],
         projects: [PROJECT],
+        sessionMounts: {},
+        sessionActiveMount: {},
         sessionProjectMounts: {
           [SESSION_ID]: [
             {
@@ -84,6 +86,8 @@ describe('resolveSessionRepo', () => {
       worktreePath: '/sessions/one/api',
       repoRoot: '/repo/api',
       branch: 'ak/one',
+      mountId: null,
+      revision: null,
     });
   });
 
@@ -92,6 +96,8 @@ describe('resolveSessionRepo', () => {
       state: {
         sessions: [SESSION],
         projects: [{ ...PROJECT, kind: 'folder' }],
+        sessionMounts: {},
+        sessionActiveMount: {},
         sessionProjectMounts: {
           [SESSION_ID]: [
             {

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Check, GitBranch, Pencil } from 'lucide-react';
 import { AnchoredPopover, Tooltip, cn, useCopyLink, useDropdown } from '@goodboy/ui';
-import type { ProjectId, SessionId } from '@goodboy/types';
+import type { MountId, ProjectId, SessionId } from '@goodboy/types';
 import { useToast } from '../../../../../app/components/Toast';
 import { useAppStore } from '../../../../../store';
 import { BranchSwitchPanel } from '../../../../worktree/BranchSwitchPanel';
@@ -10,11 +10,12 @@ import { VITAL_CHIP_FOCUS, VITAL_CHIP_FRAME, VITAL_CHIP_HOVER } from '../vitalCh
 type Props = {
   readonly sessionId: SessionId;
   readonly projectId: ProjectId;
+  readonly mountId?: MountId;
   readonly branch: string;
   readonly canSwitch: boolean;
 };
 
-export const ProjectBranchChip = ({ sessionId, projectId, branch, canSwitch }: Props) => {
+export const ProjectBranchChip = ({ sessionId, projectId, mountId, branch, canSwitch }: Props) => {
   const { showToast } = useToast();
   const { copied, failed, copy } = useCopyLink();
   const setSessionActiveProject = useAppStore((state) => state.setSessionActiveProject);
@@ -37,7 +38,11 @@ export const ProjectBranchChip = ({ sessionId, projectId, branch, canSwitch }: P
   }
 
   const openSwitch = async () => {
-    await setSessionActiveProject({ sessionId, projectId });
+    await setSessionActiveProject({
+      sessionId,
+      projectId,
+      ...(mountId === undefined ? {} : { mountId }),
+    });
     dropdown.toggle();
   };
 

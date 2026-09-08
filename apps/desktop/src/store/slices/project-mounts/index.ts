@@ -5,6 +5,7 @@ import { inspectMount } from './inspectMount';
 import { loadSessionMounts } from './loadSessionMounts';
 import { recoverMountOperations } from './recoverMountOperations';
 import { resolveMountBranchMismatch } from './resolveMountBranchMismatch';
+import { setSessionActiveMount } from './setSessionActiveMount';
 import { switchMount } from './switchMount';
 import { unmountMount } from './unmountMount';
 import type { GetFn, SetFn } from './types';
@@ -20,5 +21,6 @@ export const createProjectMountsSlice = (set: SetFn, get: GetFn) => {
     inspectMount: inspectMount(set, get),
     recoverMountOperations: recoverMountOperations(set, get),
     resolveMountBranchMismatch: resolveMountBranchMismatch(set, get),
+    setSessionActiveMount: setSessionActiveMount(set, get),
   };
 };

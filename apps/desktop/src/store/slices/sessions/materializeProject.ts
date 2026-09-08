@@ -273,7 +273,10 @@ export const materializeProject = (set: SetFn, get: GetFn) => {
         record,
       }),
       ...(isFirstMount
-        ? { sessionBranches: { ...state.sessionBranches, [sessionId]: created.branchName } }
+        ? {
+            sessionBranches: { ...state.sessionBranches, [sessionId]: created.branchName },
+            sessionActiveMount: { ...state.sessionActiveMount, [sessionId]: mountId },
+          }
         : {}),
       ...(isFirstActiveProject
         ? {

@@ -13,6 +13,7 @@ import type {
   PlanConsumption,
   PlanConsumptionId,
   PlanId,
+  MountId,
   PlanWithCount,
   Project,
   ProjectId,
@@ -397,6 +398,28 @@ const AGENT_ID_2 = 'agent-2' as AgentId;
 const RUN_ID = 'run-1' as ProviderRunId;
 const PLAN_ID = 'plan-1' as PlanId;
 const NOW = '2026-05-28T00:00:00.000Z' as IsoDateTime;
+
+const FIRST_MOUNT_ID = 'mount-api-one' as MountId;
+const SECOND_MOUNT_ID = 'mount-api-two' as MountId;
+
+const TWO_API_MOUNTS: ReadonlyArray<SessionProjectMount> = [
+  {
+    mountId: FIRST_MOUNT_ID,
+    projectId: PROJECT_ID,
+    mountName: 'api',
+    worktreePath: '/sessions/one/api-one',
+    repoRoot: '/repos/api',
+    branch: 'ak/one',
+  },
+  {
+    mountId: SECOND_MOUNT_ID,
+    projectId: PROJECT_ID,
+    mountName: 'api split',
+    worktreePath: '/sessions/one/api-two',
+    repoRoot: '/repos/api',
+    branch: 'ak/two',
+  },
+];
 
 function buildWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   return {
@@ -788,6 +811,65 @@ describe('store contract', () => {
       await resultPromise;
 
       expect(invocation?.cwd).toBe('/sessions/one/web');
+    });
+
+    it('runScript refuses to guess between two mounts of the same project', async () => {
+      const store = await getStore();
+      const script: ProjectScript = {
+        id: 'sc-1' as ProjectScriptId,
+        projectId: PROJECT_ID,
+        name: 'setup',
+        body: 'echo api',
+        sortOrder: 0,
+        createdAt: NOW,
+        updatedAt: NOW,
+      };
+      store.setState({
+        sessions: [buildSession({ activeProjectId: PROJECT_ID })],
+        sessionActiveMount: {},
+        sessionProjectMounts: { [SESSION_ID]: TWO_API_MOUNTS },
+        projectScripts: { [WS_ID]: [script] },
+      });
+
+      const result = await store
+        .getState()
+        .runScript({ sessionId: SESSION_ID, scriptId: script.id });
+
+      expect(invokeScriptRunSpy).not.toHaveBeenCalled();
+      expect(result.stderr).toContain('several mounts');
+    });
+
+    it('runScript uses the mount the caller named', async () => {
+      const store = await getStore();
+      const script: ProjectScript = {
+        id: 'sc-1' as ProjectScriptId,
+        projectId: PROJECT_ID,
+        name: 'setup',
+        body: 'echo api',
+        sortOrder: 0,
+        createdAt: NOW,
+        updatedAt: NOW,
+      };
+      store.setState({
+        sessions: [buildSession({ activeProjectId: PROJECT_ID })],
+        sessionActiveMount: {},
+        sessionProjectMounts: { [SESSION_ID]: TWO_API_MOUNTS },
+        projectScripts: { [WS_ID]: [script] },
+      });
+
+      const resultPromise = store
+        .getState()
+        .runScript({ sessionId: SESSION_ID, scriptId: script.id, mountId: SECOND_MOUNT_ID });
+      await vi.waitFor(() => expect(invokeScriptRunSpy).toHaveBeenCalledOnce());
+      const invocation = invokeScriptRunSpy.mock.calls[0]?.[0];
+      const runId = invocation?.runId;
+      if (runId === undefined || scriptExitHandler === null) {
+        throw new Error('script listeners were not ready');
+      }
+      scriptExitHandler({ runId, exitCode: 0 });
+      await resultPromise;
+
+      expect(invocation?.cwd).toBe('/sessions/one/api-two');
     });
 
     it('runScript records an error and refuses to invoke when the project is unmounted', async () => {
