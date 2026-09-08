@@ -60,6 +60,9 @@ export const persistResolveTurn = async ({
     await insertResolveAttempt({ db, attempt: { ...attempt, threadIds: owned } });
   }
   const questions = isCandidate ? [] : await listOpenQuestionsForSession(db, sessionId);
+  const question =
+    questions.find((item) => item.createdByAgentId === agent.id && item.status === 'open')?.text ??
+    null;
   for (const threadId of owned) {
     const previous = rows.find((row) => row.threadId === threadId);
     if (
@@ -81,18 +84,13 @@ export const persistResolveTurn = async ({
         projectId: get().sessionActiveProject[sessionId] ?? null,
         prNumber: get().sessionGithub[sessionId]?.pr?.number,
       });
-    const question =
-      owned.length === 1
-        ? (questions.find((item) => item.createdByAgentId === agent.id && item.status === 'open')
-            ?.text ?? null)
-        : null;
     const retained = threadOutcome({ row });
     const verdict =
       parsed.analysisVerdicts[threadId] ??
       (row.disposition === 'no_change' ? 'wontfix' : undefined);
     const patch: Partial<ResolveThread> =
       outcome === undefined
-        ? hasOwnedMarkers && retained !== null
+        ? retained !== null && (hasOwnedMarkers || question !== null)
           ? outcomePatch({ outcome: retained, verdict })
           : {
               state: question === null ? 'failed' : 'needs_answer',
@@ -128,7 +126,6 @@ export const persistResolveTurn = async ({
       sessionId,
       rows: await listResolveThreads({ db, sessionId }),
       attempts: await listResolveAttempts({ db, sessionId }),
-      fallbackOwnership: { [agent.id]: owned },
     });
   }
 };

@@ -9,10 +9,30 @@ import { mapNotificationAction } from './';
 
 const retrySummarizerSpy = vi.fn();
 const retryStepSummarySpy = vi.fn(async () => undefined);
-const pushAllResolutionsSpy = vi.fn(async () => ({ pushed: true, resolved: 0, failed: 0 }));
+const retryPublicationSpy = vi.fn(async () => ({
+  publicationId: 'pub-1',
+  repo: 'acme/web',
+  prNumber: 248,
+  branch: 'feature/retry',
+  localHead: 'abc',
+  remoteHead: null,
+  requiresPush: false,
+  commits: [],
+  replies: [],
+  excluded: [],
+  blocker: null,
+}));
+const publishConversationsSpy = vi.fn(async () => ({
+  kind: 'done' as const,
+  pushed: false,
+  resolved: 1,
+  commented: 0,
+  failed: 0,
+}));
 const setCurrentSessionSpy = vi.fn(async () => undefined);
 const setActiveLensSpy = vi.fn();
 const selectAgentSpy = vi.fn(async () => undefined);
+const emitNotificationSpy = vi.fn(async () => undefined);
 
 type FakeStore = {
   summarizerStatus: Record<
@@ -21,10 +41,12 @@ type FakeStore = {
   >;
   retrySummarizer: typeof retrySummarizerSpy;
   retryStepSummary: typeof retryStepSummarySpy;
-  pushAllResolutions: typeof pushAllResolutionsSpy;
+  retryPublication: typeof retryPublicationSpy;
+  publishConversations: typeof publishConversationsSpy;
   setCurrentSession: typeof setCurrentSessionSpy;
   setActiveLens: typeof setActiveLensSpy;
   selectAgent: typeof selectAgentSpy;
+  emitNotification: typeof emitNotificationSpy;
 };
 
 function buildStore(overrides: Partial<FakeStore> = {}): FakeStore {
@@ -32,10 +54,12 @@ function buildStore(overrides: Partial<FakeStore> = {}): FakeStore {
     summarizerStatus: {},
     retrySummarizer: retrySummarizerSpy,
     retryStepSummary: retryStepSummarySpy,
-    pushAllResolutions: pushAllResolutionsSpy,
+    retryPublication: retryPublicationSpy,
+    publishConversations: publishConversationsSpy,
     setCurrentSession: setCurrentSessionSpy,
     setActiveLens: setActiveLensSpy,
     selectAgent: selectAgentSpy,
+    emitNotification: emitNotificationSpy,
     ...overrides,
   };
 }
@@ -123,18 +147,72 @@ describe('mapNotificationAction', () => {
     window.removeEventListener('goodboy:reveal-chat', revealed);
   });
 
-  it('retry-push-resolutions: returns action with Retry label', () => {
-    const action: NotificationAction = { kind: 'retry-push-resolutions', sessionId: SESSION_ID };
+  it('retry-publication: returns action with Retry label', () => {
+    const action: NotificationAction = { kind: 'retry-publication', sessionId: SESSION_ID };
     const store = buildStore();
     const toastAction = mapNotificationAction(action, store as never);
     expect(toastAction?.label).toBe('Retry');
   });
 
-  it('retry-push-resolutions: onClick calls pushAllResolutions with sessionId', () => {
-    const action: NotificationAction = { kind: 'retry-push-resolutions', sessionId: SESSION_ID };
+  it('retry-publication: onClick reconciles a failed publication and publishes the fresh preview', async () => {
+    const action: NotificationAction = { kind: 'retry-publication', sessionId: SESSION_ID };
     const store = buildStore();
     const toastAction = mapNotificationAction(action, store as never);
     toastAction?.onClick();
-    expect(pushAllResolutionsSpy).toHaveBeenCalledWith(SESSION_ID);
+    await vi.waitFor(() =>
+      expect(publishConversationsSpy).toHaveBeenCalledWith({
+        sessionId: SESSION_ID,
+        publicationId: 'pub-1',
+      }),
+    );
+    expect(retryPublicationSpy).toHaveBeenCalledWith({ sessionId: SESSION_ID });
+  });
+
+  it('retry-publication: reports a rejected retry instead of leaving an unhandled rejection', async () => {
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    const action: NotificationAction = { kind: 'retry-publication', sessionId: SESSION_ID };
+    const store = buildStore({
+      retryPublication: vi.fn(async () => {
+        throw new Error('the pull request could not be read');
+      }) as unknown as typeof retryPublicationSpy,
+    });
+
+    const toastAction = mapNotificationAction(action, store as never);
+    toastAction?.onClick();
+    await vi.waitFor(() => expect(emitNotificationSpy).toHaveBeenCalled());
+
+    expect(emitNotificationSpy).toHaveBeenCalledWith(
+      'error',
+      'error',
+      'retry failed, conversations left open',
+      expect.stringContaining('the pull request could not be read'),
+      { sessionId: SESSION_ID },
+    );
+    expect(publishConversationsSpy).not.toHaveBeenCalled();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(unhandled).not.toHaveBeenCalled();
+    process.off('unhandledRejection', unhandled);
+  });
+
+  it('retry-publication: reports a rejected publication', async () => {
+    const action: NotificationAction = { kind: 'retry-publication', sessionId: SESSION_ID };
+    const store = buildStore({
+      publishConversations: vi.fn(async () => {
+        throw new Error('github refused the reply');
+      }) as unknown as typeof publishConversationsSpy,
+    });
+
+    const toastAction = mapNotificationAction(action, store as never);
+    toastAction?.onClick();
+    await vi.waitFor(() => expect(emitNotificationSpy).toHaveBeenCalled());
+
+    expect(emitNotificationSpy).toHaveBeenCalledWith(
+      'error',
+      'error',
+      'retry failed, conversations left open',
+      expect.stringContaining('github refused the reply'),
+      { sessionId: SESSION_ID },
+    );
   });
 });

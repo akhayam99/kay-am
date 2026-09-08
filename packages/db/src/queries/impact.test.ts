@@ -623,10 +623,10 @@ describe('review outcomes', () => {
       [RECENT],
     );
     await db.execute(
-      `INSERT INTO pending_resolutions
-         (id, session_id, pr_number, thread_id, commit_sha, created_at, outcome)
-       VALUES ('r1', 's1', 1, 'thread', 'sha', ?, 'resolved')`,
-      [RECENT],
+      `INSERT INTO resolve_threads
+         (id, session_id, pr_number, thread_id, origin_kind, state, disposition, created_at, updated_at)
+       VALUES ('r1', 's1', 1, 'thread', 'review_comment', 'fixed', 'fix', ?, ?)`,
+      [RECENT, RECENT],
     );
 
     const result = await getReviewOutcomes(params({ db, sinceMs: SINCE }));

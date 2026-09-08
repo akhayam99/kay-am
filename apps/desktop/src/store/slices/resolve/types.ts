@@ -1,4 +1,12 @@
-import type { Agent, AgentId, ResolveAttemptPhase, ResolveThread, SessionId } from '@goodboy/types';
+import type {
+  Agent,
+  AgentId,
+  ResolveAttemptPhase,
+  ResolvePublicationPreview,
+  ResolveThread,
+  SessionId,
+} from '@goodboy/types';
+import type { PublishConversationsResult } from './publishConversations';
 import type { GetFn, SetFn } from '../../slice-types';
 
 export type { GetFn, SetFn } from '../../slice-types';
@@ -17,6 +25,10 @@ export type AttemptParams = SessionParams & {
   readonly effort: string | null;
   readonly instructions: string | null;
   readonly phase: 'queued' | 'running';
+  readonly threadIds?: ReadonlyArray<string>;
+};
+export type CancelAttemptParams = SessionParams & {
+  readonly attemptId: string;
 };
 export type PhaseParams = SessionParams & {
   readonly agentId: AgentId;
@@ -47,11 +59,27 @@ export type BatchUpdateParams = SessionParams & {
   readonly updates: ResolveUpdates | ((params: ResolveUpdatesParams) => ResolveUpdates);
 };
 
+export type PreparePublicationParams = SessionParams & {
+  readonly threadIds?: ReadonlyArray<string>;
+  readonly scopeId?: string;
+};
+export type PublishParams = SessionParams & {
+  readonly publicationId: string;
+  readonly scopeId?: string;
+};
+
 export type ResolveActions = {
+  readonly preparePublication: (
+    params: PreparePublicationParams,
+  ) => Promise<ResolvePublicationPreview>;
+  readonly publishConversations: (params: PublishParams) => Promise<PublishConversationsResult>;
+  readonly retryPublication: (params: SessionParams) => Promise<ResolvePublicationPreview>;
+  readonly cancelPublication: (params: PublishParams) => Promise<void>;
   readonly updateResolveThreads: (params: BatchUpdateParams) => Promise<void>;
   readonly loadResolveSession: (params: SessionParams) => Promise<void>;
   readonly persistResolveTurn: (params: TurnParams) => Promise<void>;
   readonly recordResolveAttempt: (params: AttemptParams) => Promise<string>;
+  readonly cancelResolveAttempt: (params: CancelAttemptParams) => Promise<void>;
   readonly recordResolvePhase: (params: PhaseParams) => Promise<void>;
   readonly drainResolveQueue: (params: DrainParams) => Promise<void>;
   readonly drainResolveWorktree: (params: WorktreeDrainParams) => Promise<void>;

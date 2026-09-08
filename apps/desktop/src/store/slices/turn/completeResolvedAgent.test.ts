@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Agent, AgentId, IsoDateTime, PendingResolution, SessionId } from '@goodboy/types';
+import type { Agent, AgentId, IsoDateTime, ResolveThread, SessionId } from '@goodboy/types';
 import { createResolveSlice } from '../resolve';
 import { resolveInitialState } from '../resolve/state';
 import { buildResolutionReplyBody } from '../github/buildResolutionReplyBody';
-import type { ResolverThreadOutcome } from '../../types';
+import { threadOutcome } from '../resolve/threadOutcome';
 import type { GetFn, SetFn } from './types';
 
 const h = vi.hoisted(() => ({
@@ -50,10 +50,7 @@ type Harness = {
   readonly state: {
     sessionPhaseRuns: Record<SessionId, ReadonlyArray<Agent>>;
     agentKindOverride: Record<AgentId, never>;
-    resolverState: Record<AgentId, string>;
-    resolverThreadOutcomes: Record<AgentId, Record<string, ResolverThreadOutcome>>;
-    sessionPendingResolutions: Record<SessionId, ReadonlyArray<PendingResolution>>;
-    queueResolution: ReturnType<typeof vi.fn>;
+    sessionResolveThreads: Record<SessionId, ReadonlyArray<ResolveThread>>;
     refreshUnreadWorkspaces: ReturnType<typeof vi.fn>;
     emitNotification: ReturnType<typeof vi.fn>;
   };
@@ -67,15 +64,10 @@ type HarnessParams = Record<string, never>;
 const createHarness = ({}: HarnessParams): Harness => {
   const state = {
     ...resolveInitialState,
-    sessionResolvedThreads: {},
     sessionActiveProject: {},
     sessionGithub: {},
     sessionPhaseRuns: { [SESSION_ID]: [agent] },
     agentKindOverride: {},
-    resolverState: {},
-    resolverThreadOutcomes: {},
-    sessionPendingResolutions: {},
-    queueResolution: vi.fn(async () => undefined),
     refreshUnreadWorkspaces: vi.fn(async () => undefined),
     emitNotification: vi.fn(async () => undefined),
   };
@@ -93,23 +85,22 @@ const createHarness = ({}: HarnessParams): Harness => {
   return { state, set, get, actions };
 };
 
+type OutcomeParams = { readonly state: Harness['state']; readonly threadId: string };
+const rowFor = ({ state, threadId }: OutcomeParams): ResolveThread | undefined =>
+  (state.sessionResolveThreads[SESSION_ID] ?? []).find((row) => row.threadId === threadId);
+const outcomeFor = ({ state, threadId }: OutcomeParams) => {
+  const row = rowFor({ state, threadId });
+  return row === undefined ? null : threadOutcome({ row });
+};
+const settledThreadIds = ({ state }: { readonly state: Harness['state'] }) =>
+  (state.sessionResolveThreads[SESSION_ID] ?? [])
+    .filter((row) => threadOutcome({ row }) !== null)
+    .map((row) => row.threadId);
+
 describe('completeResolvedAgent', () => {
   it('uses verdict thread ids when a legacy resolver has no source thread ids', async () => {
     const { state, set, get } = createHarness({});
     state.sessionPhaseRuns[SESSION_ID] = [{ ...agent, sourceThreadIds: undefined }];
-    state.sessionPendingResolutions[SESSION_ID] = [
-      {
-        id: 'pending',
-        sessionId: SESSION_ID,
-        threadId: 'PRRT_1',
-        prNumber: 12,
-        commitSha: 'old-sha',
-        reply: null,
-        outcome: 'resolved',
-        replyPostedAt: null,
-        createdAt: NOW,
-      },
-    ];
     await completeResolvedAgent({
       set,
       get,
@@ -118,12 +109,11 @@ describe('completeResolvedAgent', () => {
       assistantText: '<<comment-resolved threadId="PRRT_1" commitSha="abcdef1234567890">>',
       now: () => NOW,
     });
-    expect(state.queueResolution).toHaveBeenCalledWith(
-      SESSION_ID,
-      expect.objectContaining({ threadId: 'PRRT_1', commitSha: 'abcdef1234567890' }),
-    );
-    expect(state.resolverState[AGENT_ID]).toBe('committed');
-    expect(state.resolverThreadOutcomes[AGENT_ID]?.PRRT_1).toMatchObject({ kind: 'resolved' });
+    expect(rowFor({ state, threadId: 'PRRT_1' })).toMatchObject({
+      state: 'fixed',
+      disposition: 'fix',
+      commitShas: ['abcdef1234567890'],
+    });
   });
 
   beforeEach(() => {
@@ -144,11 +134,11 @@ describe('completeResolvedAgent', () => {
       now: () => NOW,
     });
 
-    const outcome = state.resolverThreadOutcomes[AGENT_ID]?.PRRT_1;
+    const outcome = outcomeFor({ state, threadId: 'PRRT_1' });
     expect(outcome).toEqual({ kind: 'analyzed', reply: summary, verdict: 'wontfix' });
-    expect(buildResolutionReplyBody({ closure: outcome, prUrl: null, isAttributed: false })).toBe(
-      summary,
-    );
+    expect(
+      buildResolutionReplyBody({ closure: outcome ?? undefined, prUrl: null, isAttributed: false }),
+    ).toBe(summary);
   });
 
   it('keeps an agent that fixed two threads and asked about a third in needs-you', async () => {
@@ -167,8 +157,8 @@ describe('completeResolvedAgent', () => {
       now: () => NOW,
     });
 
-    expect(state.resolverState[AGENT_ID]).toBe('awaiting');
-    expect(Object.keys(state.resolverThreadOutcomes[AGENT_ID] ?? {})).toEqual(['PRRT_1', 'PRRT_2']);
+    expect(settledThreadIds({ state })).toEqual(['PRRT_1', 'PRRT_2']);
+    expect(outcomeFor({ state, threadId: 'PRRT_3' })).toBeNull();
   });
 
   it('settles an agent as committed once every owned thread has an outcome', async () => {
@@ -187,7 +177,7 @@ describe('completeResolvedAgent', () => {
       now: () => NOW,
     });
 
-    expect(state.resolverState[AGENT_ID]).toBe('committed');
+    expect(settledThreadIds({ state })).toEqual(['PRRT_1', 'PRRT_2']);
   });
 
   it('lets a later marker supersede a settled thread without wiping its siblings', async () => {
@@ -211,43 +201,25 @@ describe('completeResolvedAgent', () => {
       now: () => NOW,
     });
 
-    expect(state.resolverThreadOutcomes[AGENT_ID]?.PRRT_1).toEqual({
+    expect(outcomeFor({ state, threadId: 'PRRT_1' })).toEqual({
       kind: 'resolved',
       commitSha: 'abcdef1234567890',
     });
-    expect(state.resolverThreadOutcomes[AGENT_ID]?.PRRT_2).toEqual({
+    expect(outcomeFor({ state, threadId: 'PRRT_2' })).toEqual({
       kind: 'analyzed',
       reply: 'already covered',
       verdict: 'wontfix',
     });
-    expect(state.resolverState[AGENT_ID]).toBe('committed');
   });
 
-  it('requeues an amended sha for a thread that is already in the push batch', async () => {
+  it('records an amended sha on the row a first turn already settled', async () => {
     const { state, set, get, actions } = createHarness({});
     const oldSha = 'aaaaaaaaaaaaaaaa';
     const newSha = 'bbbbbbbbbbbbbbbb';
-    const queued = {
-      id: 'pending-1',
-      sessionId: SESSION_ID,
-      prNumber: 7,
-      threadId: 'PRRT_1',
-      commitSha: oldSha,
-      reply: 'fixed it',
-      outcome: 'resolved',
-      replyPostedAt: null,
-      createdAt: NOW,
-    } satisfies PendingResolution;
     await actions.persistResolveTurn({
       sessionId: SESSION_ID,
       agent,
       assistantText: `<<comment-resolved threadId="PRRT_1" commitSha="${oldSha}">>`,
-    });
-    state.sessionPendingResolutions = { [SESSION_ID]: [queued] };
-    state.queueResolution.mockImplementationOnce(async (_sessionId, args) => {
-      state.sessionPendingResolutions = {
-        [SESSION_ID]: [{ ...queued, commitSha: args.commitSha }],
-      };
     });
 
     await completeResolvedAgent({
@@ -259,16 +231,10 @@ describe('completeResolvedAgent', () => {
       now: () => NOW,
     });
 
-    expect(state.queueResolution).toHaveBeenCalledWith(SESSION_ID, {
-      threadId: 'PRRT_1',
-      commitSha: newSha,
-      prNumber: queued.prNumber,
-      reply: queued.reply,
-      outcome: 'resolved',
+    expect(rowFor({ state, threadId: 'PRRT_1' })).toMatchObject({
+      state: 'fixed',
+      commitShas: [newSha],
     });
-    expect(state.resolverThreadOutcomes[AGENT_ID]?.PRRT_1).toMatchObject({ commitSha: newSha });
-    expect(state.sessionPendingResolutions[SESSION_ID]).toHaveLength(1);
-    expect(state.sessionPendingResolutions[SESSION_ID]?.[0]?.commitSha).toBe(newSha);
   });
 
   it('does not downgrade a resolved marker for the same thread', async () => {
@@ -284,8 +250,7 @@ describe('completeResolvedAgent', () => {
       now: () => NOW,
     });
 
-    expect(state.resolverState[AGENT_ID]).toBe('committed');
-    expect(state.resolverThreadOutcomes[AGENT_ID]?.PRRT_1).toEqual({
+    expect(outcomeFor({ state, threadId: 'PRRT_1' })).toEqual({
       kind: 'resolved',
       commitSha: 'abcdef1234567890',
     });
@@ -312,23 +277,8 @@ describe('completeResolvedAgent', () => {
     );
     expect(state.emitNotification).not.toHaveBeenCalled();
   });
-  it('leaves another resolver thread and its queued commit untouched', async () => {
+  it('leaves a thread the agent does not own out of its rows', async () => {
     const { state, set, get } = createHarness({});
-    state.sessionPendingResolutions = {
-      [SESSION_ID]: [
-        {
-          id: 'other',
-          sessionId: SESSION_ID,
-          prNumber: 7,
-          threadId: 'PRRT_OTHER',
-          commitSha: 'original',
-          reply: 'Original draft',
-          outcome: 'resolved',
-          replyPostedAt: null,
-          createdAt: NOW,
-        },
-      ],
-    };
     await completeResolvedAgent({
       set,
       get,
@@ -337,7 +287,6 @@ describe('completeResolvedAgent', () => {
       assistantText: '<<comment-resolved threadId="PRRT_OTHER" commitSha="abcdef1234567890">>',
       now: () => NOW,
     });
-    expect(state.queueResolution).not.toHaveBeenCalled();
-    expect(state.resolverThreadOutcomes[AGENT_ID]?.PRRT_OTHER).toBeUndefined();
+    expect(rowFor({ state, threadId: 'PRRT_OTHER' })).toBeUndefined();
   });
 });

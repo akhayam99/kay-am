@@ -1,5 +1,7 @@
+import { listResolvePublicationsForSession, setResolvePublicationPhase } from '@goodboy/db';
 import type { SessionId } from '@goodboy/types';
 import type { RewrittenHead } from '../../../features/worktree/worktree';
+import { tauriDatabase } from '../../../shared/lib/db';
 import type { GetFn, SetFn } from './types';
 
 type Params = {
@@ -19,6 +21,27 @@ export const repointRewrittenCommits = async ({
   if (replaced.size === 0) {
     return;
   }
+  const publications = await listResolvePublicationsForSession({
+    db: tauriDatabase,
+    sessionId,
+  }).catch(() => []);
+  for (const publication of publications) {
+    if (publication.phase !== 'previewed') {
+      continue;
+    }
+    if (!publication.commitShas.some((sha) => replaced.has(sha))) {
+      continue;
+    }
+    await setResolvePublicationPhase({
+      db: tauriDatabase,
+      id: publication.id,
+      phase: 'cancelled',
+      error: 'stale',
+    });
+    set((state) => ({
+      activePublicationPreview: { ...state.activePublicationPreview, [sessionId]: null },
+    }));
+  }
   for (const row of get().sessionResolveThreads[sessionId] ?? []) {
     if (row.commitShas?.some((sha) => replaced.has(sha)) !== true) {
       continue;
@@ -27,34 +50,6 @@ export const repointRewrittenCommits = async ({
       sessionId,
       threadId: row.threadId,
       patch: { commitShas: row.commitShas.map((sha) => (replaced.has(sha) ? head.sha : sha)) },
-    });
-  }
-  set((state) => ({
-    resolverThreadOutcomes: Object.fromEntries(
-      Object.entries(state.resolverThreadOutcomes).map(([agentId, byThread]) => [
-        agentId,
-        Object.fromEntries(
-          Object.entries(byThread).map(([threadId, outcome]) => [
-            threadId,
-            outcome.kind === 'resolved' && replaced.has(outcome.commitSha)
-              ? { ...outcome, commitSha: head.sha }
-              : outcome,
-          ]),
-        ),
-      ]),
-    ),
-  }));
-  const stale = (get().sessionPendingResolutions[sessionId] ?? []).filter((row) =>
-    replaced.has(row.commitSha),
-  );
-  for (const row of stale) {
-    await get().dequeueResolution(sessionId, row.threadId);
-    await get().queueResolution(sessionId, {
-      threadId: row.threadId,
-      commitSha: head.sha,
-      prNumber: row.prNumber,
-      reply: row.reply,
-      outcome: row.outcome,
     });
   }
 };

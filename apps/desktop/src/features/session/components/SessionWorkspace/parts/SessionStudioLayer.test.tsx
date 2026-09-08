@@ -15,10 +15,6 @@ vi.mock('../../WorkflowBuilderView', () => ({
   WorkflowBuilderView: () => <div data-testid="studio-workflow" />,
 }));
 
-vi.mock('../../../../github/components/GitHubSessionPane', () => ({
-  GitHubSessionPane: () => <div data-testid="studio-github" />,
-}));
-
 vi.mock('../../../../integrations/gitlab/MrSessionPane', () => ({
   MrSessionPane: () => <div data-testid="studio-mr" />,
 }));
@@ -45,9 +41,9 @@ describe('SessionStudioLayer', () => {
     expect(screen.getByTestId('studio-workflow')).not.toBeNull();
   });
 
-  it('renders the github pane for a github studio', () => {
-    renderStudio({ kind: 'github' });
-    expect(screen.getByTestId('studio-github')).not.toBeNull();
+  it('has no github studio kind: the review lens owns pull requests', () => {
+    const kinds: ReadonlyArray<SessionStudio['kind']> = ['workflow', 'mr', 'bitbucket'];
+    expect(kinds).not.toContain('github');
   });
 
   it('renders the bitbucket studio for a bitbucket studio', () => {

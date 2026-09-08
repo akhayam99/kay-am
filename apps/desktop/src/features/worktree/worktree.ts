@@ -340,6 +340,29 @@ export const listBranchCommits = async (
   return invoke<ReadonlyArray<BranchCommit>>('worktree_commits', { worktreePath });
 };
 
+export type IsAncestorParams = {
+  readonly worktreePath: string;
+  readonly sha: string;
+  readonly head: string;
+};
+
+export const worktreeIsAncestor = async ({
+  worktreePath,
+  sha,
+  head,
+}: IsAncestorParams): Promise<boolean> => {
+  return invoke<boolean>('worktree_is_ancestor', { worktreePath, sha, head });
+};
+
+export type RemoteHeadParams = { readonly worktreePath: string; readonly branch: string };
+
+export const worktreeRemoteHead = async ({
+  worktreePath,
+  branch,
+}: RemoteHeadParams): Promise<string | null> => {
+  return invoke<string | null>('worktree_remote_head', { worktreePath, branch });
+};
+
 export const worktreeDiffCommit = async (worktreePath: string, sha: string): Promise<string> => {
   return invoke<string>('worktree_diff_commit', { worktreePath, sha });
 };

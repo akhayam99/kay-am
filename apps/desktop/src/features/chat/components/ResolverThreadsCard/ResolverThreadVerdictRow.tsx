@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Markdown, cn, tintClasses } from '@goodboy/ui';
-import { ResolverOutcomeChip } from '../../../session/components/ResolverDetailPane/parts/ResolverOutcomeChip';
+import { ResolverOutcomeChip } from './ResolverOutcomeChip';
 import { TranscriptChevron } from '../TranscriptChevron';
 import { TranscriptDisclosure } from '../TranscriptDisclosure';
 import { TranscriptShell } from '../TranscriptShell';
@@ -57,7 +57,7 @@ export const ResolverThreadVerdictRow = ({
   const onHeaderClick = isExpandable ? () => setOpen((value) => !value) : onOpen;
   const headerLabel = isExpandable
     ? `${open ? 'Collapse' : 'Expand'} thread ${position}`
-    : `Open thread ${position} in the resolver inspector`;
+    : `Open thread ${position} in Review`;
 
   const header = (
     <div className="flex min-w-0 items-center gap-2 pr-2">
@@ -103,7 +103,7 @@ export const ResolverThreadVerdictRow = ({
               onClick={onOpen}
               className="self-start text-2xs text-muted-foreground motion-safe:transition-colors hover:text-primary"
             >
-              Open in the resolver inspector
+              Open in Review
             </button>
           )}
         </div>

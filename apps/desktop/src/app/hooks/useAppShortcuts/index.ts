@@ -172,7 +172,6 @@ export const useAppShortcuts = ({
   useShortcut('lens.summary', () => goToLens({ kind: 'last_output_summary' }));
   useShortcut('lens.workflows', () => goToLens({ kind: 'workflows' }));
   useShortcut('lens.agents', () => goToLens({ kind: 'agents' }));
-  useShortcut('lens.resolve', () => goToLens({ kind: 'review' }));
   useShortcut('lens.review', () => goToLens({ kind: 'review' }));
   useShortcut('lens.questions', () => goToLens({ kind: 'questions' }));
   useShortcut('lens.files', () => goToLens({ kind: 'files' }), !isExploreSession);

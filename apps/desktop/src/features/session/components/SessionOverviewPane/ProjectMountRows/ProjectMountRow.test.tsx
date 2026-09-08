@@ -173,7 +173,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('ProjectMountRow request action', () => {
-  it('opens the pull request studio for this mount, without touching the window bus', async () => {
+  it('opens the pull request for this mount in review, without touching the window bus', async () => {
     const listener = vi.fn();
     window.addEventListener('goodboy:open-github-session', listener);
     renderRow({ diffStat: { additions: 3, deletions: 1 } });

@@ -6,14 +6,14 @@ import {
   extractAllCommentWontfix,
   isReviewThreadId,
 } from '@goodboy/core';
-import type { AgentId, PrComment, PendingResolution, SessionId } from '@goodboy/types';
+import type { AgentId, PrComment, ResolveThread, SessionId } from '@goodboy/types';
 import { CONCEPT_ICONS, ICON_SIZE } from '../../../../shared/components/conceptIcons';
 import { useAppStore } from '../../../../store';
-import { resolverTallySentence } from '../../../session/resolverTallySentence';
-import { resolverThreadTally } from '../../../session/resolverThreadTally';
 import { TranscriptDisclosure } from '../TranscriptDisclosure';
 import { TranscriptRowHeader } from '../TranscriptRowHeader';
 import { ResolverThreadVerdictRow } from './ResolverThreadVerdictRow';
+import { tallySentence } from './tallySentence';
+import { verdictTally } from './verdictTally';
 import { resolverThreadVerdicts, type ResolverThreadVerdict } from './resolverThreadVerdicts';
 
 type Props = {
@@ -23,18 +23,18 @@ type Props = {
 };
 
 const EMPTY_COMMENTS: ReadonlyArray<PrComment> = [];
-const EMPTY_PENDING: ReadonlyArray<PendingResolution> = [];
+const EMPTY_ROWS: ReadonlyArray<ResolveThread> = [];
 
 const Icon = CONCEPT_ICONS.resolve;
 
-const tallySentence = ({
+const previewSentence = ({
   verdicts,
 }: {
   readonly verdicts: ReadonlyArray<ResolverThreadVerdict>;
 }): string | null =>
-  resolverTallySentence({
-    tally: resolverThreadTally({
-      settlements: verdicts.map(({ kind, isClosed }) => ({ kind, isClosed })),
+  tallySentence({
+    tally: verdictTally({
+      verdicts: verdicts.map(({ kind, isClosed }) => ({ kind, isClosed })),
     }),
   });
 
@@ -67,10 +67,9 @@ export const ResolverThreadsCard = ({ assistantText, sessionId, agentId = null }
   const githubComments = useAppStore(
     (state) => state.sessionGithub[sessionId]?.detail?.comments ?? EMPTY_COMMENTS,
   );
-  const pendingResolutions = useAppStore(
-    (state) => state.sessionPendingResolutions[sessionId] ?? EMPTY_PENDING,
-  );
-  const selectAgent = useAppStore((state) => state.selectAgent);
+  const resolveRows = useAppStore((state) => state.sessionResolveThreads[sessionId] ?? EMPTY_ROWS);
+  const setReviewLensIntent = useAppStore((state) => state.setReviewLensIntent);
+  const setActiveLens = useAppStore((state) => state.setActiveLens);
   const openDiffLens = useAppStore((state) => state.openDiffLens);
 
   const resolvedOnGithub = useMemo(
@@ -83,8 +82,9 @@ export const ResolverThreadsCard = ({ assistantText, sessionId, agentId = null }
     [githubComments],
   );
   const queuedThreadIds = useMemo(
-    () => new Set(pendingResolutions.map((resolution) => resolution.threadId)),
-    [pendingResolutions],
+    () =>
+      new Set(resolveRows.filter((row) => row.state === 'publishing').map((row) => row.threadId)),
+    [resolveRows],
   );
 
   const verdicts = useMemo(
@@ -109,18 +109,10 @@ export const ResolverThreadsCard = ({ assistantText, sessionId, agentId = null }
 
   const [open, setOpen] = useState(false);
 
-  const onOpen =
-    agentId === null
-      ? null
-      : () => {
-          void selectAgent(sessionId, agentId);
-          window.dispatchEvent(new CustomEvent('goodboy:reveal-chat'));
-          window.dispatchEvent(
-            new CustomEvent('goodboy:open-resolver-inspector', {
-              detail: { sessionId, agentId },
-            }),
-          );
-        };
+  const onOpen = (threadId: string) => {
+    setReviewLensIntent({ intent: { sessionId, threadId } });
+    setActiveLens(sessionId, 'review');
+  };
 
   const onOpenCommit = (sha: string) => {
     openDiffLens(sessionId, { kind: 'commit', sha, path: null });
@@ -138,7 +130,7 @@ export const ResolverThreadsCard = ({ assistantText, sessionId, agentId = null }
         verdict={onlyVerdict}
         position={1}
         nested={false}
-        onOpen={onOpen}
+        onOpen={() => onOpen(onlyVerdict.threadId)}
         onOpenCommit={onOpenCommit}
         data-testid="resolver-thread-verdict"
       />
@@ -156,12 +148,12 @@ export const ResolverThreadsCard = ({ assistantText, sessionId, agentId = null }
           grouped
           tone="neutral"
           icon={<Icon size={ICON_SIZE.row} aria-hidden />}
-          eyebrow="resolver findings"
-          preview={tallySentence({ verdicts })}
+          eyebrow="resolve findings"
+          preview={previewSentence({ verdicts })}
           meta={`${verdicts.length}`}
           open={open}
           onToggle={() => setOpen((value) => !value)}
-          aria-label={open ? 'Collapse resolver findings' : 'Expand resolver findings'}
+          aria-label={open ? 'Collapse resolve findings' : 'Expand resolve findings'}
         />
       }
     >
@@ -172,7 +164,7 @@ export const ResolverThreadsCard = ({ assistantText, sessionId, agentId = null }
               verdict={verdict}
               position={index + 1}
               nested
-              onOpen={onOpen}
+              onOpen={() => onOpen(verdict.threadId)}
               onOpenCommit={onOpenCommit}
               data-testid={`resolver-thread-verdict-${index}`}
             />

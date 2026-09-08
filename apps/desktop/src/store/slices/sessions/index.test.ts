@@ -15,7 +15,6 @@ import type {
   PlanId,
   Message,
   MessageId,
-  PendingResolution,
   PlanWithCount,
   Project,
   ProjectId,
@@ -77,9 +76,6 @@ const inspectWorktreeSpy = vi.fn(async ({ worktreePath }: { worktreePath: string
   isLocked: false,
   lockReason: null,
 }));
-const listPendingResolutionsForSessionSpy = vi.fn(
-  async () => [] as ReadonlyArray<PendingResolution>,
-);
 const getWorkspaceByIdSpy = vi.fn();
 const listProjectsForWorkspaceSpy = vi.fn();
 const upsertSessionExternalTaskSpy = vi.fn(async () => undefined);
@@ -192,10 +188,6 @@ vi.mock('@goodboy/db', async () => {
     getGithubPrCache: vi.fn(async () => null),
     upsertGithubPrCache: vi.fn(async () => undefined),
     deleteGithubPrCache: vi.fn(async () => undefined),
-    listPendingResolutionsForSession: listPendingResolutionsForSessionSpy,
-    queuePendingResolution: vi.fn(async () => undefined),
-    deletePendingResolution: vi.fn(async () => undefined),
-    markPendingResolutionReplyPosted: vi.fn(async () => undefined),
   };
 });
 
@@ -548,7 +540,6 @@ describe('store contract', () => {
     listProjectScriptsSpy.mockResolvedValue([]);
     listIntegrationBindingsForWorkspaceSpy.mockResolvedValue([]);
     listDiffCommentsSpy.mockResolvedValue([]);
-    listPendingResolutionsForSessionSpy.mockResolvedValue([]);
     getWorkspaceByIdSpy.mockResolvedValue(buildWorkspace());
     listProjectsForWorkspaceSpy.mockResolvedValue([buildProject()]);
     createWorktreeSpy.mockResolvedValue({
@@ -754,7 +745,6 @@ describe('store contract', () => {
 
     it('setCurrentSession rebuilds resolver verdicts from the persisted transcript', async () => {
       const store = await getStore();
-      store.setState({ resolverThreadOutcomes: {} } as never);
       invokeAgentListSpy.mockResolvedValue([
         buildAgent({
           id: AGENT_ID,
@@ -779,32 +769,13 @@ describe('store contract', () => {
       await store.getState().setCurrentSession(SESSION_ID);
 
       await vi.waitFor(() => {
-        expect(store.getState().resolverThreadOutcomes[AGENT_ID]).toEqual({
-          PRRT_1: { kind: 'resolved', commitSha: 'abcdef1234567890' },
-        });
-      });
-    });
-
-    it('loads pending resolutions on activation, so a session landing on a lens other than Overview still sees the retry strip', async () => {
-      const store = await getStore();
-      store.setState({ sessionPendingResolutions: {} });
-      const pending: PendingResolution = {
-        id: 'pending-1',
-        sessionId: SESSION_ID,
-        prNumber: 7,
-        threadId: 'PRRT_2',
-        commitSha: '',
-        reply: null,
-        outcome: 'wontfix',
-        replyPostedAt: null,
-        createdAt: NOW,
-      };
-      listPendingResolutionsForSessionSpy.mockResolvedValue([pending]);
-
-      await store.getState().setCurrentSession(SESSION_ID);
-
-      await vi.waitFor(() => {
-        expect(store.getState().sessionPendingResolutions[SESSION_ID]).toEqual([pending]);
+        expect(
+          (store.getState().sessionResolveThreads[SESSION_ID] ?? []).map((row) => ({
+            threadId: row.threadId,
+            state: row.state,
+            commitShas: row.commitShas,
+          })),
+        ).toEqual([{ threadId: 'PRRT_1', state: 'fixed', commitShas: ['abcdef1234567890'] }]);
       });
     });
 

@@ -4,7 +4,6 @@ import type { ReactElement, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { Agent, AgentId, Session, SessionId } from '@goodboy/types';
-import type { ResolverStatus } from '../../resolver-linkage';
 
 const h = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
@@ -16,7 +15,6 @@ const h = vi.hoisted(() => ({
   stage: { stage: 'running' as const, reason: 'running' },
   currentSession: null as Session | null,
   selectAgent: vi.fn(),
-  resolverLinks: [] as ReadonlyArray<{ agent: Agent; status: ResolverStatus }>,
 }));
 
 vi.mock('../../../../store', () => ({
@@ -28,10 +26,6 @@ vi.mock('../../../../store', () => ({
 
 vi.mock('../../hooks/useSessionCrumbs', () => ({
   useSessionCrumbs: () => h.crumbs,
-}));
-
-vi.mock('../../hooks/useResolverIndex', () => ({
-  useResolverIndex: () => ({ links: h.resolverLinks }),
 }));
 
 vi.mock('./WorkflowAdvance', () => ({
@@ -130,9 +124,7 @@ const resetState = () => {
     activeLens: { [SESSION_ID]: 'agents' },
     sessionPhaseRuns: { [SESSION_ID]: [scout, implementer, workflowStep] },
     agentKindOverride: {},
-    resolverState: {},
-    sessionPendingResolutions: {},
-    sessionResolvedThreads: {},
+    sessionResolveAttempts: {},
     sessionGithub: {},
     phaseTemplates: { 'workspace-1': [{ id: 'workflow-1', name: 'refactor', steps: [] }] },
     sessionWorkflows: { [SESSION_ID]: [] },
@@ -167,7 +159,6 @@ const openStepSurface = () => {
 beforeEach(() => {
   h.currentSession = session;
   h.stage.reason = 'running';
-  h.resolverLinks = [];
   h.crumbs = [
     { id: 'overview', label: 'Overview', onClick: vi.fn() },
     { id: 'lens-agents', label: 'Agents', onClick: vi.fn() },
@@ -222,20 +213,23 @@ describe('SessionCrumbBar', () => {
     expect(within(selectedCrumb).getByLabelText('completed')).toBeDefined();
   });
 
-  it('shows the queued resolver count on the active review lens crumb', () => {
+  it('counts the queued fix attempts on the active review crumb', () => {
     h.crumbs = [
       { id: 'overview', label: 'Overview', onClick: vi.fn() },
       { id: 'lens-review', label: 'Review' },
     ];
     h.state.activeLens = { [SESSION_ID]: 'review' };
     h.state.selectedAgentId = {};
-    h.resolverLinks = [
-      { agent: scout, status: 'pending' },
-      { agent: implementer, status: 'pending' },
-    ];
+    h.state.sessionResolveAttempts = {
+      [SESSION_ID]: [
+        { id: 'a1', phase: 'queued' },
+        { id: 'a2', phase: 'queued' },
+        { id: 'a3', phase: 'running' },
+      ],
+    };
     render(<SessionCrumbBar />);
 
-    expect(screen.getByLabelText('2 queued')).toBeDefined();
+    expect(screen.getByText('2 queued')).toBeDefined();
   });
 
   it('turns the last crumb into a sibling switcher when peers exist in the same home', () => {

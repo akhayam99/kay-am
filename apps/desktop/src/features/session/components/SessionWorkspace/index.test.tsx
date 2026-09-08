@@ -27,9 +27,8 @@ type Store = {
   focusedGithubIssueNumber: Record<string, number | null>;
   sessionExternalTasks: Record<string, ReadonlyArray<unknown>>;
   sessionGithub: Record<string, unknown>;
-  sessionPendingResolutions: Record<string, ReadonlyArray<{ threadId: string }>>;
-  sessionResolvedThreads: Record<string, ReadonlyArray<string>>;
-  resolverState: Record<string, 'awaiting' | 'committed' | 'wontfix' | 'analyzed'>;
+  sessionGitlabMr: Record<string, unknown>;
+  sessionBitbucketPr: Record<string, unknown>;
   agentTurnState: Record<string, unknown>;
   agentKindOverride: Record<string, unknown>;
   sessionLoading: Record<string, { agents: boolean; plans: boolean }>;
@@ -73,9 +72,8 @@ const { store, hooks } = vi.hoisted(() => ({
     focusedGithubIssueNumber: {},
     sessionExternalTasks: {},
     sessionGithub: {},
-    sessionPendingResolutions: {},
-    sessionResolvedThreads: {},
-    resolverState: {},
+    sessionGitlabMr: {},
+    sessionBitbucketPr: {},
     agentTurnState: {},
     agentKindOverride: {},
     sessionLoading: {},
@@ -93,6 +91,7 @@ const { store, hooks } = vi.hoisted(() => ({
     openQuestions: [] as ReadonlyArray<{ readonly createdByAgentId?: string }>,
     agentsLaneMounts: 0,
     agentsLaneUnmounts: 0,
+    remoteKind: null as 'github' | 'gitlab' | 'other' | null,
   },
 }));
 
@@ -147,24 +146,13 @@ vi.mock('../../../terminal/components/TerminalDock', () => ({ TerminalDock: () =
 vi.mock('../../../plans/components/PlanStudio', () => ({ PlanStudio: () => null }));
 vi.mock('../../../scripts', () => ({ ScriptsPanel: () => null }));
 vi.mock('../../../worktree/worktree', () => ({ worktreeStatus: vi.fn() }));
+vi.mock('../../../worktree/useRemoteHostKind', () => ({
+  useRemoteHostKind: () => hooks.remoteKind,
+}));
 vi.mock('../../../workspace/components/WorkspacesSidebar/parts/AgentsSection', () => ({
   AgentsSection: ({ only }: { only?: string }) => (
     <div data-testid="agents-section" data-home={only} />
   ),
-}));
-vi.mock('../ResolverAgentsLane', () => ({
-  ResolverAgentsLane: ({
-    mode = 'active',
-    inspectedResolverId,
-  }: {
-    readonly mode?: 'active' | 'finished';
-    readonly inspectedResolverId: string | null;
-  }) =>
-    mode === 'active' ? (
-      <div data-testid="resolver-lane">{inspectedResolverId}</div>
-    ) : (
-      <div data-testid={`resolver-lane-${mode}`}>{inspectedResolverId}</div>
-    ),
 }));
 vi.mock('../StandaloneAgentsLane', () => ({
   StandaloneAgentsLane: ({
@@ -204,8 +192,8 @@ vi.mock('../CreateAgentPopover', () => ({
 vi.mock('../SessionOverviewPane', () => ({
   SessionOverviewPane: () => <div role="region" aria-label="Session overview" />,
 }));
-vi.mock('../../../review/components/ReviewBoardPane', () => ({
-  ReviewBoardPane: () => <div data-testid="review-board" />,
+vi.mock('../../../review/components/ReviewPane', () => ({
+  ReviewPane: () => <div data-testid="review-board" />,
 }));
 vi.mock('../SessionCrumbBar', () => ({
   SessionCrumbBar: () => <div data-testid="session-crumb-bar" />,
@@ -218,7 +206,7 @@ vi.mock('./parts/ContextPane', () => ({
     <div data-testid="context-pane" data-region={initialRegion ?? 'context'} />
   ),
 }));
-vi.mock('./parts/PrPane', () => ({ PrPane: () => null }));
+vi.mock('./parts/PrPane', () => ({ PrPane: () => <div data-testid="code-host-pane" /> }));
 vi.mock('./parts/FilesPane', () => ({ FilesPane: () => null }));
 vi.mock('./parts/IntegrationPane', () => ({
   IntegrationPane: ({ provider }: { provider: string }) => (
@@ -286,9 +274,8 @@ beforeEach(() => {
   store.focusedGithubIssueNumber = {};
   store.sessionExternalTasks = {};
   store.sessionGithub = {};
-  store.sessionPendingResolutions = {};
-  store.sessionResolvedThreads = {};
-  store.resolverState = {};
+  store.sessionGitlabMr = {};
+  store.sessionBitbucketPr = {};
   store.agentTurnState = {};
   store.agentKindOverride = {};
   store.sessionLoading = {};
@@ -299,6 +286,7 @@ beforeEach(() => {
   hooks.openQuestions = [];
   hooks.agentsLaneMounts = 0;
   hooks.agentsLaneUnmounts = 0;
+  hooks.remoteKind = null;
 });
 
 afterEach(cleanup);
@@ -354,7 +342,7 @@ describe('SessionWorkspace agent overlay', () => {
     const { result } = renderHook(() => useSessionCrumbs({ session }));
     expect(result.current.map((crumb) => crumb.label)).toEqual([
       'Overview',
-      'Review board',
+      'Review',
       'Standalone resolver',
     ]);
   });
@@ -450,6 +438,53 @@ describe('SessionWorkspace agent overlay', () => {
     render(<SessionWorkspace session={session} isActive />);
 
     expect(screen.getByTestId('review-board')).toBeDefined();
+  });
+});
+
+describe('SessionWorkspace code host routing', () => {
+  it('sends a saved pr lens to Review on a GitHub remote', () => {
+    hooks.remoteKind = 'github';
+    store.activeLens = { [SESSION_ID]: 'pr' };
+    store.selectedAgentId = {};
+
+    render(<SessionWorkspace session={session} isActive />);
+
+    expect(store.setActiveLens).toHaveBeenCalledWith(SESSION_ID, 'review');
+  });
+
+  it('sends a pr lens to Review when a GitHub pull request is loaded on an unnamed remote', () => {
+    hooks.remoteKind = null;
+    store.sessionGithub = { [SESSION_ID]: { pr: { number: 248 } } };
+    store.activeLens = { [SESSION_ID]: 'pr' };
+    store.selectedAgentId = {};
+
+    render(<SessionWorkspace session={session} isActive />);
+
+    expect(store.setActiveLens).toHaveBeenCalledWith(SESSION_ID, 'review');
+  });
+
+  it('keeps the code host lens for a GitLab session', () => {
+    hooks.remoteKind = 'gitlab';
+    store.sessionGitlabMr = { [SESSION_ID]: { mr: { iid: 7 } } };
+    store.activeLens = { [SESSION_ID]: 'pr' };
+    store.selectedAgentId = {};
+
+    render(<SessionWorkspace session={session} isActive />);
+
+    expect(screen.getByTestId('code-host-pane')).toBeDefined();
+    expect(store.setActiveLens).not.toHaveBeenCalledWith(SESSION_ID, 'review');
+  });
+
+  it('keeps the code host lens for a Bitbucket session', () => {
+    hooks.remoteKind = 'other';
+    store.sessionBitbucketPr = { [SESSION_ID]: { pr: { id: 42 } } };
+    store.activeLens = { [SESSION_ID]: 'pr' };
+    store.selectedAgentId = {};
+
+    render(<SessionWorkspace session={session} isActive />);
+
+    expect(screen.getByTestId('code-host-pane')).toBeDefined();
+    expect(store.setActiveLens).not.toHaveBeenCalledWith(SESSION_ID, 'review');
   });
 });
 

@@ -21,7 +21,6 @@ import type {
   OpenQuestion,
   OpenQuestionId,
   OrchestratorRouting,
-  PendingResolutionOutcome,
   PermissionScope,
   PlanId,
   PlanStatus,
@@ -138,6 +137,7 @@ import { createInitialSessionViewState } from './slices/session-view/createIniti
 import type {
   DiffFocus,
   LensKind,
+  ReviewLensIntent,
   SessionCreationId,
   SessionCreationKind,
   SessionStudio,
@@ -662,7 +662,6 @@ type AppActions = {
     },
   ): Promise<AgentId>;
   forceCloseResolver(sessionId: SessionId, agentId: AgentId): Promise<void>;
-  setResolverThreadReply(params: { agentId: AgentId; threadId: string; reply: string }): void;
   renameAgent(sessionId: SessionId, agentId: AgentId, name: string): Promise<void>;
   setAgentKind(agentId: AgentId, kind: AgentKind): void;
   setAgentEffortOverride(agentId: AgentId, effort: string): void;
@@ -724,27 +723,6 @@ type AppActions = {
   ): Promise<void>;
   selectSessionPr(sessionId: SessionId, prNumber: number, mountId?: MountId): Promise<void>;
   sweepGithub(opts?: { skipUnknownPr?: boolean }): void;
-  resolveGithubThread(
-    sessionId: SessionId,
-    threadId: string,
-    closure?: { commitSha?: string; reason?: string; reply?: string },
-  ): Promise<boolean>;
-  resolveAgentThreads(sessionId: SessionId, agentId: AgentId): Promise<boolean>;
-  queueResolution(
-    sessionId: SessionId,
-    args: {
-      threadId: string;
-      commitSha: string;
-      prNumber: number;
-      reply?: string | null;
-      outcome?: PendingResolutionOutcome | null;
-    },
-  ): Promise<void>;
-  dequeueResolution(sessionId: SessionId, threadId: string): Promise<void>;
-  loadPendingResolutions(sessionId: SessionId): Promise<void>;
-  pushAllResolutions(
-    sessionId: SessionId,
-  ): Promise<{ pushed: boolean; resolved: number; failed: number }>;
   pushSessionBranch(
     sessionId: SessionId,
   ): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: string }>;
@@ -909,9 +887,7 @@ type AppActions = {
   dismissSessionNudge(sessionId: SessionId, outcome?: 'accepted' | 'dismissed'): Promise<void>;
   acceptSessionNudgeHandoff(sessionId: SessionId): Promise<AgentId | null>;
   setScriptsLensScope(params: { readonly scope: { readonly projectId: ProjectId } | null }): void;
-  setReviewLensIntent(params: {
-    readonly intent: { readonly sessionId: SessionId; readonly agentId: AgentId } | null;
-  }): void;
+  setReviewLensIntent(params: { readonly intent: ReviewLensIntent | null }): void;
   getSessionViewPrefs(workspaceId: WorkspaceId): SessionViewPrefs;
   setSessionSort(workspaceId: WorkspaceId, sort: SessionSortKey): void;
   setSessionGroup(workspaceId: WorkspaceId, group: SessionGroupKey): void;
@@ -1049,16 +1025,12 @@ export const initialState: AppState = {
   ...initialSlackThreadsState,
   reviewPrs: {},
   reviewDrafts: {},
-  sessionPendingResolutions: {},
-  sessionResolvedThreads: {},
   volatilePermissionAllows: new Set<string>(),
   agentModelOverride: {},
   agentProviderOverride: {},
   agentEffortOverride: {},
   agentKindOverride: {},
   ...resolveInitialState,
-  resolverState: {},
-  resolverThreadOutcomes: {},
   agentDraft: {},
   workflowDrafts: {},
   ...initialWorkflowStudioState,

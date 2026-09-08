@@ -12,14 +12,13 @@ const { state } = vi.hoisted(() => ({
     sessionPhaseRuns: {} as Record<string, ReadonlyArray<unknown>>,
     sessionEvents: {} as Record<string, ReadonlyArray<unknown>>,
     sessionGithub: {} as Record<string, unknown>,
-    sessionPendingResolutions: {} as Record<string, ReadonlyArray<unknown>>,
+    sessionResolveThreads: {} as Record<string, ReadonlyArray<unknown>>,
     summarizerStatus: {} as Record<string, { status: string }>,
     skipStuckStepAndAdvance: vi.fn(async () => undefined),
     materializeProject: vi.fn(async () => undefined),
     emitNotification: vi.fn(async () => undefined),
     hasUnread: false,
     runHasOpenQuestions: false,
-    resolverStatusByThreadId: {} as Record<string, string>,
   },
 }));
 
@@ -30,20 +29,6 @@ vi.mock('../../../../../../store', () => ({
 
 vi.mock('../../../../../context/openQuestionsGate', () => ({
   workflowRunHasOpenQuestions: () => state.runHasOpenQuestions,
-}));
-
-vi.mock('../../../../../session/hooks/useResolverIndex', () => ({
-  useResolverIndex: () => ({
-    links: [],
-    byThreadId: new Map(
-      Object.entries(state.resolverStatusByThreadId).map(([threadId, status]) => [
-        threadId,
-        { agent: {}, status },
-      ]),
-    ),
-    byCommentUrl: new Map(),
-    byDiffAgentId: new Map(),
-  }),
 }));
 
 import { SUGGESTION_ICONS } from '../../../../../suggestions/suggestionIcons';
@@ -115,11 +100,10 @@ beforeEach(() => {
   state.sessionPhaseRuns = {};
   state.sessionEvents = {};
   state.sessionGithub = {};
-  state.sessionPendingResolutions = {};
+  state.sessionResolveThreads = {};
   state.summarizerStatus = {};
   state.hasUnread = false;
   state.runHasOpenQuestions = false;
-  state.resolverStatusByThreadId = {};
   state.skipStuckStepAndAdvance.mockClear();
   state.materializeProject.mockClear();
   state.emitNotification.mockClear();
@@ -228,7 +212,7 @@ describe('useDynamicActions', () => {
     expect(nav.openGithub).toHaveBeenCalledWith(sessionWith());
   });
 
-  it('leaves a thread a running resolver already owns out of the count', () => {
+  it('leaves a thread a running fix attempt already owns out of the count', () => {
     state.sessionGithub = {
       'sess-1': {
         pr: { number: 12 },
@@ -240,7 +224,7 @@ describe('useDynamicActions', () => {
         },
       },
     };
-    state.resolverStatusByThreadId = { t2: 'running' };
+    state.sessionResolveThreads = { 'sess-1': [{ threadId: 't2', state: 'working' }] };
     const { result } = renderHook(() => useDynamicActions(sessionWith(), nav, 'attention'));
     expect(result.current.find((a) => a.key === 'resolve')?.label).toBe('Resolve 1 comment');
   });

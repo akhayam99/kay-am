@@ -24,6 +24,7 @@ export const recordResolveAttempt = async ({
   effort,
   instructions,
   phase,
+  threadIds,
 }: Params): Promise<string> => {
   const db = tauriDatabase;
   const attempts = await listResolveAttempts({ db, sessionId });
@@ -55,7 +56,8 @@ export const recordResolveAttempt = async ({
   };
   await insertResolveAttempt({ db, attempt });
   const rows = await listResolveThreads({ db, sessionId });
-  for (const threadId of attempt.threadIds) {
+  const claimed = threadIds ?? attempt.threadIds;
+  for (const threadId of claimed) {
     const previous = rows.find((row) => row.threadId === threadId);
     if (previous?.state === 'closed') {
       continue;

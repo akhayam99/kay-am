@@ -1,5 +1,3 @@
-import type { IsoDateTime, SessionId } from './ids';
-
 export type GhTokenMode = 'absent' | 'gh-cli' | 'pat';
 
 export type GhTokenStatus = {
@@ -163,18 +161,4 @@ export type PrDetail = {
   reviews: ReadonlyArray<PrReview>;
   reviewRequests: ReadonlyArray<PrReviewRequest>;
   checks: ReadonlyArray<PrCheckRun>;
-};
-
-export type PendingResolutionOutcome = 'resolved' | 'wontfix' | 'analyzed';
-
-export type PendingResolution = {
-  id: string;
-  sessionId: SessionId;
-  prNumber: number;
-  threadId: string;
-  commitSha: string;
-  reply: string | null;
-  outcome: PendingResolutionOutcome | null;
-  replyPostedAt: IsoDateTime | null;
-  createdAt: IsoDateTime;
 };

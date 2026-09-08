@@ -33,10 +33,11 @@ import { IntegrationPane } from './parts/IntegrationPane';
 import { GithubTaskDetail } from './parts/IntegrationPane/GithubTaskDetail';
 import { LinkTicketPopover } from './parts/IntegrationPane/LinkTicketPopover';
 import { isStandaloneAgent, resolveRootAgent } from '../../agent-kind';
-import { useResolverIndex } from '../../hooks/useResolverIndex';
+import { selectResolverAgentIds } from '../../../review/selectResolverAgentIds';
 import { SessionOverviewLoading } from './parts/SessionOverviewLoading';
-import { ReviewBoardPane } from '../../../review/components/ReviewBoardPane';
+import { ReviewPane } from '../../../review/components/ReviewPane';
 import { useIsBranchlessSession } from '../../hooks/useIsBranchlessSession';
+import { useRemoteHostKind } from '../../../worktree/useRemoteHostKind';
 import { resolveSessionRepo } from '../../../../store/slices/worktrees/resolveSessionRepo';
 import { resolveActiveMountPath } from '../../../../store/slices/worktrees/resolveActiveMountPath';
 import { ExplorePane } from '../../../explore/components/ExplorePane';
@@ -84,6 +85,7 @@ export const SessionWorkspace = ({ session, isActive }: SessionWorkspaceProps) =
   const phaseRuns = useAppStore(
     (s) => s.sessionPhaseRuns[sessionId] ?? (EMPTY_ARRAY as ReadonlyArray<Agent>),
   );
+  const agentKindOverride = useAppStore((s) => s.agentKindOverride);
   const areAgentsLoaded = useIsSessionCollectionLoaded({ sessionId, collection: 'agents' });
   const arePlansLoaded = useIsSessionCollectionLoaded({ sessionId, collection: 'plans' });
   const loadPhaseRunsForSession = useAppStore((s) => s.loadPhaseRunsForSession);
@@ -95,24 +97,19 @@ export const SessionWorkspace = ({ session, isActive }: SessionWorkspaceProps) =
     }
   }, [activeLens, sessionId, setActiveLens]);
 
+  const githubPr = useAppStore((s) => s.sessionGithub[sessionId]?.pr ?? null);
+  const gitlabMr = useAppStore((s) => s.sessionGitlabMr[sessionId]?.mr ?? null);
+  const bitbucketPr = useAppStore((s) => s.sessionBitbucketPr[sessionId]?.pr ?? null);
+  const remoteKind = useRemoteHostKind({ sessionId });
+  const isGithubCodeHost =
+    gitlabMr === null && bitbucketPr === null && (remoteKind === 'github' || githubPr !== null);
+
   useEffect(() => {
-    const onOpenResolverInspector = (event: Event) => {
-      if (!(event instanceof CustomEvent)) {
-        return;
-      }
-      const detail = event.detail as { sessionId?: unknown; agentId?: unknown };
-      if (detail.sessionId !== sessionId || typeof detail.agentId !== 'string') {
-        return;
-      }
-      useAppStore.getState().setReviewLensIntent({
-        intent: { sessionId, agentId: detail.agentId as AgentId },
-      });
-      setActiveLens(sessionId, 'review');
-    };
-    window.addEventListener('goodboy:open-resolver-inspector', onOpenResolverInspector);
-    return () =>
-      window.removeEventListener('goodboy:open-resolver-inspector', onOpenResolverInspector);
-  }, [sessionId, setActiveLens]);
+    if (activeLens !== 'pr' || !isGithubCodeHost) {
+      return;
+    }
+    setActiveLens(sessionId, 'review');
+  }, [activeLens, isGithubCodeHost, sessionId, setActiveLens]);
 
   const lens: LensKind | null = activeLens ?? null;
   const surface = resolveLensSurface({ lens });
@@ -132,10 +129,9 @@ export const SessionWorkspace = ({ session, isActive }: SessionWorkspaceProps) =
   const showStudio = studio != null;
   const showAgentOverlay = selectedAgentId != null && !showStudio;
   const showLens = selectedAgentId == null && !showStudio;
-  const resolverIndex = useResolverIndex(sessionId);
   const resolverAgentIds = useMemo(
-    () => new Set(resolverIndex.links.map(({ agent }) => agent.id)),
-    [resolverIndex],
+    () => selectResolverAgentIds({ agents: phaseRuns, kindOverride: agentKindOverride }),
+    [phaseRuns, agentKindOverride],
   );
   const overlayHome = resolveOverlayHome({ lens, agentHome });
   const githubTask = useMemo(
@@ -222,12 +218,8 @@ export const SessionWorkspace = ({ session, isActive }: SessionWorkspaceProps) =
               eyebrow={sessionEyebrow}
             />
           ) : null}
-          {lens === 'pr' ? (
-            <PrPane session={session} onSelectLens={onSelectLens} eyebrow={sessionEyebrow} />
-          ) : null}
-          {lens === 'review' ? (
-            <ReviewBoardPane session={session} eyebrow={sessionEyebrow} />
-          ) : null}
+          {lens === 'pr' ? <PrPane session={session} eyebrow={sessionEyebrow} /> : null}
+          {lens === 'review' ? <ReviewPane session={session} eyebrow={sessionEyebrow} /> : null}
           {lens === 'linear' ? (
             <IntegrationPane
               sessionId={sessionId}

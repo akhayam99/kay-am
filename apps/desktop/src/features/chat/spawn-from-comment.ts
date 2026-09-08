@@ -143,19 +143,76 @@ const instructionsSection = ({ count }: { readonly count: number }): ReadonlyArr
   ];
 };
 
+export const PROCEED_RESOLVER_PROMPT =
+  'Proceed with the fix you proposed in your analysis. When done, commit and emit the <<comment-resolved>> marker as instructed.';
+
+export type PriorContextIntent = 'retry' | 'recheck' | 'proceed';
+
+export type PriorContext = {
+  readonly threadId: string;
+  readonly reply?: string | null;
+  readonly commitShas?: ReadonlyArray<string>;
+  readonly intent: PriorContextIntent;
+};
+
+const INTENT_SENTENCE: Record<PriorContextIntent, string> = {
+  retry:
+    'The reviewer asked for another pass on this thread. Read it again and decide from scratch.',
+  recheck:
+    'The commit recorded for this thread is no longer reachable on the branch. Apply the change again and commit it.',
+  proceed: PROCEED_RESOLVER_PROMPT,
+};
+
+const amendInstruction = ({ sha }: { readonly sha: string }): string =>
+  `You already committed ${sha} for this thread. If that exact commit is still HEAD and \`git branch -r --contains ${sha}\` prints nothing, apply the new changes and run \`git commit --amend --no-edit\` to keep one commit for this thread. If HEAD moved past it or a remote contains it, make a normal new commit instead. Never rebase or force-push.`;
+
+const priorContextBlock = ({
+  entries,
+}: {
+  readonly entries: ReadonlyArray<PriorContext>;
+}): ReadonlyArray<string> => {
+  const lines: Array<string> = [RESOLVER_KICKOFF_LABELS.priorWork];
+  for (const entry of entries) {
+    lines.push('', `${RESOLVER_KICKOFF_LABELS.threadId}${entry.threadId}`);
+    const reply = entry.reply?.trim() ?? '';
+    if (reply !== '') {
+      lines.push('- the reply drafted last time:', ...quotedBody({ body: reply }));
+    }
+    const shas = entry.commitShas ?? [];
+    if (shas.length > 0) {
+      lines.push(`- commits recorded last time: ${shas.join(', ')}`);
+    }
+    lines.push(`- ${INTENT_SENTENCE[entry.intent]}`);
+    const first = shas[0];
+    if (first !== undefined && entry.intent !== 'proceed') {
+      lines.push(`- ${amendInstruction({ sha: first })}`);
+    }
+  }
+  return lines;
+};
+
 type KickoffParams = {
   readonly threads: ReadonlyArray<CommentThread>;
   readonly pr: PullRequestState;
   readonly hint: string;
+  readonly priorContext?: ReadonlyArray<PriorContext>;
 };
 
-const buildResolverKickoff = ({ threads, pr, hint }: KickoffParams): string => {
+export const buildResolverKickoff = ({
+  threads,
+  pr,
+  hint,
+  priorContext,
+}: KickoffParams): string => {
   const noun = threads.length === 1 ? 'thread' : 'threads';
   const lines: Array<string> = [
     `Resolve ${threads.length} ${noun} on PR #${pr.number}, branch \`${pr.headBranch}\`.`,
   ];
   for (const [index, thread] of threads.entries()) {
     lines.push('', ...threadBlock({ thread, position: index + 1, total: threads.length }));
+  }
+  if (priorContext !== undefined && priorContext.length > 0) {
+    lines.push('', ...priorContextBlock({ entries: priorContext }));
   }
   lines.push('', ...instructionsSection({ count: threads.length }));
   const threadIds = threads.flatMap((thread) => {
@@ -183,11 +240,19 @@ export type CommentAgentArgs = {
   readonly sourceKind: AgentSourceKind;
 };
 
-export const buildCombinedCommentAgentArgs = (
-  threads: ReadonlyArray<CommentThread>,
-  pr: PullRequestState,
-  choice: ResolveModelChoice = {},
-): CommentAgentArgs => {
+type ResolverAgentArgsParams = {
+  readonly threads: ReadonlyArray<CommentThread>;
+  readonly pr: PullRequestState;
+  readonly hint?: string;
+  readonly priorContext?: ReadonlyArray<PriorContext>;
+};
+
+export const buildResolverAgentArgs = ({
+  threads,
+  pr,
+  hint = '',
+  priorContext,
+}: ResolverAgentArgsParams): CommentAgentArgs => {
   const first = threads[0];
   if (first === undefined) {
     throw new Error('combined resolver requires at least one thread');
@@ -196,13 +261,30 @@ export const buildCombinedCommentAgentArgs = (
     thread.head.threadId != null ? [thread.head.threadId] : [],
   );
   return {
-    name: `resolve: ${threads.length} review threads`,
+    name:
+      threads.length === 1
+        ? buildCommentAgentTitle(first.head)
+        : `resolve: ${threads.length} review threads`,
     kind: 'resolver',
-    initialPrompt: buildResolverKickoff({ threads, pr, hint: choice.hint ?? '' }),
+    initialPrompt: buildResolverKickoff({
+      threads,
+      pr,
+      hint,
+      ...(priorContext !== undefined && { priorContext }),
+    }),
     sourceThreadIds,
     sourceCommentUrl: first.head.url,
     sourceKind: 'review_comment',
   };
+};
+
+export const buildCombinedCommentAgentArgs = (
+  threads: ReadonlyArray<CommentThread>,
+  pr: PullRequestState,
+  choice: ResolveModelChoice = {},
+): CommentAgentArgs => {
+  const args = buildResolverAgentArgs({ threads, pr, hint: choice.hint ?? '' });
+  return { ...args, name: `resolve: ${threads.length} review threads` };
 };
 
 export type ResolveModelChoice = {

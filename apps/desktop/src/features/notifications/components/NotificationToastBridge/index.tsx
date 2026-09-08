@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { Notification, NotificationAction } from '@goodboy/db';
+import { formatError } from '@goodboy/ui';
 import type { Session, Workspace } from '@goodboy/types';
 import { useAppStore } from '../../../../store';
 import { useToast, type ToastAction } from '../../../../app/components/Toast';
@@ -98,12 +99,29 @@ export const mapNotificationAction = (
       },
     };
   }
-  if (action.kind === 'retry-push-resolutions') {
+  if (action.kind === 'retry-publication') {
     const { sessionId } = action;
     return {
       label: 'Retry',
       onClick: () => {
-        void store.pushAllResolutions(sessionId);
+        void (async () => {
+          const preview = await store.retryPublication({ sessionId });
+          if (preview.publicationId === null) {
+            return;
+          }
+          await store.publishConversations({
+            sessionId,
+            publicationId: preview.publicationId,
+          });
+        })().catch((err: unknown) => {
+          void store.emitNotification(
+            'error',
+            'error',
+            'retry failed, conversations left open',
+            formatError(err),
+            { sessionId },
+          );
+        });
       },
     };
   }

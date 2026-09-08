@@ -263,12 +263,6 @@ export {
   deleteDiffComment,
 } from './queries/diff-comment';
 export {
-  queuePendingResolution,
-  listPendingResolutionsForSession,
-  markPendingResolutionReplyPosted,
-  deletePendingResolution,
-} from './queries/pending-resolution';
-export {
   insertPrReviewDraft,
   listPrReviewDraftsForSession,
   updatePrReviewDraftBody,
@@ -363,3 +357,11 @@ export {
   setResolveAttemptPhase,
 } from './queries/resolve-attempt';
 export { hasResolveImport, commitResolveImport } from './queries/resolve-import';
+export {
+  insertResolvePublication,
+  setResolvePublicationPhase,
+  listActiveResolvePublications,
+  listResolvePublicationsForSession,
+  upsertResolvePublicationThread,
+  listResolvePublicationThreads,
+} from './queries/resolve-publication';

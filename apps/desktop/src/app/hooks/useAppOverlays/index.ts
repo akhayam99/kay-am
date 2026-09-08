@@ -520,25 +520,6 @@ export const useAppOverlays = ({
       if (!isSessionId(sessionId) || sessionId === '') {
         return;
       }
-      const prNumber = eventValue({ event, key: 'prNumber' });
-      const threadId = eventValue({ event, key: 'threadId' });
-      setSettingsOpen(false);
-      setSessionStudio(sessionId, {
-        kind: 'github',
-        prNumber: typeof prNumber === 'number' ? prNumber : undefined,
-        threadId: typeof threadId === 'string' ? threadId : undefined,
-      });
-    };
-    window.addEventListener('goodboy:open-github-session', handler);
-    return () => window.removeEventListener('goodboy:open-github-session', handler);
-  }, [setSessionStudio]);
-
-  useEffect(() => {
-    const handler = (event: Event) => {
-      const sessionId = eventValue({ event, key: 'sessionId' });
-      if (!isSessionId(sessionId) || sessionId === '') {
-        return;
-      }
       setSettingsOpen(false);
       setSessionStudio(sessionId, { kind: 'mr' });
     };

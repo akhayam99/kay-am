@@ -315,9 +315,6 @@ const createHarness = ({
     agentTurnState: {},
     agentKindOverride: {},
     agentRunHistory: {},
-    resolverState: {},
-    resolverThreadOutcomes: {},
-    sessionResolvedThreads: {},
     sessionGithub: {},
     sendTurn,
     emitNotification,
@@ -773,7 +770,7 @@ describe('resolve queue scheduler', () => {
     const attempts = harness.get().sessionResolveAttempts[SESSION_A] ?? [];
     expect(attempts.find((attempt) => attempt.agentId === AGENT_1)).toMatchObject({
       phase: 'failed',
-      error: 'the turn ended before the resolver started',
+      error: 'the turn ended before the fix attempt started',
     });
     expect(harness.sendTurn.mock.calls[1]?.[0]?.content).toBe('fix two');
     expect(h.slots.get(SHARED_PATH)?.holder).toBe(AGENT_2);

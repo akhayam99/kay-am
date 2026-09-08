@@ -104,6 +104,7 @@ import {
 import { applyHeuristicTitle } from './applyHeuristicTitle';
 import { clusterBoundaryMarker, composeClusterBoundary } from '../workflows/clusterImplementation';
 import { resolveWorktreePath } from '../resolve/resolveWorktreePath';
+import { resumableResolveThreadIds } from '../resolve/resumableResolveThreadIds';
 import {
   selectActiveMount,
   selectMountById,
@@ -795,6 +796,10 @@ export const sendTurn = (set: SetFn, get: GetFn) => {
             effort: rawEffort,
             instructions: resolvedPrompt,
             phase: 'running',
+            threadIds: resumableResolveThreadIds({
+              rows: get().sessionResolveThreads[sessionId] ?? [],
+              agent: agentRowEarly,
+            }),
           })
         : undefined;
     lease.attemptId = resolveAttemptId;

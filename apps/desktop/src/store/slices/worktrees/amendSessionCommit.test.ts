@@ -1,4 +1,4 @@
-import type { AgentId, ProjectId, SessionId, WorkspaceId } from '@goodboy/types';
+import type { ProjectId, SessionId, WorkspaceId } from '@goodboy/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GetFn, SetFn } from './types';
 
@@ -13,8 +13,6 @@ const h = vi.hoisted(() => ({
     shortSha: 'new1234',
     replaced: ['old1234567', 'older123456'],
   })),
-  dequeueResolution: vi.fn(async () => undefined),
-  queueResolution: vi.fn(async () => undefined),
 }));
 
 vi.mock('../../../features/worktree/worktree', () => ({
@@ -26,7 +24,6 @@ import { amendSessionCommit } from './amendSessionCommit';
 import { squashSessionCommits } from './squashSessionCommits';
 
 const SESSION_ID = 'session-1' as SessionId;
-const AGENT_ID = 'agent-1' as AgentId;
 const WORKSPACE_ID = 'workspace-1' as WorkspaceId;
 const PROJECT_ID = 'project-1' as ProjectId;
 
@@ -51,15 +48,12 @@ const getFn = (worktrees: Record<string, ReadonlyArray<string>>): GetFn =>
     },
     sessionActiveProject: { [SESSION_ID]: PROJECT_ID },
     sessionBranches: {},
-    sessionPendingResolutions: {},
   })) as unknown as GetFn;
 
 describe('local history rewrites', () => {
   beforeEach(() => {
     h.amendLocalCommit.mockClear();
     h.squashLocalCommits.mockClear();
-    h.dequeueResolution.mockClear();
-    h.queueResolution.mockClear();
   });
 
   it('amends on the primary worktree of the session', async () => {
@@ -103,9 +97,15 @@ describe('local history rewrites', () => {
     expect(h.squashLocalCommits).not.toHaveBeenCalled();
   });
 
-  it('repoints outcomes and queued resolutions onto the rewritten head', async () => {
+  it('repoints the commit shas of every row onto the rewritten head', async () => {
     const state = {
-      sessionResolveThreads: {},
+      sessionResolveThreads: {
+        [SESSION_ID]: [
+          { threadId: 'PRRT_1', commitShas: ['old1234567'] },
+          { threadId: 'PRRT_2', commitShas: ['untouched12'] },
+          { threadId: 'PRRT_3', commitShas: null },
+        ],
+      },
       updateResolveThread: vi.fn(async () => true),
       sessions: [{ id: SESSION_ID, workspaceId: WORKSPACE_ID }],
       projects: [
@@ -125,39 +125,7 @@ describe('local history rewrites', () => {
       },
       sessionActiveProject: { [SESSION_ID]: PROJECT_ID },
       sessionBranches: {},
-      resolverThreadOutcomes: {
-        [AGENT_ID]: {
-          PRRT_1: { kind: 'resolved', commitSha: 'old1234567' },
-          PRRT_2: { kind: 'resolved', commitSha: 'untouched12' },
-          PRRT_3: { kind: 'analyzed' },
-        },
-      },
-      sessionPendingResolutions: {
-        [SESSION_ID]: [
-          {
-            id: 'r1',
-            sessionId: SESSION_ID,
-            prNumber: 7,
-            threadId: 'PRRT_1',
-            commitSha: 'old1234567',
-            reply: 'persisted explanation',
-            outcome: 'resolved',
-            createdAt: '2026-07-29T00:00:00.000Z',
-          },
-          {
-            id: 'r2',
-            sessionId: SESSION_ID,
-            prNumber: 7,
-            threadId: 'PRRT_2',
-            commitSha: 'untouched12',
-            reply: null,
-            outcome: 'resolved',
-            createdAt: '2026-07-29T00:00:00.000Z',
-          },
-        ],
-      },
-      dequeueResolution: h.dequeueResolution,
-      queueResolution: h.queueResolution,
+      activePublicationPreview: {},
     };
     const set = ((updater: (s: typeof state) => Partial<typeof state>) => {
       Object.assign(state, updater(state));
@@ -166,19 +134,11 @@ describe('local history rewrites', () => {
 
     await amendSessionCommit(set, get)(SESSION_ID, { sha: 'old1234567', message: 'reworded' });
 
-    expect(state.resolverThreadOutcomes[AGENT_ID]).toEqual({
-      PRRT_1: { kind: 'resolved', commitSha: 'new1234567' },
-      PRRT_2: { kind: 'resolved', commitSha: 'untouched12' },
-      PRRT_3: { kind: 'analyzed' },
-    });
-    expect(h.dequeueResolution).toHaveBeenCalledWith(SESSION_ID, 'PRRT_1');
-    expect(h.queueResolution).toHaveBeenCalledWith(SESSION_ID, {
+    expect(state.updateResolveThread).toHaveBeenCalledTimes(1);
+    expect(state.updateResolveThread).toHaveBeenCalledWith({
+      sessionId: SESSION_ID,
       threadId: 'PRRT_1',
-      commitSha: 'new1234567',
-      prNumber: 7,
-      reply: 'persisted explanation',
-      outcome: 'resolved',
+      patch: { commitShas: ['new1234567'] },
     });
-    expect(h.dequeueResolution).toHaveBeenCalledTimes(1);
   });
 });

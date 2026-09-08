@@ -1,4 +1,9 @@
+import { cancelPublication } from './cancelPublication';
+import { cancelResolveAttempt } from './cancelResolveAttempt';
 import { drainResolveQueue } from './drainResolveQueue';
+import { preparePublication } from './preparePublication';
+import { publishConversations } from './publishConversations';
+import { retryPublication } from './retryPublication';
 import { drainResolveWorktree } from './drainResolveWorktree';
 import { loadResolveSession } from './loadResolveSession';
 import { persistResolveTurn } from './persistResolveTurn';
@@ -11,8 +16,11 @@ import type {
   ResolveActions,
   BatchUpdateParams,
   AttemptParams,
+  CancelAttemptParams,
   DrainParams,
   PhaseParams,
+  PreparePublicationParams,
+  PublishParams,
   SessionParams,
   SliceParams,
   TurnParams,
@@ -37,6 +45,8 @@ export const createResolveSlice = ({ set, get }: SliceParams): ResolveActions =>
       serialize({ run: () => persistResolveTurn({ set, get, ...params }) }),
     recordResolveAttempt: (params: AttemptParams) =>
       serialize({ run: () => recordResolveAttempt({ set, get, ...params }) }),
+    cancelResolveAttempt: (params: CancelAttemptParams) =>
+      serialize({ run: () => cancelResolveAttempt({ set, get, ...params }) }),
     recordResolvePhase: (params: PhaseParams) =>
       serialize({ run: () => recordResolvePhase({ set, get, ...params }) }),
     drainResolveQueue: (params: DrainParams) =>
@@ -46,5 +56,10 @@ export const createResolveSlice = ({ set, get }: SliceParams): ResolveActions =>
     reconcileResolveDrains: () => serialize({ run: () => reconcileResolveDrains({ set, get }) }),
     updateResolveThread: (params: UpdateParams) =>
       serialize({ run: () => updateResolveThread({ set, get, ...params }) }),
+    preparePublication: (params: PreparePublicationParams) =>
+      preparePublication({ set, get, ...params }),
+    publishConversations: (params: PublishParams) => publishConversations({ set, get, ...params }),
+    retryPublication: (params: SessionParams) => retryPublication({ set, get, ...params }),
+    cancelPublication: (params: PublishParams) => cancelPublication({ set, get, ...params }),
   };
 };

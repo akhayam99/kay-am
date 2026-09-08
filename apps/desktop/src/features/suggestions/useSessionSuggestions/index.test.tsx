@@ -10,7 +10,7 @@ const { store, worktreeStatus } = vi.hoisted(() => ({
     sessionPhaseRuns: {} as Record<string, ReadonlyArray<unknown>>,
     planConsumptions: {} as Record<string, ReadonlyArray<unknown>>,
     sessionGithub: {} as Record<string, unknown>,
-    sessionPendingResolutions: {} as Record<string, ReadonlyArray<unknown>>,
+    sessionResolveThreads: {} as Record<string, ReadonlyArray<unknown>>,
     sessionProjectMounts: {
       'session-1': [{ projectId: 'api', mountName: 'API', worktreePath: '/api', branch: 'feat' }],
     } as Record<string, ReadonlyArray<Record<string, string>>>,
@@ -34,15 +34,6 @@ vi.mock('../../workflows/useAttachedWorkflowRuns', () => ({
 
 vi.mock('../../workflows/useWorkflowAdvanceStates', () => ({
   useWorkflowAdvanceStates: () => new Map(),
-}));
-
-vi.mock('../../session/hooks/useResolverIndex', () => ({
-  useResolverIndex: () => ({
-    links: [],
-    byThreadId: new Map(),
-    byCommentUrl: new Map(),
-    byDiffAgentId: new Map(),
-  }),
 }));
 
 vi.mock('../../worktree/worktree', () => ({ worktreeStatus }));

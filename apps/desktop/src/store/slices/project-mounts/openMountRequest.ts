@@ -12,25 +12,11 @@ export type OpenMountRequestInput = {
 
 type StudioParams = {
   readonly mountId: MountId;
-  readonly provider: MountPullRequestProvider;
-  readonly requestNumber: number | undefined;
-  readonly threadId: string | undefined;
+  readonly provider: Exclude<MountPullRequestProvider, 'github'>;
 };
 
-const studioFor = ({ mountId, provider, requestNumber, threadId }: StudioParams): SessionStudio => {
-  if (provider === 'gitlab') {
-    return { kind: 'mr', mountId };
-  }
-  if (provider === 'bitbucket') {
-    return { kind: 'bitbucket', mountId };
-  }
-  return {
-    kind: 'github',
-    mountId,
-    ...(requestNumber === undefined ? {} : { prNumber: requestNumber }),
-    ...(threadId === undefined ? {} : { threadId }),
-  };
-};
+const studioFor = ({ mountId, provider }: StudioParams): SessionStudio =>
+  provider === 'gitlab' ? { kind: 'mr', mountId } : { kind: 'bitbucket', mountId };
 
 export const openMountRequest = (_set: SetFn, get: GetFn) => {
   return async ({
@@ -43,6 +29,24 @@ export const openMountRequest = (_set: SetFn, get: GetFn) => {
     await get()
       .setSessionActiveMount({ sessionId, mountId })
       .catch(() => undefined);
-    get().setSessionStudio(sessionId, studioFor({ mountId, provider, requestNumber, threadId }));
+    if (provider !== 'github') {
+      get().setSessionStudio(sessionId, studioFor({ mountId, provider }));
+      return;
+    }
+    if (requestNumber !== undefined) {
+      await get()
+        .selectSessionPr(sessionId, requestNumber, mountId)
+        .catch(() => undefined);
+    }
+    get().setReviewLensIntent({
+      intent: {
+        sessionId,
+        ...(threadId === undefined ? {} : { threadId }),
+        ...(requestNumber === undefined
+          ? { mode: 'create_pr' as const }
+          : { prNumber: requestNumber }),
+      },
+    });
+    get().setActiveLens(sessionId, 'review');
   };
 };

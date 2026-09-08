@@ -75,7 +75,7 @@ describe('shortcut dispatcher on darwin', () => {
   it('does not confuse two combos that differ only by a modifier', () => {
     const onResolve = vi.fn();
     const onReload = vi.fn();
-    bind('lens.resolve', onResolve);
+    bind('lens.review', onResolve);
     bind('app.reload', onReload);
 
     press({ key: 'r', code: 'KeyR', metaKey: true });
@@ -155,7 +155,7 @@ describe('shortcut dispatcher off darwin', () => {
   it('still separates two combos that differ only by a modifier', () => {
     const onResolve = vi.fn();
     const onReload = vi.fn();
-    bind('lens.resolve', onResolve);
+    bind('lens.review', onResolve);
     bind('app.reload', onReload);
 
     press({ key: 'r', code: 'KeyR', ctrlKey: true });

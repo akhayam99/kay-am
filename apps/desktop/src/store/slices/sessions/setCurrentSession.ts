@@ -223,7 +223,6 @@ export const setCurrentSession = (set: SetFn, get: GetFn) => {
                 { sessionId: id },
               );
             });
-          void get().loadPendingResolutions(id);
 
           if (!get().selectedAgentId[id]) {
             set((state) => ({

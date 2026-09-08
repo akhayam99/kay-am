@@ -3,24 +3,23 @@ import type { PrComment, PullRequestState } from '@goodboy/types';
 import { Button, EmptyState, cn } from '@goodboy/ui';
 import { ExternalLink } from 'lucide-react';
 import { type CommentThread, groupThreads, threadPriority } from '../../comment-threads';
-import type { ResolverLink } from '../../../session/resolver-linkage';
 import { CONCEPT_ICONS, CONCEPT_TONE, ICON_SIZE } from '../../../../shared/components/conceptIcons';
 import { ConversationThread } from './ConversationThread';
 
 type Props = {
   readonly comments: ReadonlyArray<PrComment>;
   readonly pr: PullRequestState;
-  readonly resolverFor?: (thread: CommentThread) => ResolverLink | undefined;
   readonly scrollToThreadId?: string | null;
   readonly onOpenUrl: (url: string) => void;
+  readonly onFix?: (thread: CommentThread) => void;
 };
 
 export const PrConversation = ({
   comments,
   pr,
-  resolverFor,
   scrollToThreadId = null,
   onOpenUrl,
+  onFix,
 }: Props) => {
   const threads = useMemo(() => {
     const all = groupThreads(comments);
@@ -90,7 +89,11 @@ export const PrConversation = ({
                 tid && tid === flashThreadId ? 'ring-2 ring-accent/60' : '',
               )}
             >
-              <ConversationThread thread={t} link={resolverFor?.(t)} onOpenUrl={onOpenUrl} />
+              <ConversationThread
+                thread={t}
+                onOpenUrl={onOpenUrl}
+                {...(onFix !== undefined && { onFix: () => onFix(t) })}
+              />
             </li>
           );
         })}

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { ResolveThread, SessionId } from '@goodboy/types';
+import type {
+  ResolvePublication,
+  ResolvePublicationThread,
+  ResolveThread,
+  SessionId,
+} from '@goodboy/types';
 import { makeTestDatabase } from '../../test-helpers/test-db';
 import { migrate } from '../../migrations/runner';
 import { migrations } from '../../migrations';
@@ -11,6 +16,14 @@ import {
   setResolveAttemptPhase,
 } from '../resolve-attempt';
 import { commitResolveImport, hasResolveImport } from '../resolve-import';
+import {
+  insertResolvePublication,
+  listActiveResolvePublications,
+  listResolvePublicationThreads,
+  listResolvePublicationsForSession,
+  setResolvePublicationPhase,
+  upsertResolvePublicationThread,
+} from '../resolve-publication';
 
 const SESSION = 'session' as SessionId;
 const seed = async () => {
@@ -188,7 +201,12 @@ describe('durable resolve rows', () => {
       githubResolved: null,
       closedAt: null,
     });
-    expect(await db.select('SELECT id FROM pending_resolutions')).toHaveLength(5);
+    expect(rows).toHaveLength(5);
+    expect(
+      await db.select(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'pending_resolutions'",
+      ),
+    ).toEqual([]);
   });
 
   it('rejects a stale state revision without losing the newer draft', async () => {
@@ -292,5 +310,127 @@ describe('durable resolve rows', () => {
     });
     await commitResolveImport({ db, sessionId: SESSION, version: 1, rows: [row] });
     expect((await listResolveThreads({ db, sessionId: SESSION }))[0]?.replyDraft).toBe('New reply');
+  });
+});
+
+describe('resolve publications', () => {
+  const publication: ResolvePublication = {
+    id: 'pub-1',
+    sessionId: SESSION,
+    repo: 'acme/web',
+    prNumber: 248,
+    branch: 'feature/retry',
+    localHead: 'aaaa111',
+    remoteHead: '9f8e7d6',
+    commitShas: ['aaaa111', 'bbbb222'],
+    requiresPush: true,
+    phase: 'previewed',
+    pushedHead: null,
+    confirmedAt: null,
+    completedAt: null,
+    error: null,
+    createdAt: 10,
+  };
+  const publicationThread: ResolvePublicationThread = {
+    publicationId: 'pub-1',
+    threadId: 'PRRT_1',
+    revision: 3,
+    priorState: 'fixed',
+    replyBody: 'Fixed in aaaa111',
+    replyPhase: 'pending',
+    replyId: null,
+    replyPostedAt: null,
+    resolvePhase: 'pending',
+    resolvedAt: null,
+    error: null,
+  };
+
+  it('round-trips a publication with its per-thread receipts', async () => {
+    const db = await seed();
+    await migrate(db);
+    await insertResolvePublication({ db, publication });
+    await upsertResolvePublicationThread({ db, thread: publicationThread });
+    expect(await listResolvePublicationsForSession({ db, sessionId: SESSION })).toEqual([
+      publication,
+    ]);
+    expect(await listResolvePublicationThreads({ db, publicationId: 'pub-1' })).toEqual([
+      publicationThread,
+    ]);
+  });
+
+  it('moves a thread from pending to a posted receipt without losing the frozen body', async () => {
+    const db = await seed();
+    await migrate(db);
+    await insertResolvePublication({ db, publication });
+    await upsertResolvePublicationThread({ db, thread: publicationThread });
+    await upsertResolvePublicationThread({
+      db,
+      thread: {
+        ...publicationThread,
+        replyPhase: 'posted',
+        replyId: 'IC_1',
+        replyPostedAt: 99,
+        resolvePhase: 'resolved',
+        resolvedAt: 100,
+      },
+    });
+    const stored = await listResolvePublicationThreads({ db, publicationId: 'pub-1' });
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({
+      replyBody: 'Fixed in aaaa111',
+      replyPhase: 'posted',
+      replyId: 'IC_1',
+      resolvePhase: 'resolved',
+      resolvedAt: 100,
+    });
+  });
+
+  it('only counts an in-flight publication of the same pull request as active', async () => {
+    const db = await seed();
+    await migrate(db);
+    await insertResolvePublication({ db, publication });
+    expect(
+      await listActiveResolvePublications({ db, repo: 'acme/web', prNumber: 248 }),
+    ).toHaveLength(0);
+    await setResolvePublicationPhase({ db, id: 'pub-1', phase: 'pushing' });
+    expect(await listActiveResolvePublications({ db, repo: 'acme/web', prNumber: 248 })).toEqual([
+      { ...publication, phase: 'pushing' },
+    ]);
+    expect(
+      await listActiveResolvePublications({ db, repo: 'acme/web', prNumber: 999 }),
+    ).toHaveLength(0);
+    await setResolvePublicationPhase({ db, id: 'pub-1', phase: 'finished' });
+    expect(
+      await listActiveResolvePublications({ db, repo: 'acme/web', prNumber: 248 }),
+    ).toHaveLength(0);
+  });
+
+  it('records the pushed head and stamps completion only on a terminal phase', async () => {
+    const db = await seed();
+    await migrate(db);
+    await insertResolvePublication({ db, publication });
+    await setResolvePublicationPhase({
+      db,
+      id: 'pub-1',
+      phase: 'pushed',
+      pushedHead: 'aaaa111',
+    });
+    const midway = (await listResolvePublicationsForSession({ db, sessionId: SESSION }))[0];
+    expect(midway?.pushedHead).toBe('aaaa111');
+    expect(midway?.completedAt).toBeNull();
+    await setResolvePublicationPhase({ db, id: 'pub-1', phase: 'finished' });
+    const done = (await listResolvePublicationsForSession({ db, sessionId: SESSION }))[0];
+    expect(done?.pushedHead).toBe('aaaa111');
+    expect(done?.completedAt).not.toBeNull();
+  });
+
+  it('drops publications and their receipts when the session is deleted', async () => {
+    const db = await seed();
+    await migrate(db);
+    await insertResolvePublication({ db, publication });
+    await upsertResolvePublicationThread({ db, thread: publicationThread });
+    await db.execute('DELETE FROM sessions WHERE id = ?', [SESSION]);
+    expect(await listResolvePublicationsForSession({ db, sessionId: SESSION })).toEqual([]);
+    expect(await listResolvePublicationThreads({ db, publicationId: 'pub-1' })).toEqual([]);
   });
 });

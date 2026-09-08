@@ -167,7 +167,7 @@ function buildHarness(
     sessionPlans: { [SESSION_ID]: plans },
     planConsumptions: {},
     activeLens: { [SESSION_ID]: 'agents' },
-    sessionStudio: { [SESSION_ID]: { kind: 'github' } },
+    sessionStudio: { [SESSION_ID]: { kind: 'workflow' } },
     selectedAgentId: {},
     agentTurnState: {},
     workspaceOverrides: {
@@ -220,7 +220,7 @@ describe('spawnAgent focus', () => {
     await spawn(SESSION_ID, { name: 'quiet spawn' });
 
     expect(getState().selectedAgentId[SESSION_ID]).toBeUndefined();
-    expect(getState().sessionStudio[SESSION_ID]).toEqual({ kind: 'github' });
+    expect(getState().sessionStudio[SESSION_ID]).toEqual({ kind: 'workflow' });
   });
 
   it('routes an explicit focus through the work surface, closing the studio', async () => {

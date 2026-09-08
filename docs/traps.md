@@ -28,13 +28,13 @@ below has been "fixed" at least once and had to be put back.
   also not the union the pull-request surfaces switch on. That one is
   `PullRequestProvider`, which already carries `'bitbucket'`, so Bitbucket
   pull requests do not need a `RemoteHostKind` member to work.
-- `pending_resolutions` is a durable SQLite queue (migration `m052`), not the
-  canonical verdict history. Later migrations add the reply, outcome, and
-  reply-posted state needed to retry delivery. Rows survive a restart and are
-  deleted once consumed, so do not read a row's absence as a verdict.
-  `hydrateResolverOutcomes` rebuilds in-memory verdicts by replaying persisted
-  assistant messages for top-level resolver agents and parsing their outcome
-  markers.
+- `resolve_threads` is the only verdict history. Migration `m140` moved every
+  `pending_resolutions` row into it and `m143` dropped that table, so nothing
+  reads a separate queue any more and a row's state is the answer. In-memory
+  verdicts are derived from the row through `threadOutcome`, never rebuilt by
+  replaying assistant messages; marker parsing writes rows, it does not own
+  them. `resolve_publications` and `resolve_publication_threads` carry
+  delivery, which is what makes an interrupted publish resumable.
 - `RoutingPicker.onModel(model)` carries only the model string, not the
   provider selected in the picker. A consumer that rebuilds a provider-model
   pair from values captured by an earlier render can therefore commit the old

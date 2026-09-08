@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Goodboy",
-  "version": "0.2.19",
+  "version": "0.2.20",
   "identifier": "com.goodboy.desktop",
   "build": {
     "frontendDist": "../dist",

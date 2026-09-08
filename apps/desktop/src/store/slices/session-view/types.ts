@@ -15,6 +15,7 @@ import type {
   SessionViewPrefs,
   WorkspaceId,
 } from '@goodboy/types';
+import type { ReviewMode } from '../../../features/review/reviewMode';
 
 export type { SetFn, GetFn } from '../../slice-types';
 
@@ -71,14 +72,16 @@ export type FocusedExternalTask = {
   readonly projectId: ProjectId | null;
 };
 
+export type ReviewLensIntent = {
+  readonly sessionId: SessionId;
+  readonly threadId?: string;
+  readonly attemptId?: string;
+  readonly prNumber?: number;
+  readonly mode?: ReviewMode;
+};
+
 export type SessionStudio =
   | { readonly kind: 'workflow' }
-  | {
-      readonly kind: 'github';
-      readonly mountId?: MountId;
-      readonly prNumber?: number;
-      readonly threadId?: string;
-    }
   | { readonly kind: 'mr'; readonly mountId?: MountId }
   | { readonly kind: 'bitbucket'; readonly mountId?: MountId };
 
@@ -129,10 +132,7 @@ export type SessionCreation = {
 
 type SessionViewSliceState = {
   readonly scriptsLensScope: { readonly projectId: ProjectId } | null;
-  readonly reviewLensIntent: {
-    readonly sessionId: SessionId;
-    readonly agentId: AgentId;
-  } | null;
+  readonly reviewLensIntent: ReviewLensIntent | null;
   readonly sessionViewPrefs: Readonly<Record<WorkspaceId, SessionViewPrefs>>;
   readonly activeLens: Readonly<Record<SessionId, LensKind | null>>;
   readonly lensHistory: Readonly<Record<SessionId, LensHistory>>;
@@ -149,9 +149,7 @@ type SessionViewSliceState = {
 
 type SessionViewSliceActions = {
   setScriptsLensScope(params: { readonly scope: { readonly projectId: ProjectId } | null }): void;
-  setReviewLensIntent(params: {
-    readonly intent: { readonly sessionId: SessionId; readonly agentId: AgentId } | null;
-  }): void;
+  setReviewLensIntent(params: { readonly intent: ReviewLensIntent | null }): void;
   getSessionViewPrefs(workspaceId: WorkspaceId): SessionViewPrefs;
   setSessionSort(workspaceId: WorkspaceId, sort: SessionSortKey): void;
   setSessionGroup(workspaceId: WorkspaceId, group: SessionGroupKey): void;

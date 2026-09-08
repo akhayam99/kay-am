@@ -2,7 +2,7 @@ import { Divider, EmptyState, Skeleton } from '@goodboy/ui';
 import type { FileDiff } from '@goodboy/types';
 import { CONCEPT_ICONS, CONCEPT_TONE } from '../../../../../shared/components/conceptIcons';
 import { ErrorStrip } from '@goodboy/ui';
-import { ReviewFileDiff } from '../../../../review/components/ReviewBoardPane/ReviewFileDiff';
+import { ReviewFileDiff } from '../../../../review/components/ReviewPane/WriteReview/ReviewFileDiff';
 import { EMPTY_ARRAY } from '../../../../../store';
 
 type Props = {
