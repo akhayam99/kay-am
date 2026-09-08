@@ -7,6 +7,68 @@ version in the same PR that bumps the version numbers (see
 `docs/release-command.md`), before the tag is pushed: the release build fails
 if it can't find a matching `## Goodboy vX.Y.Z` heading.
 
+## Goodboy v0.2.20
+
+Review is one surface. The conversation list stays on screen from Fix
+through Publish, a pull request no longer has five destinations, and
+everything you send back to GitHub goes out through a single publisher
+that shows you the exact replies and commits before it posts anything.
+The old pending resolutions storage is gone with the layer that kept
+it alive.
+
+### [#1694] One publisher for review conversations
+
+Replying to review comments used to be spread across several paths
+that each pushed and posted on their own terms, so a failed push could
+still leave threads closed against code that never reached the remote.
+There is one publisher now. It freezes a preview of the exact reply
+bodies and the exact commits that are about to go out, verifies every
+commit it claims to be sending is really an ancestor of your branch
+head, pushes first, and confirms the remote head actually moved to the
+pushed commit before a single reply is posted. If a required push
+fails, nothing is closed and nothing is sent. A publication survives a
+restart with its per thread receipts, so retrying reconciles what is
+uncertain against the pull request first and never posts the same
+reply twice. Two sessions working on the same pull request take turns
+rather than racing.
+
+### [#1695] Review keeps the conversation list on screen
+
+Review was a set of sub-tabs you left behind the moment you acted:
+threads in one place, resolvers in another, pending resolutions in a
+strip, decisions behind per thread menus. It is now one surface. The
+conversation list stays put from Fix through Publish, with a detail
+pane beside it and a publication dock at the foot that shows what is
+being sent and reports when the work is done. Conversations are
+grouped and ordered by what they need from you, and the status behind
+each one is decoded in a single place instead of being reinvented by
+every badge. The combined fix attempt is finally what its name says:
+threads are grouped by file and split when a group gets too large for
+one agent to hold, so you get one agent per file rather than one per
+comment. A combined agent that stops to ask you a question no longer
+drags its siblings down with it, and answering resumes only the
+threads that were still waiting.
+
+### [#1696] One destination for a pull request
+
+A pull request used to live in as many places as you had ways to open
+it, including a separate GitHub overlay that duplicated half of
+Review. Details, activity, checks, writing a review and creating a
+pull request are now modes of the Review surface, and every entry
+point lands there. Local notes moved into PR activity, where you would
+look for them. Drafting a pull request for a session that has none
+happens inline. Repositories on GitLab, Bitbucket and unrecognized
+remotes still open on their own code host.
+
+### [#1697] The pending resolutions layer is removed
+
+The compatibility layer that kept the old resolver code compiling
+alongside the new one is gone, along with the `pending_resolutions`
+table it stored into. Impact metrics now count from the durable
+conversation records directly, and the upgrade path is pinned by a
+test that runs the full migration chain from an older database and
+checks that every existing row comes through intact.
+
 ## Goodboy v0.2.19
 
 Workflow Studio can import a custom workflow from another workspace,
