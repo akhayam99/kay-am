@@ -68,12 +68,14 @@ export const ResolveItemContainer = ({
   const [instruction, setInstruction] = useState('');
   const [isBusy, setIsBusy] = useState(false);
   const [isCheckRunning, setIsCheckRunning] = useState(false);
+  const [unprovable, setUnprovable] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setReply(row.proposal ?? '');
     setInstruction('');
     setError(null);
+    setUnprovable(null);
   }, [row.proposal, row.thread.threadId]);
 
   useEffect(() => {
@@ -157,6 +159,7 @@ export const ResolveItemContainer = ({
     }
     setIsCheckRunning(true);
     setError(null);
+    setUnprovable(null);
     void runResolveCheck({
       sessionId,
       candidateId: candidate.id,
@@ -165,6 +168,7 @@ export const ResolveItemContainer = ({
       testIdentity: null,
       breadth: 'full',
     })
+      .then((pair) => setUnprovable(pair.unprovable))
       .catch((caught: unknown) => setError(formatError(caught)))
       .finally(() => setIsCheckRunning(false));
   };
@@ -184,6 +188,7 @@ export const ResolveItemContainer = ({
       canAccept={row.status === 'for_you' || row.status === 'changed_since_accepted'}
       canRunCheck={candidate !== null && checkScript !== null}
       isCheckRunning={isCheckRunning}
+      checksNote={unprovable}
       error={error}
       hasPrevious={neighbours.previousThreadId !== null}
       hasNext={neighbours.nextThreadId !== null}

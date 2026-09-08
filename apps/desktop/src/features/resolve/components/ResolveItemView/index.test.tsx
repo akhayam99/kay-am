@@ -108,6 +108,7 @@ const renderView = (overrides: Partial<Parameters<typeof ResolveItemView>[0]> = 
       instruction=""
       isBusy={false}
       canAccept
+      checksNote={null}
       canRunCheck={false}
       isCheckRunning={false}
       error={null}

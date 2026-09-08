@@ -237,6 +237,8 @@ pub fn run() {
             worktree::worktree_remote_head,
             worktree::worktree_diff_commit,
             worktree::worktree_diff_range,
+            worktree::worktree_scratch_add,
+            worktree::worktree_scratch_remove,
             worktree::worktree_amend_commit,
             worktree::worktree_squash_commits,
             worktree::worktree_diff_working,

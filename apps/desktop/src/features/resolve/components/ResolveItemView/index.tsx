@@ -27,6 +27,7 @@ type Props = {
   readonly canAccept: boolean;
   readonly canRunCheck: boolean;
   readonly isCheckRunning: boolean;
+  readonly checksNote: string | null;
   readonly error: string | null;
   readonly hasPrevious: boolean;
   readonly hasNext: boolean;
@@ -58,6 +59,7 @@ export const ResolveItemView = ({
   canAccept,
   canRunCheck,
   isCheckRunning,
+  checksNote,
   error,
   hasPrevious,
   hasNext,
@@ -131,6 +133,7 @@ export const ResolveItemView = ({
         checks={checks}
         canRunCheck={canRunCheck}
         isRunning={isCheckRunning}
+        note={checksNote}
         onRunCheck={onRunCheck}
       />
       <Divider />

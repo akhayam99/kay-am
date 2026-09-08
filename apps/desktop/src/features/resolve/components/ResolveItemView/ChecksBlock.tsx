@@ -11,10 +11,11 @@ type Props = {
   readonly checks: ResolveChecksSummary;
   readonly canRunCheck: boolean;
   readonly isRunning: boolean;
+  readonly note: string | null;
   readonly onRunCheck: () => void;
 };
 
-export const ChecksBlock = ({ checks, canRunCheck, isRunning, onRunCheck }: Props) => (
+export const ChecksBlock = ({ checks, canRunCheck, isRunning, note, onRunCheck }: Props) => (
   <div className="flex min-w-0 flex-col gap-2">
     <p className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
       {RESOLVE_ITEM_LABEL.checks}
@@ -60,10 +61,11 @@ export const ChecksBlock = ({ checks, canRunCheck, isRunning, onRunCheck }: Prop
         ))}
       </ul>
     )}
+    {note !== null && <p className="text-2xs text-warning">{note}</p>}
     {canRunCheck && (
       <div>
         <Button size="sm" variant="ghost" disabled={isRunning} onClick={onRunCheck}>
-          {RESOLVE_ITEM_LABEL.runOnCurrentCode}
+          {isRunning ? RESOLVE_ITEM_LABEL.checkRunning : RESOLVE_ITEM_LABEL.runBothTrees}
         </Button>
       </div>
     )}

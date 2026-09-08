@@ -411,6 +411,32 @@ export const worktreeDiffRange = async ({
   return invoke<string>('worktree_diff_range', { worktreePath, base, head });
 };
 
+export type ScratchAddParams = {
+  readonly worktreePath: string;
+  readonly sha: string;
+  readonly slug: string;
+};
+
+export const worktreeScratchAdd = async ({
+  worktreePath,
+  sha,
+  slug,
+}: ScratchAddParams): Promise<string> => {
+  return invoke<string>('worktree_scratch_add', { worktreePath, sha, slug });
+};
+
+export type ScratchRemoveParams = {
+  readonly worktreePath: string;
+  readonly scratchPath: string;
+};
+
+export const worktreeScratchRemove = async ({
+  worktreePath,
+  scratchPath,
+}: ScratchRemoveParams): Promise<void> => {
+  return invoke<void>('worktree_scratch_remove', { worktreePath, scratchPath });
+};
+
 export type RewrittenHead = {
   readonly sha: string;
   readonly shortSha: string;

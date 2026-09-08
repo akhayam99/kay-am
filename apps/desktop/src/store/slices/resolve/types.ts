@@ -3,13 +3,13 @@ import type {
   AgentId,
   ResolveAttemptPhase,
   ResolveCheckBreadth,
-  ResolveCheckRun,
   ResolvePublicationPreview,
   ResolveThread,
   ResolveUncapturedWork,
   SessionId,
 } from '@goodboy/types';
 import type { PublishConversationsResult } from './publishConversations';
+import type { ResolveCheckPair } from './runResolveCheck';
 import type { GetFn, SetFn } from '../../slice-types';
 
 export type { GetFn, SetFn } from '../../slice-types';
@@ -108,7 +108,7 @@ export type ResolveActions = {
   readonly recordResolvePhase: (params: PhaseParams) => Promise<void>;
   readonly beginResolveCandidate: (params: CandidateBeginParams) => Promise<void>;
   readonly captureResolveCandidate: (params: CandidateCaptureParams) => Promise<string | null>;
-  readonly runResolveCheck: (params: CheckRunParams) => Promise<ResolveCheckRun>;
+  readonly runResolveCheck: (params: CheckRunParams) => Promise<ResolveCheckPair>;
   readonly invalidateIntegratedApprovals: (params: SessionParams) => Promise<number>;
   readonly recoverUncapturedResolveWork: (
     params: SessionParams,
