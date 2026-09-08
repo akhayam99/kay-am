@@ -6,7 +6,6 @@ export type Props = {
   readonly count: number;
   readonly isShown: boolean;
   readonly icon: LucideIcon;
-  readonly itemsLabel: string;
   readonly onChange: (isShown: boolean) => void;
 };
 

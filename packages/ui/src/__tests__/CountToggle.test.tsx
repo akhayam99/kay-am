@@ -15,7 +15,6 @@ describe('CountToggle', () => {
         count={0}
         isShown={false}
         icon={CircleCheck}
-        itemsLabel="agents"
         onChange={vi.fn()}
       />,
     );
@@ -31,7 +30,6 @@ describe('CountToggle', () => {
         count={3}
         isShown={false}
         icon={CircleCheck}
-        itemsLabel="agents"
         onChange={onChange}
       />,
     );
@@ -49,7 +47,6 @@ describe('CountToggle', () => {
         count={2}
         isShown={true}
         icon={CircleCheck}
-        itemsLabel="questions"
         onChange={vi.fn()}
       />,
     );
