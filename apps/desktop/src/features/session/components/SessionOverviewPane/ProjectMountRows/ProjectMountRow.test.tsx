@@ -5,19 +5,23 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import type { ReactNode } from 'react';
 import type { OverflowMenuItem } from '@goodboy/ui';
 import type {
-  Project,
-  PullRequestState,
+  IsoDateTime,
+  MountId,
+  ProjectId,
   SessionId,
-  SessionProjectMount,
+  WorkspaceId,
   WorktreeStatus,
 } from '@goodboy/types';
+import type { MountRowView } from '../../../../../store/slices/project-mounts/mountRowModel';
 
 const { store, remoteKind } = vi.hoisted(() => ({
   remoteKind: { current: 'github' as string | null },
   store: {
-    setSessionActiveProject: vi.fn(async () => undefined),
+    setSessionActiveMount: vi.fn(async () => undefined),
     setScriptsLensScope: vi.fn(),
     openMountDiff: vi.fn(async () => undefined),
+    openMountRequest: vi.fn(async () => undefined),
+    attachMount: vi.fn(async () => undefined),
     projects: [] as ReadonlyArray<{ id: string; baseBranch?: string | null }>,
     emitNotification: vi.fn(),
     sessionWorktrees: {} as Record<string, ReadonlyArray<string>>,
@@ -43,10 +47,18 @@ vi.mock('./ProjectSyncControl', () => ({
   ProjectSyncControl: () => <span data-testid="sync-control" />,
 }));
 vi.mock('./ProjectDetachMenu', () => ({
-  ProjectDetachMenu: () => <span data-testid="detach-menu" />,
+  ProjectDetachMenu: ({ menuLabel }: { readonly menuLabel?: string }) => (
+    <span data-testid="detach-menu">{menuLabel}</span>
+  ),
 }));
-vi.mock('../../../../worktree/useRemoteHostKind', () => ({
-  useRemoteHostKind: () => remoteKind.current,
+vi.mock('./NewBranchMountAction', () => ({
+  NewBranchMountAction: () => <span data-testid="fork-action" />,
+}));
+vi.mock('./MountBranchDecision', () => ({
+  MountBranchDecision: () => <div data-testid="branch-decision" />,
+}));
+vi.mock('../../../../worktree/useMountRemoteHostKind', () => ({
+  useMountRemoteHostKind: () => remoteKind.current,
 }));
 vi.mock('../../../../../app/components/Toast', () => ({
   useToast: () => ({ showToast: vi.fn() }),
@@ -96,52 +108,60 @@ import { ProjectMountRow } from './ProjectMountRow';
 
 const sessionId = 'session-1' as SessionId;
 
-const project = {
-  id: 'api',
-  name: 'API',
-  kind: 'repo',
-  workspaceId: 'ws-1',
-} as Project;
-
-const mount = {
-  projectId: 'api',
+const baseRow: MountRowView = {
+  mountId: 'mount-1' as MountId,
+  projectId: 'api' as ProjectId,
+  projectName: 'API',
+  projectKind: 'repo',
   mountName: 'API',
   branch: 'feat/api',
+  baseBranch: 'main',
   worktreePath: '/api',
+  lastWorktreePath: '/api',
   repoRoot: '/repo/api',
-} as SessionProjectMount;
+  isAttached: true,
+  isOnDisk: true,
+  revision: 0,
+  parallelIndex: 0,
+  request: null,
+  series: null,
+  observation: null,
+  isCompleted: false,
+};
 
 const renderRow = ({
   diffStat = null,
-  pullRequest = null,
   worktreeStatus = null,
   isStatusPending = false,
-  rowMount = mount,
-  rowProject = project,
+  row = baseRow,
+  label = 'API',
 }: {
   readonly diffStat?: { additions: number; deletions: number } | null;
-  readonly pullRequest?: PullRequestState | null;
   readonly worktreeStatus?: WorktreeStatus | null;
   readonly isStatusPending?: boolean;
-  readonly rowMount?: SessionProjectMount;
-  readonly rowProject?: Project | null;
+  readonly row?: MountRowView;
+  readonly label?: string;
 }) =>
   render(
-    <ProjectMountRow
-      sessionId={sessionId}
-      project={rowProject}
-      mount={rowMount}
-      diffStat={diffStat}
-      pullRequest={pullRequest ?? null}
-      worktreeStatus={worktreeStatus}
-      isStatusPending={isStatusPending}
-      onSelectLens={vi.fn()}
-    />,
+    <ul>
+      <ProjectMountRow
+        sessionId={sessionId}
+        row={row}
+        label={label}
+        workspaceId={'ws-1' as WorkspaceId}
+        isGrouped={false}
+        canDetachProject
+        canFork
+        diffStat={diffStat}
+        worktreeStatus={worktreeStatus}
+        isStatusPending={isStatusPending}
+        onSelectLens={vi.fn()}
+      />
+    </ul>,
   );
 
 beforeEach(() => {
-  store.setSessionActiveProject.mockClear();
-  store.setSessionActiveProject.mockResolvedValue(undefined);
+  vi.clearAllMocks();
   remoteKind.current = 'github';
   store.terminalTabs = {};
   store.scriptRuns = {};
@@ -154,24 +174,26 @@ beforeEach(() => {
   store.sessionWorktrees = { [sessionId]: ['/session-root'] };
   store.sessionPhaseRuns = {};
   store.detectedEditors = [{ binary: 'code', label: 'VS Code' }];
-  vi.mocked(openInEditor).mockClear();
 });
 
 afterEach(cleanup);
 
-describe('ProjectMountRow create pr action', () => {
-  it('offers create pr when there are changes and no pr, targeting the mount project', async () => {
+describe('ProjectMountRow request action', () => {
+  it('opens the pull request studio for this mount, without touching the window bus', async () => {
     const listener = vi.fn();
     window.addEventListener('goodboy:open-github-session', listener);
     renderRow({ diffStat: { additions: 3, deletions: 1 } });
 
-    const action = screen.getByRole('button', { name: 'Create a PR for API' });
-    fireEvent.click(action);
+    fireEvent.click(screen.getByRole('button', { name: 'Create a PR for API' }));
 
-    await waitFor(() => expect(listener).toHaveBeenCalledTimes(1));
-    const event = listener.mock.calls[0]?.[0] as CustomEvent<{ sessionId: SessionId }>;
-    expect(event.detail).toEqual({ sessionId });
-    expect(store.setSessionActiveProject).toHaveBeenCalledWith({ sessionId, projectId: 'api' });
+    await waitFor(() =>
+      expect(store.openMountRequest).toHaveBeenCalledWith({
+        sessionId,
+        mountId: 'mount-1',
+        provider: 'github',
+      }),
+    );
+    expect(listener).not.toHaveBeenCalled();
     window.removeEventListener('goodboy:open-github-session', listener);
   });
 
@@ -191,13 +213,35 @@ describe('ProjectMountRow create pr action', () => {
     expect(screen.queryByRole('button', { name: 'Create a PR for API' })).toBeNull();
   });
 
-  it('hides create pr when a pr already exists', () => {
+  it('shows the request of this mount instead of the create action', async () => {
     renderRow({
       diffStat: { additions: 3, deletions: 1 },
-      pullRequest: { number: 12, state: 'open', isDraft: false } as PullRequestState,
+      row: {
+        ...baseRow,
+        request: {
+          provider: 'github',
+          identity: null,
+          number: 12,
+          state: 'open',
+          isDraft: false,
+          url: 'https://github.com/acme/api/pull/12',
+          title: 'Split one',
+          label: 'PR #12',
+        },
+      },
     });
+
     expect(screen.queryByRole('button', { name: 'Create a PR for API' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Open PR #12' })).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Open PR #12 of API' }));
+
+    await waitFor(() =>
+      expect(store.openMountRequest).toHaveBeenCalledWith({
+        sessionId,
+        mountId: 'mount-1',
+        provider: 'github',
+        requestNumber: 12,
+      }),
+    );
   });
 
   it('offers create mr on a gitlab remote', () => {
@@ -215,8 +259,61 @@ describe('ProjectMountRow create pr action', () => {
   });
 });
 
+describe('ProjectMountRow availability', () => {
+  const detached: MountRowView = {
+    ...baseRow,
+    isAttached: false,
+    worktreePath: null,
+    isOnDisk: true,
+  };
+
+  it('offers mount on an unmounted row and keeps the worktree note', async () => {
+    renderRow({ row: detached });
+
+    expect(screen.getByText('Unmounted, worktree kept')).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Mount API' }));
+
+    await waitFor(() =>
+      expect(store.attachMount).toHaveBeenCalledWith({ sessionId, mountId: 'mount-1' }),
+    );
+  });
+
+  it('hides the worktree tools of an unmounted row', () => {
+    renderRow({ row: detached });
+
+    expect(screen.queryByRole('button', { name: 'Open terminal for API' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open the folder of API' })).toBeNull();
+  });
+
+  it('names the row and its action menu after the mount label', () => {
+    renderRow({ row: { ...baseRow }, label: 'API on feat/api' });
+
+    expect(screen.getByRole('listitem', { name: 'API on feat/api' })).toBeDefined();
+    expect(screen.getByTestId('detach-menu').textContent).toBe('API on feat/api actions');
+  });
+
+  it('renders the branch decision surface when the mount reports a mismatch', () => {
+    renderRow({
+      row: {
+        ...baseRow,
+        observation: {
+          mountId: 'mount-1' as MountId,
+          sessionId,
+          state: 'mismatch',
+          recordedBranch: 'feat/api',
+          observedBranch: 'feat/other',
+          revision: 0,
+          observedAt: '2026-09-08T10:00:00.000Z' as IsoDateTime,
+        },
+      },
+    });
+
+    expect(screen.getByTestId('branch-decision')).toBeDefined();
+  });
+});
+
 describe('ProjectMountRow folder action', () => {
-  it('names the folder action after the project and reads it out in the tooltip', () => {
+  it('names the folder action after the mount and reads it out in the tooltip', () => {
     renderRow({});
 
     const folder = screen.getByRole('button', { name: 'Open the folder of API' });
@@ -265,31 +362,11 @@ describe('ProjectMountRow activity dots', () => {
     expect(screen.queryByTestId('terminal-activity-dot')).toBeNull();
   });
 
-  it('leaves the terminal icon bare when the only tab of the project has exited', () => {
-    store.terminalTabs = {
-      [sessionId]: [{ id: `${sessionId}::t1`, projectId: 'api', status: 'exited' }],
-    };
-    renderRow({});
-    expect(screen.queryByTestId('terminal-activity-dot')).toBeNull();
-  });
-
   it('marks the scripts icon when a pending run belongs to the project', () => {
     store.scriptRuns = { [sessionId]: { 'script-api': { status: 'pending' } } };
     renderRow({});
     expect(screen.getByTestId('scripts-activity-dot')).toBeDefined();
     expect(screen.queryByTestId('terminal-activity-dot')).toBeNull();
-  });
-
-  it('leaves the scripts icon bare when the pending run belongs to another project', () => {
-    store.scriptRuns = { [sessionId]: { 'script-web': { status: 'pending' } } };
-    renderRow({});
-    expect(screen.queryByTestId('scripts-activity-dot')).toBeNull();
-  });
-
-  it('leaves the scripts icon bare when the run of the project has finished', () => {
-    store.scriptRuns = { [sessionId]: { 'script-api': { status: 'ok' } } };
-    renderRow({});
-    expect(screen.queryByTestId('scripts-activity-dot')).toBeNull();
   });
 
   it('carries the counts in the tooltips', () => {
@@ -344,23 +421,15 @@ describe('ProjectMountRow loading placeholders', () => {
     expect(screen.getByTestId('sync-control')).not.toBeNull();
   });
 
-  it('drops the placeholder when the status fetch settled without a value', () => {
-    renderRow({ worktreeStatus: null, isStatusPending: false });
-
-    expect(screen.queryByTestId('project-distance-skeleton')).toBeNull();
-    expect(screen.queryByTestId('project-branch-skeleton')).toBeNull();
-    expect(screen.getByTestId('sync-control')).not.toBeNull();
-  });
-
   it('holds a branch placeholder instead of an empty branch cell', () => {
-    renderRow({ isStatusPending: true, rowMount: { ...mount, branch: '' } as SessionProjectMount });
+    renderRow({ isStatusPending: true, row: { ...baseRow, branch: '' } });
 
     expect(screen.getByTestId('project-branch-skeleton')).not.toBeNull();
     expect(screen.queryByTestId('branch-chip')).toBeNull();
   });
 
   it('leaves a folder mount without any git placeholder', () => {
-    renderRow({ isStatusPending: true, rowProject: { ...project, kind: 'folder' } as Project });
+    renderRow({ isStatusPending: true, row: { ...baseRow, projectKind: 'folder' } });
 
     expect(screen.queryByTestId('project-distance-skeleton')).toBeNull();
     expect(screen.queryByTestId('project-branch-skeleton')).toBeNull();

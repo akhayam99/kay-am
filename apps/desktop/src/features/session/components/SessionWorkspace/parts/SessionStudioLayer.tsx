@@ -72,6 +72,7 @@ export const SessionStudioLayer = ({ session, studio, onClose }: Props) => {
             workspaceName={workspaceName}
             initialPrNumber={studio.prNumber ?? null}
             initialThreadId={studio.threadId ?? null}
+            mountId={studio.mountId ?? null}
             onClose={requestClose}
           />
         );

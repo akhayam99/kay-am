@@ -1,11 +1,11 @@
-import { useMemo } from 'react';
-import { useShallow } from 'zustand/react/shallow';
-import type { Session, SessionProjectMount } from '@goodboy/types';
+import { useEffect, useMemo } from 'react';
+import type { Session } from '@goodboy/types';
 import type { LensKind } from '../../../../../store';
-import { EMPTY_ARRAY, useAppStore, useMountDiffStats } from '../../../../../store';
+import { useAppStore, useMountDiffStats } from '../../../../../store';
 import { MountCleanupProposals } from '../MountCleanupProposals';
 import { MountProjectAction } from './MountProjectAction';
-import { ProjectMountRow } from './ProjectMountRow';
+import { ProjectMountGroup } from './ProjectMountGroup';
+import { useMountRows } from './useMountRows';
 import { useWorktreeStatusPending, useWorktreeStatuses } from '../../../hooks/useWorktreeStatuses';
 
 type Props = {
@@ -14,35 +14,35 @@ type Props = {
 };
 
 export const ProjectMountRows = ({ session, onSelectLens }: Props) => {
-  const mounts = useAppStore(
-    (state) =>
-      state.sessionProjectMounts[session.id] ?? (EMPTY_ARRAY as ReadonlyArray<SessionProjectMount>),
-  );
-  const projects = useAppStore(
-    useShallow((state) =>
-      state.projects.filter((project) => project.workspaceId === session.workspaceId),
-    ),
-  );
-  const projectPrs = useAppStore((state) => state.sessionProjectPrs?.[session.id]);
+  const groups = useMountRows({ sessionId: session.id });
+  const loadSessionMounts = useAppStore((state) => state.loadSessionMounts);
+  const loadPrSeries = useAppStore((state) => state.loadPrSeries);
   const diffStats = useMountDiffStats(session.id);
   const worktreeTargets = useMemo(
     () =>
-      mounts.map((mount) => ({
-        worktreePath: mount.worktreePath,
-        baseBranch:
-          projects.find((project) => project.id === mount.projectId)?.baseBranch ?? undefined,
-      })),
-    [mounts, projects],
+      groups.flatMap((group) =>
+        [...group.rows, ...group.completedRows].flatMap((row) =>
+          row.worktreePath === null || !row.isAttached
+            ? []
+            : [{ worktreePath: row.worktreePath, baseBranch: row.baseBranch ?? undefined }],
+        ),
+      ),
+    [groups],
   );
   const worktreeStatuses = useWorktreeStatuses({ targets: worktreeTargets });
   const pendingWorktrees = useWorktreeStatusPending({ targets: worktreeTargets });
+
+  useEffect(() => {
+    void loadSessionMounts({ sessionId: session.id }).catch(() => undefined);
+    void loadPrSeries({ sessionId: session.id }).catch(() => undefined);
+  }, [session.id]);
 
   return (
     <section
       aria-label="Mounted projects"
       className="overflow-hidden rounded-lg border border-border-soft bg-elevated/30"
     >
-      {mounts.length === 0 ? (
+      {groups.length === 0 ? (
         <div className="flex min-h-12 items-center justify-between gap-3 px-3 py-2">
           <span className="text-sm text-muted-foreground">No project mounted yet</span>
           <MountProjectAction
@@ -52,16 +52,14 @@ export const ProjectMountRows = ({ session, onSelectLens }: Props) => {
           />
         </div>
       ) : (
-        mounts.map((mount) => (
-          <ProjectMountRow
-            key={mount.projectId}
+        groups.map((group) => (
+          <ProjectMountGroup
+            key={group.projectId}
             sessionId={session.id}
-            project={projects.find((project) => project.id === mount.projectId) ?? null}
-            mount={mount}
-            diffStat={diffStats.get(mount.worktreePath) ?? null}
-            pullRequest={projectPrs?.[mount.projectId]?.[0] ?? null}
-            worktreeStatus={worktreeStatuses.get(mount.worktreePath) ?? null}
-            isStatusPending={pendingWorktrees.has(mount.worktreePath)}
+            group={group}
+            diffStats={diffStats}
+            worktreeStatuses={worktreeStatuses}
+            pendingWorktrees={pendingWorktrees}
             onSelectLens={onSelectLens}
           />
         ))

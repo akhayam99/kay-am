@@ -1,4 +1,4 @@
-import type { SessionId } from '@goodboy/types';
+import type { MountId, SessionId } from '@goodboy/types';
 import { PrDetailPanel } from '../GitHubStudio/PrDetailPanel';
 import { StudioShell } from '../../../../shared/components/StudioShell';
 import { CONCEPT_ICONS } from '../../../../shared/components/conceptIcons';
@@ -8,6 +8,7 @@ type Props = {
   readonly workspaceName: string;
   readonly initialPrNumber?: number | null;
   readonly initialThreadId?: string | null;
+  readonly mountId?: MountId | null;
   readonly onClose: () => void;
 };
 
@@ -16,6 +17,7 @@ export const GitHubSessionPane = ({
   workspaceName,
   initialPrNumber = null,
   initialThreadId = null,
+  mountId = null,
   onClose,
 }: Props) => (
   <StudioShell
@@ -32,6 +34,7 @@ export const GitHubSessionPane = ({
           sessionId={sessionId}
           initialPrNumber={initialPrNumber}
           initialThreadId={initialThreadId}
+          mountId={mountId}
           onClose={requestClose}
         />
       </div>

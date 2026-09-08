@@ -3,6 +3,7 @@ import { detachProject } from './detachProject';
 import { forkMount } from './forkMount';
 import { inspectMount } from './inspectMount';
 import { loadSessionMounts } from './loadSessionMounts';
+import { openMountRequest } from './openMountRequest';
 import { recoverMountOperations } from './recoverMountOperations';
 import { resolveMountBranchMismatch } from './resolveMountBranchMismatch';
 import { setSessionActiveMount } from './setSessionActiveMount';
@@ -14,6 +15,7 @@ export const createProjectMountsSlice = (set: SetFn, get: GetFn) => {
   return {
     detachProject: detachProject(set, get),
     loadSessionMounts: loadSessionMounts(set, get),
+    openMountRequest: openMountRequest(set, get),
     forkMount: forkMount(set, get),
     switchMount: switchMount(set, get),
     attachMount: attachMount(set, get),

@@ -16,6 +16,8 @@ type Params = {
   isBranchless?: boolean;
   requestLabel?: string;
   prFetchState?: SessionPrFetchState;
+  remainingWork?: number;
+  remainingReason?: string | null;
 };
 
 const isPrLive = (pr: PullRequestState | null): pr is PullRequestState =>
@@ -35,6 +37,8 @@ export const deriveSessionStage = ({
   isBranchless = false,
   requestLabel,
   prFetchState = 'known',
+  remainingWork = 0,
+  remainingReason = null,
 }: Params): SessionStageInfo => {
   const label = requestLabel ?? (pr === null ? '' : `PR #${pr.number}`);
   if (isBranchless) {
@@ -116,11 +120,16 @@ export const deriveSessionStage = ({
   if (pr === null) {
     return { stage: 'building', reason: 'no PR yet', attention: null };
   }
-  if (pr.state === 'merged') {
-    return { stage: 'done', reason: `${label} merged`, attention: null };
-  }
-  if (pr.state === 'closed') {
-    return { stage: 'done', reason: `${label} closed`, attention: null };
+  if (pr.state === 'merged' || pr.state === 'closed') {
+    const settled = pr.state === 'merged' ? 'merged' : 'closed';
+    if (remainingWork > 0) {
+      return {
+        stage: 'review',
+        reason: `${label} ${settled}, ${remainingReason ?? `${remainingWork} still open`}`,
+        attention: null,
+      };
+    }
+    return { stage: 'done', reason: `${label} ${settled}`, attention: null };
   }
   if (pr.isDraft) {
     return { stage: 'review', reason: `draft ${label}`, attention: null };

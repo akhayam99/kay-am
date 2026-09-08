@@ -1,6 +1,6 @@
 import { StudioDetailLayout } from '../../../../shared/components/StudioDetail';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { SessionId } from '@goodboy/types';
+import type { MountId, SessionId } from '@goodboy/types';
 import { EmptyState, formatError } from '@goodboy/ui';
 import { useResolverIndex } from '../../../session/hooks/useResolverIndex';
 import { resolverForComment, type ResolverLink } from '../../../session/resolver-linkage';
@@ -43,6 +43,7 @@ type Props = {
   readonly sessionId: SessionId | null;
   readonly initialPrNumber?: number | null;
   readonly initialThreadId?: string | null;
+  readonly mountId?: MountId | null;
   readonly onClose: () => void;
 };
 
@@ -50,6 +51,7 @@ export const PrDetailPanel = ({
   sessionId,
   initialPrNumber = null,
   initialThreadId = null,
+  mountId = null,
   onClose,
 }: Props) => {
   const sessions = useSessions();
@@ -215,7 +217,12 @@ export const PrDetailPanel = ({
   if (activePr == null) {
     return (
       <div className="flex h-full flex-col">
-        <CreatePrPanel sessionId={sessionId} defaultTitle={session.goal} onCreated={onMutated} />
+        <CreatePrPanel
+          sessionId={sessionId}
+          mountId={mountId}
+          defaultTitle={session.goal}
+          onCreated={onMutated}
+        />
       </div>
     );
   }
@@ -321,6 +328,7 @@ export const PrDetailPanel = ({
       <StudioDetailLayout header={header} fit="bleed">
         <CreatePrPanel
           sessionId={sessionId}
+          mountId={mountId}
           defaultTitle={session.goal}
           closedPr={isClosed ? { number: activePr.number, url: activePr.url } : undefined}
           onCreated={() => {

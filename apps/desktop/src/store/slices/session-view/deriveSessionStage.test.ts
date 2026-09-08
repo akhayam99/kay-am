@@ -164,3 +164,50 @@ describe('deriveSessionStage lazy session', () => {
     expect(info.reason).toBe('ready for work');
   });
 });
+
+describe('deriveSessionStage sibling branch mounts', () => {
+  it('marks a session done when the merged request is the only work left', () => {
+    const info = deriveSessionStage({ session, pr: mergedPr, ...signals, remainingWork: 0 });
+
+    expect(info.stage).toBe('done');
+    expect(info.reason).toBe('PR #42 merged');
+  });
+
+  it('keeps a session in review while a sibling mount still has an open request', () => {
+    const info = deriveSessionStage({
+      session,
+      pr: mergedPr,
+      ...signals,
+      remainingWork: 1,
+      remainingReason: '1 other request still open',
+    });
+
+    expect(info.stage).toBe('review');
+    expect(info.reason).toBe('PR #42 merged, 1 other request still open');
+  });
+
+  it('keeps a session in review while a sibling mount has work without a request', () => {
+    const info = deriveSessionStage({
+      session,
+      pr: mergedPr,
+      ...signals,
+      remainingWork: 2,
+      remainingReason: '2 branch mounts without a request',
+    });
+
+    expect(info.stage).toBe('review');
+    expect(info.reason).toBe('PR #42 merged, 2 branch mounts without a request');
+  });
+
+  it('still lets a running agent win over the remaining sibling work', () => {
+    const info = deriveSessionStage({
+      session,
+      pr: mergedPr,
+      ...signals,
+      hasRunningAgent: true,
+      remainingWork: 1,
+    });
+
+    expect(info.stage).toBe('running');
+  });
+});

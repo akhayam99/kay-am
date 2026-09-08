@@ -1,6 +1,7 @@
 import type {
   AgentId,
   IsoDateTime,
+  MountId,
   PlanId,
   ProjectId,
   Session,
@@ -72,9 +73,14 @@ export type FocusedExternalTask = {
 
 export type SessionStudio =
   | { readonly kind: 'workflow' }
-  | { readonly kind: 'github'; readonly prNumber?: number; readonly threadId?: string }
-  | { readonly kind: 'mr' }
-  | { readonly kind: 'bitbucket' };
+  | {
+      readonly kind: 'github';
+      readonly mountId?: MountId;
+      readonly prNumber?: number;
+      readonly threadId?: string;
+    }
+  | { readonly kind: 'mr'; readonly mountId?: MountId }
+  | { readonly kind: 'bitbucket'; readonly mountId?: MountId };
 
 export const DEFAULT_PREFS: SessionViewPrefs = { sort: 'updatedAt', group: 'stage' };
 

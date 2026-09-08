@@ -207,6 +207,7 @@ import type {
   UnmountMountInput,
   UnmountMountResult,
 } from './slices/project-mounts/types';
+import type { OpenMountRequestInput } from './slices/project-mounts/openMountRequest';
 import { createPresenceSlice } from './slices/presence';
 import { createTurnSlice } from './slices/turn';
 import type { SendTurnResult } from './slices/turn/types';
@@ -441,6 +442,7 @@ type AppActions = {
   recoverMountOperations(input: SessionKeyInput): Promise<number>;
   resolveMountBranchMismatch(input: ResolveMountBranchInput): Promise<SessionMountView>;
   setSessionActiveMount(input: MountKeyInput): Promise<void>;
+  openMountRequest(input: OpenMountRequestInput): Promise<void>;
   cleanupSessionMounts(
     input: CleanupSessionMountsInput,
   ): Promise<ReadonlyArray<SessionCleanupOutcome>>;
