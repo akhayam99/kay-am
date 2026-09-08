@@ -217,6 +217,10 @@ export type {
   GitUnknownReason,
   GitWorkingTree,
   WorktreeDiffScope,
+  WorktreeDirectorySize,
+  WorktreeInspection,
+  WorktreeRemovalReason,
+  WorktreeRemovalResult,
   WorktreeStatus,
 } from './worktree';
 export type {

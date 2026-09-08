@@ -60,6 +60,70 @@ pub struct WorktreeInfo {
     pub is_main: bool,
 }
 
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum WorktreeInspection {
+    Missing {
+        path: String,
+    },
+    Registered {
+        path: String,
+        #[serde(rename = "isMain")]
+        is_main: bool,
+        #[serde(rename = "isLocked")]
+        is_locked: bool,
+        #[serde(rename = "lockReason")]
+        lock_reason: Option<String>,
+    },
+    ForeignDirectory {
+        path: String,
+    },
+    RepositoryUnavailable {
+        path: String,
+    },
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum WorktreeRemovalReason {
+    RepositoryUnavailable,
+    MainCheckout,
+    UnexpectedDirectory,
+    DifferentRepository,
+    Locked,
+    StatusUnavailable,
+    StagedChanges,
+    UnstagedChanges,
+    UntrackedFiles,
+    UnmergedConflicts,
+    OperationInProgress,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum WorktreeRemovalResult {
+    Removed {
+        path: String,
+    },
+    Missing {
+        path: String,
+    },
+    Kept {
+        path: String,
+        reasons: Vec<WorktreeRemovalReason>,
+    },
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub struct WorktreeDirectorySize {
+    pub path: String,
+    #[serde(rename = "sizeBytes")]
+    pub size_bytes: Option<u64>,
+    #[serde(rename = "isPartial")]
+    pub is_partial: bool,
+    pub exists: bool,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct CreateArgs {
     #[serde(rename = "repoPath")]
@@ -455,53 +519,304 @@ fn is_directory_not_empty(error: &WorktreeError) -> bool {
     lowered.contains("directory not empty") || lowered.contains("failed to delete")
 }
 
-pub(crate) fn remove_worktree_with(
+#[derive(Debug)]
+struct RegisteredWorktree {
+    path: String,
+    is_main: bool,
+    is_locked: bool,
+    lock_reason: Option<String>,
+}
+
+fn registered_worktrees_with(
     repo_path: &Path,
-    worktree_path: &str,
     run_git: &mut dyn FnMut(&Path, &[&str]) -> Result<String, WorktreeError>,
-) -> Result<(), WorktreeError> {
-    let remove_args = ["worktree", "remove", "--force", worktree_path];
+) -> Result<Vec<RegisteredWorktree>, WorktreeError> {
+    let output = run_git(repo_path, &["worktree", "list", "--porcelain"])?;
+    Ok(parse_registered_worktrees(&output))
+}
+
+fn canonical_path(path: &Path) -> Option<PathBuf> {
+    std::fs::canonicalize(path).ok()
+}
+
+fn common_git_dir_with(
+    path: &Path,
+    run_git: &mut dyn FnMut(&Path, &[&str]) -> Result<String, WorktreeError>,
+) -> Option<PathBuf> {
+    let raw = run_git(path, &["rev-parse", "--git-common-dir"]).ok()?;
+    let value = PathBuf::from(raw.trim());
+    let resolved = match value.is_absolute() {
+        true => value,
+        false => path.join(value),
+    };
+    canonical_path(&resolved)
+}
+
+fn repository_top_level_with(
+    path: &Path,
+    run_git: &mut dyn FnMut(&Path, &[&str]) -> Result<String, WorktreeError>,
+) -> Option<PathBuf> {
+    let raw = run_git(path, &["rev-parse", "--show-toplevel"]).ok()?;
+    canonical_path(Path::new(raw.trim()))
+}
+
+fn inspect_worktree_with(
+    repo_path: &Path,
+    worktree_path: &Path,
+    run_git: &mut dyn FnMut(&Path, &[&str]) -> Result<String, WorktreeError>,
+) -> WorktreeInspection {
+    let requested_path = worktree_path.to_string_lossy().into_owned();
+    if !repo_path.is_dir() || canonical_path(repo_path).is_none() {
+        return WorktreeInspection::RepositoryUnavailable {
+            path: requested_path,
+        };
+    }
+    let registered = match registered_worktrees_with(repo_path, run_git) {
+        Ok(found) => found,
+        Err(_) => {
+            return WorktreeInspection::RepositoryUnavailable {
+                path: requested_path,
+            };
+        }
+    };
+    let Some(repository_common) = common_git_dir_with(repo_path, run_git) else {
+        return WorktreeInspection::RepositoryUnavailable {
+            path: requested_path,
+        };
+    };
+    if !worktree_path.exists() {
+        return WorktreeInspection::Missing {
+            path: requested_path,
+        };
+    }
+    let Some(target) = canonical_path(worktree_path) else {
+        return WorktreeInspection::ForeignDirectory {
+            path: requested_path,
+        };
+    };
+    let target_key = target.to_string_lossy().into_owned();
+    for entry in registered {
+        let Some(entry_path) = canonical_path(Path::new(&entry.path)) else {
+            continue;
+        };
+        if entry_path != target {
+            continue;
+        }
+        if repository_top_level_with(&target, run_git) != Some(target.clone()) {
+            return WorktreeInspection::ForeignDirectory { path: target_key };
+        }
+        if common_git_dir_with(&target, run_git) != Some(repository_common.clone()) {
+            return WorktreeInspection::ForeignDirectory { path: target_key };
+        }
+        return WorktreeInspection::Registered {
+            path: target_key,
+            is_main: entry.is_main,
+            is_locked: entry.is_locked,
+            lock_reason: entry.lock_reason,
+        };
+    }
+    WorktreeInspection::ForeignDirectory { path: target_key }
+}
+
+fn foreign_directory_reason_with(
+    repo_path: &Path,
+    target_path: &Path,
+    run_git: &mut dyn FnMut(&Path, &[&str]) -> Result<String, WorktreeError>,
+) -> WorktreeRemovalReason {
+    let repository_common = common_git_dir_with(repo_path, run_git);
+    let target_common = common_git_dir_with(target_path, run_git);
+    if repository_common.is_some() && target_common.is_some() && repository_common != target_common
+    {
+        return WorktreeRemovalReason::DifferentRepository;
+    }
+    WorktreeRemovalReason::UnexpectedDirectory
+}
+
+fn status_removal_reasons_with(
+    worktree_path: &Path,
+    run_git: &mut dyn FnMut(&Path, &[&str]) -> Result<String, WorktreeError>,
+) -> Vec<WorktreeRemovalReason> {
+    let raw = match run_git(worktree_path, &["status", "--porcelain=v1"]) {
+        Ok(found) => found,
+        Err(_) => return vec![WorktreeRemovalReason::StatusUnavailable],
+    };
+    let mut reasons = Vec::new();
+    if let GitWorkingTree::Known {
+        staged,
+        unstaged,
+        untracked,
+        unmerged,
+        ..
+    } = parse_working_tree(&raw)
+    {
+        if staged > 0 {
+            reasons.push(WorktreeRemovalReason::StagedChanges);
+        }
+        if unstaged > 0 {
+            reasons.push(WorktreeRemovalReason::UnstagedChanges);
+        }
+        if untracked > 0 {
+            reasons.push(WorktreeRemovalReason::UntrackedFiles);
+        }
+        if unmerged > 0 {
+            reasons.push(WorktreeRemovalReason::UnmergedConflicts);
+        }
+    }
+    if in_progress_operation(worktree_path).is_some() {
+        reasons.push(WorktreeRemovalReason::OperationInProgress);
+    }
+    reasons
+}
+
+fn validate_removal_with(
+    repo_path: &Path,
+    worktree_path: &Path,
+    run_git: &mut dyn FnMut(&Path, &[&str]) -> Result<String, WorktreeError>,
+) -> Result<PathBuf, WorktreeRemovalResult> {
+    match inspect_worktree_with(repo_path, worktree_path, run_git) {
+        WorktreeInspection::RepositoryUnavailable { path } => Err(WorktreeRemovalResult::Kept {
+            path,
+            reasons: vec![WorktreeRemovalReason::RepositoryUnavailable],
+        }),
+        WorktreeInspection::Missing { path } => Err(WorktreeRemovalResult::Missing { path }),
+        WorktreeInspection::ForeignDirectory { path } => {
+            let reason = foreign_directory_reason_with(repo_path, worktree_path, run_git);
+            Err(WorktreeRemovalResult::Kept {
+                path,
+                reasons: vec![reason],
+            })
+        }
+        WorktreeInspection::Registered {
+            path,
+            is_main: true,
+            ..
+        } => Err(WorktreeRemovalResult::Kept {
+            path,
+            reasons: vec![WorktreeRemovalReason::MainCheckout],
+        }),
+        WorktreeInspection::Registered {
+            path,
+            is_locked: true,
+            ..
+        } => Err(WorktreeRemovalResult::Kept {
+            path,
+            reasons: vec![WorktreeRemovalReason::Locked],
+        }),
+        WorktreeInspection::Registered { path, .. } => {
+            let target = PathBuf::from(&path);
+            let reasons = status_removal_reasons_with(&target, run_git);
+            if !reasons.is_empty() {
+                return Err(WorktreeRemovalResult::Kept { path, reasons });
+            }
+            Ok(target)
+        }
+    }
+}
+
+pub(crate) fn remove_worktree_checked_with(
+    repo_path: &Path,
+    worktree_path: &Path,
+    run_git: &mut dyn FnMut(&Path, &[&str]) -> Result<String, WorktreeError>,
+) -> Result<WorktreeRemovalResult, WorktreeError> {
+    let target = match validate_removal_with(repo_path, worktree_path, run_git) {
+        Ok(found) => found,
+        Err(result) => return Ok(result),
+    };
+    let target_string = target.to_string_lossy().into_owned();
+    let remove_args = ["worktree", "remove", "--force", target_string.as_str()];
     let first = run_git(repo_path, &remove_args);
     if first.is_ok() {
-        return Ok(());
+        return Ok(WorktreeRemovalResult::Removed {
+            path: target_string,
+        });
     }
     let error = first.unwrap_err();
     if !is_directory_not_empty(&error) {
         return Err(error);
     }
     std::thread::sleep(REMOVE_RETRY_DELAY);
-    if run_git(repo_path, &remove_args).is_ok() {
-        return Ok(());
+    match validate_removal_with(repo_path, &target, run_git) {
+        Ok(_) => {}
+        Err(WorktreeRemovalResult::Missing { .. }) => {
+            return Ok(WorktreeRemovalResult::Removed {
+                path: target_string,
+            });
+        }
+        Err(result) => return Ok(result),
     }
-    let target = Path::new(worktree_path);
+    if run_git(repo_path, &remove_args).is_ok() {
+        return Ok(WorktreeRemovalResult::Removed {
+            path: target_string,
+        });
+    }
+    match validate_removal_with(repo_path, &target, run_git) {
+        Ok(revalidated) if revalidated == target => {}
+        Ok(_) => {
+            return Ok(WorktreeRemovalResult::Kept {
+                path: target_string,
+                reasons: vec![WorktreeRemovalReason::UnexpectedDirectory],
+            });
+        }
+        Err(WorktreeRemovalResult::Missing { .. }) => {
+            return Ok(WorktreeRemovalResult::Removed {
+                path: target_string,
+            });
+        }
+        Err(result) => return Ok(result),
+    }
     if target.exists() {
-        let _ = std::fs::remove_dir_all(target);
+        std::fs::remove_dir_all(&target)?;
     }
     let _ = run_git(repo_path, &["worktree", "prune"]);
     if target.exists() {
         return Err(WorktreeError::Git {
             message: format!(
-                "worktree folder is still on disk after cleanup: {worktree_path}. close anything running inside it and remove it by hand"
+                "worktree folder is still on disk after cleanup: {target_string}. close anything running inside it and remove it by hand"
             ),
         });
     }
-    Ok(())
+    Ok(WorktreeRemovalResult::Removed {
+        path: target_string,
+    })
 }
 
 #[tauri::command]
-pub async fn worktree_remove(
+pub async fn worktree_inspect(
     repo_path: String,
     worktree_path: String,
-) -> Result<(), WorktreeError> {
-    tauri::async_runtime::spawn_blocking(move || worktree_remove_blocking(repo_path, worktree_path))
-        .await
-        .map_err(|e| WorktreeError::Io(std::io::Error::other(e.to_string())))?
+) -> Result<WorktreeInspection, WorktreeError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok(inspect_worktree_with(
+            Path::new(&repo_path),
+            Path::new(&worktree_path),
+            &mut |cwd, args| git(cwd, args),
+        ))
+    })
+    .await
+    .map_err(|e| WorktreeError::Io(std::io::Error::other(e.to_string())))?
 }
 
-fn worktree_remove_blocking(repo_path: String, worktree_path: String) -> Result<(), WorktreeError> {
-    remove_worktree_with(Path::new(&repo_path), &worktree_path, &mut |cwd, args| {
-        git(cwd, args)
+#[tauri::command]
+pub async fn worktree_remove_checked(
+    repo_path: String,
+    worktree_path: String,
+) -> Result<WorktreeRemovalResult, WorktreeError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        worktree_remove_checked_blocking(repo_path, worktree_path)
     })
+    .await
+    .map_err(|e| WorktreeError::Io(std::io::Error::other(e.to_string())))?
+}
+
+fn worktree_remove_checked_blocking(
+    repo_path: String,
+    worktree_path: String,
+) -> Result<WorktreeRemovalResult, WorktreeError> {
+    remove_worktree_checked_with(
+        Path::new(&repo_path),
+        Path::new(&worktree_path),
+        &mut |cwd, args| git(cwd, args),
+    )
 }
 
 fn exclude_file_path(repo_path: &Path) -> Option<PathBuf> {
@@ -605,25 +920,93 @@ fn canonical_key(path: &Path) -> String {
         .into_owned()
 }
 
-fn directory_size(path: &Path) -> u64 {
-    let Ok(entries) = std::fs::read_dir(path) else {
-        return 0;
+fn directory_size(path: &Path) -> (Option<u64>, bool) {
+    let entries = match std::fs::read_dir(path) {
+        Ok(found) => found,
+        Err(_) => return (None, true),
     };
     let mut total = 0u64;
-    for entry in entries.flatten() {
-        let Ok(meta) = entry.metadata() else {
-            continue;
+    let mut is_partial = false;
+    for entry in entries {
+        let entry = match entry {
+            Ok(found) => found,
+            Err(_) => {
+                is_partial = true;
+                continue;
+            }
         };
-        if meta.is_symlink() {
+        let file_type = match entry.file_type() {
+            Ok(found) => found,
+            Err(_) => {
+                is_partial = true;
+                continue;
+            }
+        };
+        if file_type.is_symlink() {
             continue;
         }
-        if meta.is_dir() {
-            total = total.saturating_add(directory_size(&entry.path()));
+        if file_type.is_dir() {
+            let (size, child_partial) = directory_size(&entry.path());
+            is_partial = is_partial || child_partial;
+            if let Some(found) = size {
+                total = total.saturating_add(found);
+            }
             continue;
         }
-        total = total.saturating_add(meta.len());
+        if !file_type.is_file() {
+            continue;
+        }
+        match entry.metadata() {
+            Ok(meta) => total = total.saturating_add(meta.len()),
+            Err(_) => is_partial = true,
+        }
     }
-    total
+    (Some(total), is_partial)
+}
+
+fn worktree_directory_size_blocking(path: String) -> WorktreeDirectorySize {
+    let target = Path::new(&path);
+    let metadata = match std::fs::symlink_metadata(target) {
+        Ok(found) => found,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return WorktreeDirectorySize {
+                path,
+                size_bytes: None,
+                is_partial: false,
+                exists: false,
+            };
+        }
+        Err(_) => {
+            return WorktreeDirectorySize {
+                path,
+                size_bytes: None,
+                is_partial: true,
+                exists: true,
+            };
+        }
+    };
+    if !metadata.is_dir() || metadata.file_type().is_symlink() {
+        return WorktreeDirectorySize {
+            path,
+            size_bytes: None,
+            is_partial: true,
+            exists: true,
+        };
+    }
+    let (size_bytes, is_partial) = directory_size(target);
+    WorktreeDirectorySize {
+        path,
+        size_bytes,
+        is_partial,
+        exists: true,
+    }
+}
+
+#[tauri::command]
+pub async fn worktree_directory_size(path: String) -> Result<WorktreeDirectorySize, WorktreeError> {
+    tauri::async_runtime::spawn_blocking(move || worktree_directory_size_blocking(path))
+        .await
+        .map_err(|e| WorktreeError::Io(std::io::Error::other(e.to_string())))
 }
 
 pub(crate) fn collect_orphans(
@@ -647,7 +1030,7 @@ pub(crate) fn collect_orphans(
         .map(|entry| OrphanWorktree {
             path: entry.path().to_string_lossy().into_owned(),
             name: entry.file_name().to_string_lossy().into_owned(),
-            size_bytes: directory_size(&entry.path()),
+            size_bytes: directory_size(&entry.path()).0.unwrap_or(0),
         })
         .collect();
     orphans.sort_by(|a, b| a.path.cmp(&b.path));
@@ -1761,6 +2144,10 @@ pub(crate) fn read_working_tree(cwd: &Path) -> GitWorkingTree {
             };
         }
     };
+    parse_working_tree(&raw)
+}
+
+fn parse_working_tree(raw: &str) -> GitWorkingTree {
     let mut staged = 0u32;
     let mut unstaged = 0u32;
     let mut untracked = 0u32;
@@ -2051,10 +2438,45 @@ fn parse_porcelain(stdout: &str) -> Vec<WorktreeInfo> {
     entries
 }
 
+fn parse_registered_worktrees(stdout: &str) -> Vec<RegisteredWorktree> {
+    let mut entries = Vec::new();
+    let mut is_main = true;
+    for block in stdout.split("\n\n") {
+        let mut path = None;
+        let mut is_locked = false;
+        let mut lock_reason = None;
+        for line in block.lines() {
+            if let Some(found) = line.strip_prefix("worktree ") {
+                path = Some(found.to_string());
+                continue;
+            }
+            if line == "locked" {
+                is_locked = true;
+                continue;
+            }
+            if let Some(found) = line.strip_prefix("locked ") {
+                is_locked = true;
+                lock_reason = Some(found.to_string());
+            }
+        }
+        let Some(path) = path else {
+            continue;
+        };
+        entries.push(RegisteredWorktree {
+            path,
+            is_main,
+            is_locked,
+            lock_reason,
+        });
+        is_main = false;
+    }
+    entries
+}
+
 #[cfg(test)]
 mod rewrite_tests {
     use super::{
-        worktree_amend_commit_blocking, worktree_create_blocking, worktree_remove_blocking,
+        worktree_amend_commit_blocking, worktree_create_blocking, worktree_remove_checked_blocking,
         worktree_squash_commits_blocking, worktree_status_blocking, CreateArgs, GitDistance,
         GitUnknownReason, GitWorkingTree, RewriteArgs,
     };
@@ -2793,7 +3215,7 @@ mod rewrite_tests {
             1
         );
 
-        worktree_remove_blocking(
+        worktree_remove_checked_blocking(
             root.to_string_lossy().into_owned(),
             created.worktree_path.clone(),
         )
@@ -2812,7 +3234,7 @@ mod rewrite_tests {
         push_to_new_remote(&root);
         let created = create_session_mount(&root, "goal-tidy0001");
 
-        worktree_remove_blocking(
+        worktree_remove_checked_blocking(
             root.to_string_lossy().into_owned(),
             created.worktree_path.clone(),
         )
@@ -2837,7 +3259,7 @@ mod rewrite_tests {
         let removed = create_session_mount(&root, "goal-tidy0002");
         let survivor = create_session_mount(&root, "goal-tidy0003");
 
-        worktree_remove_blocking(
+        worktree_remove_checked_blocking(
             root.to_string_lossy().into_owned(),
             removed.worktree_path.clone(),
         )
@@ -2858,7 +3280,9 @@ mod rewrite_tests {
 #[cfg(test)]
 mod teardown_tests {
     use super::{
-        collect_orphans, remove_worktree_with, worktree_orphan_remove_blocking, WorktreeError,
+        collect_orphans, inspect_worktree_with, remove_worktree_checked_with,
+        worktree_directory_size_blocking, worktree_orphan_remove_blocking, WorktreeError,
+        WorktreeInspection, WorktreeRemovalReason, WorktreeRemovalResult,
     };
     use std::path::{Path, PathBuf};
 
@@ -2883,69 +3307,259 @@ mod teardown_tests {
         }
     }
 
-    #[test]
-    fn a_directory_not_empty_failure_is_retried_once_before_giving_up() {
-        let root = temp_root("remove-retry");
-        let target = root.join("wt");
-        std::fs::create_dir_all(&target).unwrap();
-        let mut calls: Vec<String> = Vec::new();
-        let mut attempts = 0;
+    fn git_ok(cwd: &Path, args: &[&str]) -> String {
+        super::git(cwd, args)
+            .unwrap_or_else(|error| panic!("git {} failed: {error}", args.join(" ")))
+            .trim()
+            .to_string()
+    }
 
-        let outcome = remove_worktree_with(&root, target.to_str().unwrap(), &mut |_, args| {
-            calls.push(args.join(" "));
-            attempts += 1;
-            if attempts == 1 {
-                return Err(not_empty());
-            }
-            std::fs::remove_dir_all(&target).unwrap();
-            Ok(String::new())
-        });
+    fn init_repo(name: &str) -> PathBuf {
+        let root = temp_root(name);
+        git_ok(&root, &["init", "-b", "main"]);
+        git_ok(&root, &["config", "user.email", "test@example.com"]);
+        git_ok(&root, &["config", "user.name", "test"]);
+        std::fs::write(root.join(".gitignore"), "node_modules/\n").unwrap();
+        std::fs::write(root.join("tracked.txt"), "base\n").unwrap();
+        git_ok(&root, &["add", ".gitignore", "tracked.txt"]);
+        git_ok(&root, &["commit", "-m", "base"]);
+        std::fs::canonicalize(root).unwrap()
+    }
 
-        assert!(outcome.is_ok(), "{outcome:?}");
-        assert_eq!(calls.len(), 2, "the second attempt never ran: {calls:?}");
+    fn add_worktree(root: &Path, name: &str) -> PathBuf {
+        let target = root.join("worktrees").join(name);
+        git_ok(
+            root,
+            &[
+                "worktree",
+                "add",
+                "-b",
+                &format!("test/{name}"),
+                target.to_str().unwrap(),
+            ],
+        );
+        std::fs::canonicalize(target).unwrap()
+    }
+
+    fn remove(root: &Path, target: &Path) -> WorktreeRemovalResult {
+        remove_worktree_checked_with(root, target, &mut |cwd, args| super::git(cwd, args)).unwrap()
+    }
+
+    fn kept_reasons(result: WorktreeRemovalResult) -> Vec<WorktreeRemovalReason> {
+        let WorktreeRemovalResult::Kept { reasons, .. } = result else {
+            panic!("expected kept result, found {result:?}");
+        };
+        reasons
     }
 
     #[test]
-    fn a_worktree_git_cannot_delete_is_removed_from_disk_and_pruned() {
-        let root = temp_root("remove-fallback");
-        let target = root.join("wt");
-        std::fs::create_dir_all(target.join("apps").join("web")).unwrap();
-        std::fs::write(target.join("apps").join("web").join("page.tsx"), "x").unwrap();
-        let mut calls: Vec<String> = Vec::new();
+    fn clean_registered_worktree_with_ignored_dependencies_is_removed() {
+        let root = init_repo("remove-clean");
+        let target = add_worktree(&root, "clean");
+        std::fs::create_dir_all(target.join("node_modules").join("dep")).unwrap();
+        std::fs::write(
+            target.join("node_modules").join("dep").join("index.js"),
+            "x",
+        )
+        .unwrap();
 
-        let outcome = remove_worktree_with(&root, target.to_str().unwrap(), &mut |_, args| {
-            calls.push(args.join(" "));
-            if args.first() == Some(&"worktree") && args.get(1) == Some(&"remove") {
-                return Err(not_empty());
+        let result = remove(&root, &target);
+
+        assert!(matches!(result, WorktreeRemovalResult::Removed { .. }));
+        assert!(!target.exists());
+    }
+
+    #[test]
+    fn dirty_worktree_is_kept_with_each_change_reason() {
+        let root = init_repo("remove-dirty");
+        let target = add_worktree(&root, "dirty");
+        std::fs::write(target.join("tracked.txt"), "changed\n").unwrap();
+        std::fs::write(target.join("staged.txt"), "staged\n").unwrap();
+        git_ok(&target, &["add", "staged.txt"]);
+        std::fs::write(target.join("untracked.txt"), "untracked\n").unwrap();
+
+        let reasons = kept_reasons(remove(&root, &target));
+
+        assert!(reasons.contains(&WorktreeRemovalReason::StagedChanges));
+        assert!(reasons.contains(&WorktreeRemovalReason::UnstagedChanges));
+        assert!(reasons.contains(&WorktreeRemovalReason::UntrackedFiles));
+        assert!(target.exists());
+    }
+
+    #[test]
+    fn conflicted_worktree_and_in_progress_merge_are_kept() {
+        let root = init_repo("remove-conflict");
+        let target = add_worktree(&root, "conflict");
+        std::fs::write(root.join("tracked.txt"), "main\n").unwrap();
+        git_ok(&root, &["commit", "-am", "main change"]);
+        std::fs::write(target.join("tracked.txt"), "branch\n").unwrap();
+        git_ok(&target, &["commit", "-am", "branch change"]);
+        assert!(super::git(&target, &["merge", "main"]).is_err());
+
+        let reasons = kept_reasons(remove(&root, &target));
+
+        assert!(reasons.contains(&WorktreeRemovalReason::UnmergedConflicts));
+        assert!(reasons.contains(&WorktreeRemovalReason::OperationInProgress));
+        assert!(target.exists());
+    }
+
+    #[test]
+    fn status_failure_is_treated_as_unsafe() {
+        let root = init_repo("remove-status-failure");
+        let target = add_worktree(&root, "status-failure");
+        let git_dir = PathBuf::from(git_ok(&target, &["rev-parse", "--absolute-git-dir"]));
+        std::fs::write(git_dir.join("index"), "invalid index").unwrap();
+
+        let reasons = kept_reasons(remove(&root, &target));
+
+        assert_eq!(reasons, vec![WorktreeRemovalReason::StatusUnavailable]);
+        assert!(target.exists());
+    }
+
+    #[test]
+    fn locked_worktree_is_kept() {
+        let root = init_repo("remove-locked");
+        let target = add_worktree(&root, "locked");
+        git_ok(
+            &root,
+            &[
+                "worktree",
+                "lock",
+                "--reason",
+                "busy",
+                target.to_str().unwrap(),
+            ],
+        );
+
+        let reasons = kept_reasons(remove(&root, &target));
+
+        assert_eq!(reasons, vec![WorktreeRemovalReason::Locked]);
+        assert!(target.exists());
+    }
+
+    #[test]
+    fn wrong_repository_and_main_checkout_are_kept() {
+        let root = init_repo("remove-owner");
+        let other = init_repo("remove-other-owner");
+        let target = add_worktree(&root, "owned");
+
+        let wrong_repo = kept_reasons(remove(&other, &target));
+        let main_checkout = kept_reasons(remove(&root, &root));
+
+        assert_eq!(wrong_repo, vec![WorktreeRemovalReason::DifferentRepository]);
+        assert_eq!(main_checkout, vec![WorktreeRemovalReason::MainCheckout]);
+        assert!(target.exists());
+    }
+
+    #[test]
+    fn missing_path_is_reported_without_removal() {
+        let root = init_repo("remove-missing");
+        let target = root.join("missing");
+
+        let result = remove(&root, &target);
+
+        assert_eq!(
+            result,
+            WorktreeRemovalResult::Missing {
+                path: target.to_string_lossy().into_owned()
             }
-            Ok(String::new())
-        });
-
-        assert!(outcome.is_ok(), "{outcome:?}");
-        assert!(!target.exists(), "the folder is still on disk");
-        assert!(
-            calls.contains(&"worktree prune".to_string()),
-            "git worktree prune never ran: {calls:?}"
         );
     }
 
     #[test]
-    fn a_failure_that_is_not_about_a_dirty_directory_is_reported_as_is() {
-        let root = temp_root("remove-other-error");
-        let target = root.join("wt");
+    fn unexpected_directory_is_kept() {
+        let root = init_repo("remove-unexpected");
+        let target = root.join("unexpected");
         std::fs::create_dir_all(&target).unwrap();
-        let mut calls = 0;
 
-        let outcome = remove_worktree_with(&root, target.to_str().unwrap(), &mut |_, _| {
-            calls += 1;
-            Err(WorktreeError::Git {
-                message: "fatal: 'wt' is not a working tree".to_string(),
-            })
-        });
+        let reasons = kept_reasons(remove(&root, &target));
 
-        assert!(outcome.is_err());
-        assert_eq!(calls, 1, "a hopeless failure must not be retried");
-        assert!(target.exists(), "the folder must be left untouched");
+        assert_eq!(reasons, vec![WorktreeRemovalReason::UnexpectedDirectory]);
+        assert!(target.exists());
+    }
+
+    #[test]
+    fn fallback_removes_only_the_revalidated_registered_target() {
+        let root = init_repo("remove-fallback");
+        let target = add_worktree(&root, "fallback");
+        let neighbor = root.join("worktrees").join("keep-me");
+        std::fs::create_dir_all(target.join("node_modules").join("dep")).unwrap();
+        std::fs::write(
+            target.join("node_modules").join("dep").join("index.js"),
+            "x",
+        )
+        .unwrap();
+        std::fs::create_dir_all(&neighbor).unwrap();
+        let mut remove_attempts = 0;
+
+        let result = remove_worktree_checked_with(&root, &target, &mut |cwd, args| {
+            if args.starts_with(&["worktree", "remove"]) {
+                remove_attempts += 1;
+                return Err(not_empty());
+            }
+            super::git(cwd, args)
+        })
+        .unwrap();
+
+        assert!(matches!(result, WorktreeRemovalResult::Removed { .. }));
+        assert_eq!(remove_attempts, 2);
+        assert!(!target.exists());
+        assert!(neighbor.exists());
+    }
+
+    #[test]
+    fn fallback_keeps_a_target_that_changes_before_revalidation() {
+        let root = init_repo("remove-fallback-swap");
+        let target = add_worktree(&root, "fallback-swap");
+        let displaced = root.join("displaced");
+        let mut remove_attempts = 0;
+
+        let result = remove_worktree_checked_with(&root, &target, &mut |cwd, args| {
+            if args.starts_with(&["worktree", "remove"]) {
+                remove_attempts += 1;
+                if remove_attempts == 2 {
+                    std::fs::rename(&target, &displaced).unwrap();
+                    std::fs::create_dir_all(&target).unwrap();
+                    std::fs::write(target.join("precious.txt"), "keep").unwrap();
+                }
+                return Err(not_empty());
+            }
+            super::git(cwd, args)
+        })
+        .unwrap();
+
+        assert_eq!(
+            kept_reasons(result),
+            vec![WorktreeRemovalReason::UnexpectedDirectory]
+        );
+        assert!(target.join("precious.txt").exists());
+    }
+
+    #[test]
+    fn inspection_distinguishes_registered_missing_foreign_and_unavailable() {
+        let root = init_repo("inspect");
+        let target = add_worktree(&root, "registered");
+        let foreign = root.join("foreign");
+        let missing = root.join("missing");
+        let unavailable = root.join("unavailable");
+        std::fs::create_dir_all(&foreign).unwrap();
+        let mut run_git = |cwd: &Path, args: &[&str]| super::git(cwd, args);
+
+        let registered = inspect_worktree_with(&root, &target, &mut run_git);
+        let missing_result = inspect_worktree_with(&root, &missing, &mut run_git);
+        let foreign_result = inspect_worktree_with(&root, &foreign, &mut run_git);
+        let unavailable_result = inspect_worktree_with(&unavailable, &foreign, &mut run_git);
+
+        assert!(matches!(registered, WorktreeInspection::Registered { .. }));
+        assert!(matches!(missing_result, WorktreeInspection::Missing { .. }));
+        assert!(matches!(
+            foreign_result,
+            WorktreeInspection::ForeignDirectory { .. }
+        ));
+        assert!(matches!(
+            unavailable_result,
+            WorktreeInspection::RepositoryUnavailable { .. }
+        ));
     }
 
     fn make_worktree_dir(parent: &Path, name: &str, bytes: usize) -> PathBuf {
@@ -2976,6 +3590,81 @@ mod teardown_tests {
         );
         assert_eq!(found[0].size_bytes, 4096);
         assert!(orphan.exists());
+    }
+
+    #[test]
+    fn directory_size_counts_files_without_following_symlinks() {
+        let root = temp_root("directory-size");
+        let target = root.join("target");
+        let external = root.join("external.bin");
+        std::fs::create_dir_all(target.join("nested")).unwrap();
+        std::fs::write(target.join("one.bin"), vec![0u8; 10]).unwrap();
+        std::fs::write(target.join("nested").join("two.bin"), vec![0u8; 25]).unwrap();
+        std::fs::write(&external, vec![0u8; 4096]).unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&external, target.join("external-link")).unwrap();
+
+        let result = worktree_directory_size_blocking(target.to_string_lossy().into_owned());
+
+        assert_eq!(result.size_bytes, Some(35));
+        assert!(!result.is_partial);
+        assert!(result.exists);
+    }
+
+    #[test]
+    fn absent_directory_has_no_size() {
+        let root = temp_root("directory-size-missing");
+        let target = root.join("missing");
+
+        let result = worktree_directory_size_blocking(target.to_string_lossy().into_owned());
+
+        assert_eq!(result.size_bytes, None);
+        assert!(!result.is_partial);
+        assert!(!result.exists);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unreadable_directory_is_distinct_from_an_empty_directory() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = temp_root("directory-size-unreadable");
+        let empty = root.join("empty");
+        let unreadable = root.join("unreadable");
+        std::fs::create_dir_all(&empty).unwrap();
+        std::fs::create_dir_all(&unreadable).unwrap();
+        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o000)).unwrap();
+
+        let empty_result = worktree_directory_size_blocking(empty.to_string_lossy().into_owned());
+        let unreadable_result =
+            worktree_directory_size_blocking(unreadable.to_string_lossy().into_owned());
+
+        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o700)).unwrap();
+        assert_eq!(empty_result.size_bytes, Some(0));
+        assert!(!empty_result.is_partial);
+        assert_eq!(unreadable_result.size_bytes, None);
+        assert!(unreadable_result.is_partial);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unreadable_child_marks_a_partial_size() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = temp_root("directory-size-partial");
+        let target = root.join("target");
+        let unreadable = target.join("unreadable");
+        std::fs::create_dir_all(&unreadable).unwrap();
+        std::fs::write(target.join("readable.bin"), vec![0u8; 17]).unwrap();
+        std::fs::write(unreadable.join("hidden.bin"), vec![0u8; 100]).unwrap();
+        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o000)).unwrap();
+
+        let result = worktree_directory_size_blocking(target.to_string_lossy().into_owned());
+
+        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o700)).unwrap();
+        assert_eq!(result.size_bytes, Some(17));
+        assert!(result.is_partial);
+        assert!(result.exists);
     }
 
     #[test]

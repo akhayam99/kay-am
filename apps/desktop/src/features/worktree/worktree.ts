@@ -3,7 +3,10 @@ import type {
   BranchCommit,
   SessionId,
   WorkspaceId,
+  WorktreeDirectorySize,
   WorktreeDiffScope,
+  WorktreeInspection,
+  WorktreeRemovalResult,
   WorktreeStatus,
 } from '@goodboy/types';
 
@@ -192,8 +195,41 @@ export const scratchDirRemove = async ({ sessionId }: ScratchDirParams): Promise
   await invoke('scratch_dir_remove', { sessionId });
 };
 
+type WorktreePathParams = {
+  readonly repoPath: string;
+  readonly worktreePath: string;
+};
+
+export const inspectWorktree = async ({
+  repoPath,
+  worktreePath,
+}: WorktreePathParams): Promise<WorktreeInspection> => {
+  return invoke<WorktreeInspection>('worktree_inspect', { repoPath, worktreePath });
+};
+
+export const removeWorktreeChecked = async ({
+  repoPath,
+  worktreePath,
+}: WorktreePathParams): Promise<WorktreeRemovalResult> => {
+  return invoke<WorktreeRemovalResult>('worktree_remove_checked', { repoPath, worktreePath });
+};
+
 export const removeWorktree = async (repoPath: string, worktreePath: string): Promise<void> => {
-  await invoke('worktree_remove', { repoPath, worktreePath });
+  const result = await removeWorktreeChecked({ repoPath, worktreePath });
+  if (result.kind !== 'kept') {
+    return;
+  }
+  throw new Error(`Worktree kept: ${result.reasons.join(', ')}`);
+};
+
+type WorktreeDirectorySizeParams = {
+  readonly path: string;
+};
+
+export const worktreeDirectorySize = async ({
+  path,
+}: WorktreeDirectorySizeParams): Promise<WorktreeDirectorySize> => {
+  return invoke<WorktreeDirectorySize>('worktree_directory_size', { path });
 };
 
 type TidyRepoGoodboyDirParams = {
