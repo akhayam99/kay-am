@@ -7,6 +7,40 @@ version in the same PR that bumps the version numbers (see
 `docs/release-command.md`), before the tag is pushed: the release build fails
 if it can't find a matching `## Goodboy vX.Y.Z` heading.
 
+## Goodboy v0.2.22
+
+Mounting a branch works again. v0.2.21 shipped the multi mount feature with a
+defect that made every new mount fail on the spot, and made an agent that
+asked for one loop through turn after turn. Both are fixed, and continuation
+turns are now bounded so nothing in that family can run away again.
+
+### [#1706] Fork a mount without hijacking the one you forked from
+
+Creating a mount failed with `FOREIGN KEY constraint failed`, and an agent
+that asked for one woke up in the directory it had just left, found its
+branch still missing, and asked again, about ten times over.
+
+Both came from the same line. The operation journal recorded a mount id when
+the operation began, before the mount row existed. From the interface that
+meant pointing at a row that was not there yet, which the database refused.
+From an agent it meant something quieter and worse: the identifier already
+in the journal was the mount being forked from, so the fork adopted it,
+landed on the source directory, found it already there and handed the source
+mount straight back. The turn that followed opened in the same place, on the
+same branch, with the same work still to do.
+
+The journal now records a mount only once it exists, and carries the mount it
+intends to create separately, so an interrupted fork still finds its way back
+to the right directory. A fork replays only when the request truly matches,
+down to the branch it asked for. A fork that comes back holding the mount it
+started from, or a branch nobody asked for, is refused rather than acted on.
+And a chain of continuation turns now stops after three, refuses to reopen the
+mount it is already in, and says why in the turn instead of going quiet.
+
+The tests that would have caught this exist now. The store slice runs against
+a real database with its constraints on, rather than a stand in that accepted
+anything, because the fault lived exactly in the seam neither half covered.
+
 ## Goodboy v0.2.21
 
 A session can hold several branches of the same project at once. Split a
