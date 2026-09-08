@@ -1,9 +1,6 @@
-import { resolveReviewThread } from '@goodboy/core';
 import { upsertResolvePublicationThread } from '@goodboy/db';
 import type { ResolvePublicationThread, SessionId } from '@goodboy/types';
 import { tauriDatabase } from '../../../shared/lib/db';
-import { tauriGhRunner } from '../../../features/github/github';
-import { sessionThreadGhOptions } from '../github/sessionThreadGhOptions';
 import type { GetFn } from './types';
 
 type Params = {
@@ -13,7 +10,7 @@ type Params = {
   readonly frozen: ResolvePublicationThread;
 };
 
-export const markThreadResolved = async ({
+export const markThreadDone = async ({
   get,
   sessionId,
   threadId,
@@ -23,21 +20,20 @@ export const markThreadResolved = async ({
     db: tauriDatabase,
     thread: { ...frozen, resolvePhase: 'resolving' },
   });
-  await resolveReviewThread(tauriGhRunner, threadId, sessionThreadGhOptions({ get, sessionId }));
-  const resolvedAt = Date.now();
+  const closedAt = Date.now();
   await get().updateResolveThread({
     sessionId,
     threadId,
     patch: {
       state: 'closed',
-      githubResolved: true,
-      closedAt: resolvedAt,
+      githubResolved: false,
+      closedAt,
       closedSource: 'goodboy',
       stateReason: null,
     },
   });
   await upsertResolvePublicationThread({
     db: tauriDatabase,
-    thread: { ...frozen, resolvePhase: 'resolved', resolvedAt },
+    thread: { ...frozen, resolvePhase: 'resolved', resolvedAt: closedAt },
   });
 };

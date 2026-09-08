@@ -1,11 +1,11 @@
 import {
   insertResolvePublication,
-  listResolveQueueItems,
   listResolveThreads,
   upsertResolvePublicationThread,
 } from '@goodboy/db';
 import type {
   BranchCommit,
+  PrComment,
   PublicationBlocker,
   ResolvePublication,
   ResolvePublicationExclusion,
@@ -28,9 +28,13 @@ import { getSessionRepo } from '../worktrees/getSessionRepo';
 import { UNKNOWN_PUBLICATION_REPO, isPublicationTargetBusy } from './publicationLock';
 import { publicationTarget } from './publicationTarget';
 import { loadPublicationsInto } from './publicationState';
+import { approvedPublicationScope } from './approvedPublicationScope';
+import { isLocalNoteThread } from './isLocalNoteThread';
 import { recoverUncapturedResolveWork } from './recoverUncapturedResolveWork';
 import { selectPublishableThreads } from './selectPublishableThreads';
+import { sourceFingerprint } from './sourceFingerprint';
 import { threadOutcome } from './threadOutcome';
+import { unapprovedBranchCommits } from './unapprovedBranchCommits';
 import type { PreparePublicationParams, SliceParams } from './types';
 
 type Params = SliceParams & PreparePublicationParams;
@@ -39,6 +43,7 @@ type FrozenReply = {
   readonly row: ResolveThread;
   readonly body: string | null;
   readonly closes: boolean;
+  readonly fingerprint: string | null;
 };
 
 type GitFacts = {
@@ -150,6 +155,7 @@ type BlockerParams = {
   readonly hasWorktree: boolean;
   readonly isTargetBusy: boolean;
   readonly headBranch: string | null;
+  readonly unapprovedCount: number;
   readonly git: GitFacts;
 };
 
@@ -158,6 +164,7 @@ const blockerOf = ({
   hasWorktree,
   isTargetBusy,
   headBranch,
+  unapprovedCount,
   git,
 }: BlockerParams): PublicationBlocker | null => {
   if (isTargetBusy) {
@@ -181,6 +188,9 @@ const blockerOf = ({
   if (git.missingShas.length > 0) {
     return 'missing_commit';
   }
+  if (unapprovedCount > 0) {
+    return 'unapproved_commit';
+  }
   return git.hasMovedRemote ? 'remote_moved' : null;
 };
 
@@ -190,42 +200,38 @@ export const preparePublication = async ({
   sessionId,
   threadIds,
   scopeId,
+  drift = [],
 }: Params): Promise<ResolvePublicationPreview> => {
   const target = publicationTarget({ get, sessionId });
   const uncaptured = await recoverUncapturedResolveWork({ set, get, sessionId }).catch(() => null);
   const repo = getSessionRepo({ get, sessionId });
   const rows = await listResolveThreads({ db: tauriDatabase, sessionId });
-  const queueItems = await listResolveQueueItems({ db: tauriDatabase, sessionId });
-  const validApprovals = new Set(
-    queueItems.flatMap(({ item, thread }) =>
-      item.approvalState === 'accepted' &&
-      item.approvedRevision === thread.revision &&
-      item.candidateRevision === item.approvedRevision &&
-      item.deliveredAt === null
-        ? [thread.threadId]
-        : [],
-    ),
-  );
+  const scope = await approvedPublicationScope({ sessionId });
   const selection = selectPublishableThreads({ rows, threadIds });
-  const invalid = selection.publishable.filter((row) => !validApprovals.has(row.threadId));
-  const publishable = selection.publishable.filter((row) => validApprovals.has(row.threadId));
+  const invalid = selection.publishable.filter((row) => !scope.threadIds.has(row.threadId));
+  const publishable = selection.publishable.filter((row) => scope.threadIds.has(row.threadId));
   const invalidExclusions: ReadonlyArray<ResolvePublicationExclusion> = invalid.map((row) => ({
     threadId: row.threadId,
     reason: 'not_ready',
   }));
   const excluded = [...selection.excluded, ...invalidExclusions];
   const isAttributed = isSessionAttributionEnabled({ get, sessionId });
-  const frozen: ReadonlyArray<FrozenReply> = publishable.map((row) => {
-    const closure = closureOf({ row });
-    return {
-      row,
-      body:
-        closure === null
-          ? null
-          : buildResolutionReplyBody({ closure, prUrl: target.prUrl, isAttributed }),
-      closes: threadOutcome({ row }) !== null,
-    };
-  });
+  const comments: ReadonlyArray<PrComment> = get().sessionGithub[sessionId]?.detail?.comments ?? [];
+  const frozen: ReadonlyArray<FrozenReply> = await Promise.all(
+    publishable.map(async (row) => {
+      const closure = closureOf({ row });
+      const isNote = isLocalNoteThread({ row });
+      return {
+        row,
+        body:
+          closure === null || isNote
+            ? null
+            : buildResolutionReplyBody({ closure, prUrl: target.prUrl, isAttributed }),
+        closes: threadOutcome({ row }) !== null,
+        fingerprint: isNote ? null : await sourceFingerprint({ comments, threadId: row.threadId }),
+      };
+    }),
+  );
   const shas = fixShas({ rows: publishable });
   const requiresPush = shas.length > 0;
   const git =
@@ -236,6 +242,15 @@ export const preparePublication = async ({
           shas,
         })
       : IDLE_GIT;
+  const outgoing = git.commits.filter((commit) => !commit.pushed);
+  const unapproved =
+    requiresPush && repo !== null
+      ? await unapprovedBranchCommits({
+          worktreePath: repo.worktreePath,
+          commits: outgoing,
+          scope,
+        })
+      : [];
   const isTargetBusy =
     publishable.length > 0 &&
     (await isPublicationTargetBusy({
@@ -253,16 +268,15 @@ export const preparePublication = async ({
             hasWorktree: repo !== null,
             isTargetBusy,
             headBranch: get().sessionGithub[sessionId]?.pr?.headBranch ?? null,
+            unapprovedCount: unapproved.length,
             git,
           });
-  const commits = git.commits
-    .filter((commit) => !commit.pushed)
-    .map((commit) => ({
-      ...commit,
-      threadIds: publishable
-        .filter((row) => row.commitShas?.includes(commit.sha) === true)
-        .map((row) => row.threadId),
-    }));
+  const commits = outgoing.map((commit) => ({
+    ...commit,
+    threadIds: publishable
+      .filter((row) => row.commitShas?.includes(commit.sha) === true)
+      .map((row) => row.threadId),
+  }));
   const replies = frozen.flatMap((entry) =>
     entry.body === null
       ? []
@@ -275,6 +289,10 @@ export const preparePublication = async ({
           },
         ],
   );
+  const notes = frozen.flatMap((entry) =>
+    entry.body === null ? [{ threadId: entry.row.threadId, revision: entry.row.revision }] : [],
+  );
+  const frozenAt = Date.now();
   const base = {
     repo: target.repo,
     prNumber: target.prNumber,
@@ -282,9 +300,13 @@ export const preparePublication = async ({
     localHead: git.localHead,
     remoteHead: git.remoteHead,
     requiresPush,
+    frozenAt,
     commits,
+    unapproved,
     replies,
+    notes,
     excluded,
+    drift,
   };
   if (blocker !== null || publishable.length === 0) {
     const preview: ResolvePublicationPreview = { ...base, publicationId: null, blocker };
@@ -299,16 +321,19 @@ export const preparePublication = async ({
     repo: target.repo ?? UNKNOWN_PUBLICATION_REPO,
     prNumber: target.prNumber,
     branch: git.branch,
+    targetRef: git.branch === '' ? '' : `refs/heads/${git.branch}`,
     localHead: git.localHead,
     remoteHead: git.remoteHead,
     commitShas: shas,
+    candidateIds: scope.candidateIds,
+    approvedItemIds: scope.itemIds,
     requiresPush,
     phase: 'previewed',
     pushedHead: null,
     confirmedAt: null,
     completedAt: null,
     error: null,
-    createdAt: Date.now(),
+    createdAt: frozenAt,
   };
   await insertResolvePublication({ db: tauriDatabase, publication });
   for (const entry of frozen) {
@@ -319,9 +344,12 @@ export const preparePublication = async ({
         threadId: entry.row.threadId,
         revision: entry.row.revision,
         priorState: entry.row.state,
+        sourceFingerprint: entry.fingerprint,
+        operationId: crypto.randomUUID(),
         replyBody: entry.body,
         replyPhase: replyPhaseOf({ entry }),
         replyId: entry.row.replyId,
+        replyAttemptedAt: null,
         replyPostedAt: entry.row.replyPostedAt,
         resolvePhase: entry.closes ? 'pending' : 'skipped',
         resolvedAt: null,

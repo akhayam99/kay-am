@@ -145,9 +145,12 @@ export type ResolvePublication = Readonly<{
   repo: string;
   prNumber: number;
   branch: string;
+  targetRef: string;
   localHead: string;
   remoteHead: string | null;
   commitShas: ReadonlyArray<string>;
+  candidateIds: ReadonlyArray<string>;
+  approvedItemIds: ReadonlyArray<string>;
   requiresPush: boolean;
   phase: ResolvePublicationPhase;
   pushedHead: string | null;
@@ -162,9 +165,12 @@ export type ResolvePublicationThread = Readonly<{
   threadId: string;
   revision: number;
   priorState: ResolveThreadState;
+  sourceFingerprint: string | null;
+  operationId: string;
   replyBody: string | null;
   replyPhase: ResolvePublicationReplyPhase;
   replyId: string | null;
+  replyAttemptedAt: number | null;
   replyPostedAt: number | null;
   resolvePhase: ResolvePublicationResolvePhase;
   resolvedAt: number | null;
@@ -173,6 +179,7 @@ export type ResolvePublicationThread = Readonly<{
 
 export type PublicationBlocker =
   | 'uncaptured_work'
+  | 'unapproved_commit'
   | 'dirty_tree'
   | 'writer_busy'
   | 'publication_in_progress'
@@ -186,6 +193,16 @@ export type ResolvePublicationExclusion = Readonly<{
   reason: 'needs_you' | 'working' | 'not_ready';
 }>;
 
+export type ResolvePublicationDriftKind =
+  'branch_moved' | 'remote_moved' | 'comment_changed' | 'approval_withdrawn';
+
+export type ResolvePublicationDrift = Readonly<{
+  kind: ResolvePublicationDriftKind;
+  threadId: string | null;
+  before: string;
+  after: string;
+}>;
+
 export type ResolvePublicationPreview = Readonly<{
   publicationId: string | null;
   repo: string | null;
@@ -194,13 +211,17 @@ export type ResolvePublicationPreview = Readonly<{
   localHead: string;
   remoteHead: string | null;
   requiresPush: boolean;
+  frozenAt: number;
   commits: ReadonlyArray<BranchCommit & { readonly threadIds: ReadonlyArray<string> }>;
+  unapproved: ReadonlyArray<BranchCommit>;
   replies: ReadonlyArray<{
     readonly threadId: string;
     readonly body: string;
     readonly revision: number;
     readonly closes: boolean;
   }>;
+  notes: ReadonlyArray<{ readonly threadId: string; readonly revision: number }>;
   excluded: ReadonlyArray<ResolvePublicationExclusion>;
+  drift: ReadonlyArray<ResolvePublicationDrift>;
   blocker: PublicationBlocker | null;
 }>;

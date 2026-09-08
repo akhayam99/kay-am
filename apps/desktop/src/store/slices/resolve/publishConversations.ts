@@ -9,26 +9,23 @@ import {
 } from '@goodboy/db';
 import { formatError } from '@goodboy/ui';
 import type {
-  ResolvePublication,
+  PrComment,
+  ResolvePublicationDrift,
   ResolvePublicationPreview,
   ResolvePublicationThread,
-  ResolveThread,
 } from '@goodboy/types';
-import {
-  acquireWorktreeWriter,
-  releaseWorktreeWriter,
-  worktreeRemoteHead,
-  worktreeStatus,
-} from '../../../features/worktree/worktree';
+import { acquireWorktreeWriter, releaseWorktreeWriter } from '../../../features/worktree/worktree';
 import { tauriDatabase } from '../../../shared/lib/db';
 import { postThreadReply } from '../github/postThreadReply';
-import { pushSessionBranch } from '../github/pushSessionBranch';
 import { getSessionRepo } from '../worktrees/getSessionRepo';
-import { markThreadResolved } from './markThreadResolved';
+import { approvedPublicationScope } from './approvedPublicationScope';
+import { markThreadDone } from './markThreadDone';
 import { preparePublication } from './preparePublication';
+import { isDriftChecked, publicationDrift } from './publicationDrift';
 import { loadPublicationsInto } from './publicationState';
 import { withPublicationLock } from './publicationLock';
 import { restoreResolvePublication } from './restoreResolvePublication';
+import { verifiedPush } from './verifiedPush';
 import type { PublishParams, SliceParams } from './types';
 
 type Params = SliceParams & PublishParams;
@@ -41,10 +38,14 @@ export type PublishConversationsResult =
   | {
       readonly kind: 'done';
       readonly pushed: boolean;
-      readonly resolved: number;
-      readonly commented: number;
+      readonly closed: number;
+      readonly replied: number;
       readonly failed: number;
     };
+
+type LockedResult =
+  | PublishConversationsResult
+  | { readonly kind: 'drifted'; readonly drift: ReadonlyArray<ResolvePublicationDrift> };
 
 const UNCERTAIN = /timeout|timed out|etimedout|econnreset|network|socket hang up/i;
 
@@ -62,7 +63,7 @@ const markDelivered = async ({ sessionId, thread }: MarkDeliveredParams): Promis
       item.approvedRevision === thread.revision,
   );
   if (match === undefined) {
-    throw new Error('Published resolve item no longer has a valid approval');
+    throw new Error('This item no longer carries the approval it was published under');
   }
   const delivered = await markResolveQueueItemDelivered({
     db: tauriDatabase,
@@ -71,78 +72,8 @@ const markDelivered = async ({ sessionId, thread }: MarkDeliveredParams): Promis
     deliveredAt: Date.now(),
   });
   if (!delivered) {
-    throw new Error('Published resolve item could not be marked delivered');
+    throw new Error('This item could not be marked done');
   }
-};
-
-const isSnapshotChecked = ({
-  publication,
-}: {
-  readonly publication: ResolvePublication;
-}): boolean => publication.phase === 'previewed' || publication.phase === 'confirmed';
-
-type SnapshotParams = {
-  readonly publication: ResolvePublication;
-  readonly frozen: ReadonlyArray<ResolvePublicationThread>;
-  readonly rows: ReadonlyArray<ResolveThread>;
-  readonly worktreePath: string;
-};
-
-const isSnapshotIntact = async ({
-  publication,
-  frozen,
-  rows,
-  worktreePath,
-}: SnapshotParams): Promise<boolean> => {
-  const byThread = new Map(rows.map((row) => [row.threadId, row]));
-  for (const thread of frozen) {
-    const row = byThread.get(thread.threadId);
-    if (row === undefined || row.revision !== thread.revision) {
-      return false;
-    }
-  }
-  if (!publication.requiresPush) {
-    return true;
-  }
-  const status = await worktreeStatus({ worktreePath }).catch(() => null);
-  if (status !== null && (status.branch ?? '') !== publication.branch) {
-    return false;
-  }
-  if (status !== null && (status.head ?? '') !== publication.localHead) {
-    return false;
-  }
-  const remoteHead = await worktreeRemoteHead({
-    worktreePath,
-    branch: publication.branch,
-  }).catch(() => null);
-  return remoteHead === publication.remoteHead;
-};
-
-type PushErrorParams = {
-  readonly push: { readonly ok: true } | { readonly ok: false; readonly error: string };
-  readonly publication: ResolvePublication;
-  readonly worktreePath: string;
-};
-
-const pushError = async ({
-  push,
-  publication,
-  worktreePath,
-}: PushErrorParams): Promise<string | null> => {
-  if (!push.ok) {
-    return push.error;
-  }
-  const remoteHead = await worktreeRemoteHead({
-    worktreePath,
-    branch: publication.branch,
-  }).catch(() => null);
-  if (remoteHead === null) {
-    return `the remote head of ${publication.branch} could not be read, so the push of ${publication.localHead} stays unverified`;
-  }
-  if (remoteHead === publication.localHead) {
-    return null;
-  }
-  return `the remote head of ${publication.branch} is ${remoteHead}, not the reviewed ${publication.localHead}`;
 };
 
 export const publishConversations = async ({
@@ -163,32 +94,7 @@ export const publishConversations = async ({
   }
   const worktreePath = repo?.worktreePath ?? '';
   const frozen = await listResolvePublicationThreads({ db: tauriDatabase, publicationId });
-  const rowsBefore = await listResolveThreads({ db: tauriDatabase, sessionId });
-  if (isSnapshotChecked({ publication })) {
-    const isIntact = await isSnapshotIntact({
-      publication,
-      frozen,
-      rows: rowsBefore,
-      worktreePath,
-    });
-    if (!isIntact) {
-      await setResolvePublicationPhase({
-        db: tauriDatabase,
-        id: publicationId,
-        phase: 'cancelled',
-        error: 'stale',
-      });
-      const preview = await preparePublication({
-        set,
-        get,
-        sessionId,
-        threadIds: frozen.map((thread) => thread.threadId),
-      });
-      await loadPublicationsInto({ set, sessionId });
-      return { kind: 'stale', preview };
-    }
-  }
-  return withPublicationLock<PublishConversationsResult>({
+  const locked = await withPublicationLock<LockedResult>({
     repo: publication.repo,
     prNumber: publication.prNumber,
     ...(scopeId !== undefined && { scopeId }),
@@ -203,6 +109,29 @@ export const publishConversations = async ({
         return { kind: 'busy' };
       }
       try {
+        const rowsBefore = await listResolveThreads({ db: tauriDatabase, sessionId });
+        if (isDriftChecked({ publication })) {
+          const comments: ReadonlyArray<PrComment> =
+            get().sessionGithub[sessionId]?.detail?.comments ?? [];
+          const scope = await approvedPublicationScope({ sessionId });
+          const drift = await publicationDrift({
+            publication,
+            frozen,
+            rows: rowsBefore,
+            comments,
+            scope,
+            worktreePath,
+          });
+          if (drift.length > 0) {
+            await setResolvePublicationPhase({
+              db: tauriDatabase,
+              id: publicationId,
+              phase: 'cancelled',
+              error: 'stale',
+            });
+            return { kind: 'drifted', drift };
+          }
+        }
         await setResolvePublicationPhase({
           db: tauriDatabase,
           id: publicationId,
@@ -228,12 +157,7 @@ export const publishConversations = async ({
             id: publicationId,
             phase: 'pushing',
           });
-          const push = await pushSessionBranch(get, sessionId);
-          const error = await pushError({
-            push,
-            publication,
-            worktreePath,
-          });
+          const error = await verifiedPush({ get, sessionId, publication, worktreePath });
           if (error !== null) {
             await setResolvePublicationPhase({
               db: tauriDatabase,
@@ -255,7 +179,7 @@ export const publishConversations = async ({
             void get().emitNotification(
               'error',
               'error',
-              'nothing was published',
+              'nothing was pushed',
               `${error}. The conversations stayed as they were.`,
               { sessionId, action: { kind: 'retry-publication', sessionId } },
             );
@@ -274,8 +198,8 @@ export const publishConversations = async ({
           id: publicationId,
           phase: 'posting',
         });
-        let resolved = 0;
-        let commented = 0;
+        let closed = 0;
+        let replied = 0;
         let failed = 0;
         let lastError = '';
         for (const thread of frozen) {
@@ -294,21 +218,23 @@ export const publishConversations = async ({
               replyBody: current.replyBody,
               frozen: current,
             });
+            if (reply.posted) {
+              replied += 1;
+            }
             if (current.resolvePhase === 'skipped') {
               if (reply.posted) {
-                commented += 1;
                 await markDelivered({ sessionId, thread: { ...current, ...reply } });
               }
               continue;
             }
-            await markThreadResolved({
+            await markThreadDone({
               get,
               sessionId,
               threadId: thread.threadId,
               frozen: { ...current, replyPhase: reply.posted ? 'posted' : current.replyPhase },
             });
             await markDelivered({ sessionId, thread: current });
-            resolved += 1;
+            closed += 1;
           } catch (err) {
             failed += 1;
             lastError = formatError(err);
@@ -342,7 +268,7 @@ export const publishConversations = async ({
           activePublicationPreview: { ...state.activePublicationPreview, [sessionId]: null },
         }));
         await get().refreshSessionPrDetail(sessionId, { force: true });
-        return { kind: 'done', pushed, resolved, commented, failed };
+        return { kind: 'done', pushed, closed, replied, failed };
       } finally {
         if (lease !== null) {
           await releaseWorktreeWriter({ path: worktreePath, holder }).catch(() => undefined);
@@ -350,4 +276,17 @@ export const publishConversations = async ({
       }
     },
   });
+  if (locked.kind !== 'drifted') {
+    return locked;
+  }
+  const preview = await preparePublication({
+    set,
+    get,
+    sessionId,
+    threadIds: frozen.map((thread) => thread.threadId),
+    drift: locked.drift,
+    ...(scopeId !== undefined && { scopeId }),
+  });
+  await loadPublicationsInto({ set, sessionId });
+  return { kind: 'stale', preview };
 };

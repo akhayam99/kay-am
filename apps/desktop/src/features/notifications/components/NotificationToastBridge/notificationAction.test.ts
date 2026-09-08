@@ -147,11 +147,11 @@ describe('mapNotificationAction', () => {
     window.removeEventListener('goodboy:reveal-chat', revealed);
   });
 
-  it('retry-publication: returns action with Retry label', () => {
+  it('retry-publication: returns action with the check and retry label', () => {
     const action: NotificationAction = { kind: 'retry-publication', sessionId: SESSION_ID };
     const store = buildStore();
     const toastAction = mapNotificationAction(action, store as never);
-    expect(toastAction?.label).toBe('Retry');
+    expect(toastAction?.label).toBe('Check and retry');
   });
 
   it('retry-publication: onClick reconciles a failed publication and publishes the fresh preview', async () => {

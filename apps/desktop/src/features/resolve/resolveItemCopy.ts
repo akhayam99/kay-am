@@ -22,7 +22,7 @@ export const RESOLVE_ITEM_LABEL = {
 export const checksHeadline = ({ verdict }: { readonly verdict: ResolveChecksVerdict }): string => {
   const headline: Record<ResolveChecksVerdict['kind'], string> = {
     nothing_ran: 'Nothing ran against this proposal',
-    all_stale: 'Every receipt is stale, so nothing here is proven',
+    all_stale: 'Every run is stale, so nothing here is proven',
     proves_the_fix: 'Fails on the current code, passes on the proposal',
     passes_without_base_run: 'Passes on the proposal. It never ran on the current code',
     passes_on_both: 'Passes on the proposal and on the current code, so it proves nothing',

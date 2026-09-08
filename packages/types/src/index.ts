@@ -346,6 +346,8 @@ export type {
   ResolveUncapturedWork,
   ResolveUncapturedWorkReason,
   ResolvePublication,
+  ResolvePublicationDrift,
+  ResolvePublicationDriftKind,
   ResolvePublicationExclusion,
   ResolvePublicationPhase,
   ResolvePublicationPreview,

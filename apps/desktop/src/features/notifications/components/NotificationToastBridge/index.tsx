@@ -102,7 +102,7 @@ export const mapNotificationAction = (
   if (action.kind === 'retry-publication') {
     const { sessionId } = action;
     return {
-      label: 'Retry',
+      label: 'Check and retry',
       onClick: () => {
         void (async () => {
           const preview = await store.retryPublication({ sessionId });
