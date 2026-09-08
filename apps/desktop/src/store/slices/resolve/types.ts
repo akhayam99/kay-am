@@ -2,6 +2,8 @@ import type {
   Agent,
   AgentId,
   ResolveAttemptPhase,
+  ResolveCheckBreadth,
+  ResolveCheckRun,
   ResolvePublicationPreview,
   ResolveThread,
   ResolveUncapturedWork,
@@ -41,6 +43,13 @@ export type CandidateBeginParams = SessionParams & {
 };
 export type CandidateCaptureParams = CandidateBeginParams & {
   readonly threadIds: ReadonlyArray<string>;
+};
+export type CheckRunParams = SessionParams & {
+  readonly candidateId: string;
+  readonly command: string;
+  readonly name: string;
+  readonly testIdentity: string | null;
+  readonly breadth: ResolveCheckBreadth;
 };
 export type PhaseParams = SessionParams & {
   readonly agentId: AgentId;
@@ -99,6 +108,7 @@ export type ResolveActions = {
   readonly recordResolvePhase: (params: PhaseParams) => Promise<void>;
   readonly beginResolveCandidate: (params: CandidateBeginParams) => Promise<void>;
   readonly captureResolveCandidate: (params: CandidateCaptureParams) => Promise<string | null>;
+  readonly runResolveCheck: (params: CheckRunParams) => Promise<ResolveCheckRun>;
   readonly invalidateIntegratedApprovals: (params: SessionParams) => Promise<number>;
   readonly recoverUncapturedResolveWork: (
     params: SessionParams,

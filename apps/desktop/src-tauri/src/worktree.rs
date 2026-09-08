@@ -1987,6 +1987,33 @@ fn worktree_diff_commit_blocking(
 }
 
 #[tauri::command]
+pub async fn worktree_diff_range(
+    worktree_path: String,
+    base: String,
+    head: String,
+) -> Result<String, WorktreeError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        worktree_diff_range_blocking(worktree_path, base, head)
+    })
+    .await
+    .map_err(|e| WorktreeError::Io(std::io::Error::other(e.to_string())))?
+}
+
+fn worktree_diff_range_blocking(
+    worktree_path: String,
+    base: String,
+    head: String,
+) -> Result<String, WorktreeError> {
+    let p = Path::new(&worktree_path);
+    if !p.exists() {
+        return Err(WorktreeError::RepoNotFound(worktree_path));
+    }
+    let from = resolve_commit(p, base.trim())?;
+    let to = resolve_commit(p, head.trim())?;
+    git(p, &["diff", &from, &to])
+}
+
+#[tauri::command]
 pub async fn worktree_diff_working(
     worktree_path: String,
     scope: String,

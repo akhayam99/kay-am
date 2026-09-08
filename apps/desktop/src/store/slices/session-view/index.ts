@@ -15,6 +15,7 @@ import {
   setSessionStudio,
   toggleWorkflowExpand,
 } from './workSurface';
+import { openResolveDiff, returnFromResolveDiff, setResolveQueueView } from './resolveSurface';
 import { beginSessionCreation, endSessionCreation } from './sessionCreation';
 import type { GetFn, SessionViewSlice, SetFn } from './types';
 
@@ -23,6 +24,7 @@ export { deriveSessionStage } from './deriveSessionStage';
 export { resolveSessionRequest } from './resolveSessionRequest';
 export { isPrReviewSession } from './isPrReviewSession';
 export { readPersistedLens } from './workSurfaceStorage';
+export { EMPTY_RESOLVE_QUEUE_VIEW } from './types';
 export type { GroupedSessions, SessionViewSlice } from './types';
 export type {
   FocusedExternalTask,
@@ -31,6 +33,9 @@ export type {
   LensKind,
   LensHistory,
   DiffFocus,
+  ResolveDiffReturn,
+  ResolveQueueFilter,
+  ResolveQueueView,
   SessionCreation,
   SessionCreationId,
   SessionCreationKind,
@@ -53,6 +58,9 @@ export const createSessionViewSlice = (set: SetFn, get: GetFn): SessionViewSlice
     setSessionStudio: setSessionStudio(set),
     setDiffFocus: setDiffFocus(set),
     openDiffLens: openDiffLens(get),
+    setResolveQueueView: setResolveQueueView(set),
+    openResolveDiff: openResolveDiff(set, get),
+    returnFromResolveDiff: returnFromResolveDiff(set, get),
     openMountDiff: openMountDiff(set, get),
     openExternalTaskLens: openExternalTaskLens(set, get),
     beginSessionCreation: beginSessionCreation(set),

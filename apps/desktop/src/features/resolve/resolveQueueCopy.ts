@@ -19,8 +19,7 @@ export const RESOLVE_QUEUE_ACTION_LABEL = {
   acceptAll: 'Accept all',
 } as const;
 
-export const forYouHeading = ({ count }: { readonly count: number }): string =>
-  `${count} for you`;
+export const forYouHeading = ({ count }: { readonly count: number }): string => `${count} for you`;
 
 export const acceptFixLabel = ({ coveredCount }: { readonly coveredCount: number }): string =>
   coveredCount > 1 ? `Accept fix (${coveredCount})` : 'Accept fix';
@@ -31,12 +30,13 @@ export const secondaryStatusLine = ({
 }: {
   readonly workingCount: number;
   readonly readyToPushCount: number;
-}): string =>
-  `${workingCount} working · ${readyToPushCount} ready to push`;
+}): string => `${workingCount} working · ${readyToPushCount} ready to push`;
 
 export const coversSeveralSentence = ({
   coveredCount,
 }: {
   readonly coveredCount: number;
 }): string | null =>
-  coveredCount > 1 ? `This proposal also covers ${coveredCount - 1} other comment${coveredCount - 1 === 1 ? '' : 's'}.` : null;
+  coveredCount > 1
+    ? `This proposal also covers ${coveredCount - 1} other comment${coveredCount - 1 === 1 ? '' : 's'}.`
+    : null;

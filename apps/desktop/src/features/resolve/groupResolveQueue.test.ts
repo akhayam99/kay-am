@@ -69,6 +69,7 @@ const row = ({
     createdAtMs: reviewerCreatedAtMs,
     location: null,
     path: null,
+    line: null,
   },
   proposal: null,
   coveredThreadIds: [],

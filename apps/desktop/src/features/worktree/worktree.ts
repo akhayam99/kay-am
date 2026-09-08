@@ -397,6 +397,20 @@ export const worktreeDiffCommit = async (worktreePath: string, sha: string): Pro
   return invoke<string>('worktree_diff_commit', { worktreePath, sha });
 };
 
+export type DiffRangeParams = {
+  readonly worktreePath: string;
+  readonly base: string;
+  readonly head: string;
+};
+
+export const worktreeDiffRange = async ({
+  worktreePath,
+  base,
+  head,
+}: DiffRangeParams): Promise<string> => {
+  return invoke<string>('worktree_diff_range', { worktreePath, base, head });
+};
+
 export type RewrittenHead = {
   readonly sha: string;
   readonly shortSha: string;

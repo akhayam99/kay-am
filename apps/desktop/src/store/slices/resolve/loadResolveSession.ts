@@ -8,6 +8,7 @@ import { tauriDatabase } from '../../../shared/lib/db';
 import { drainResolveQueue } from './drainResolveQueue';
 import { reconcileResolveAttempts } from './reconcileResolveAttempts';
 import { importLegacyResolve } from './importLegacyResolve';
+import { loadResolveCandidatesInto } from './loadResolveCandidatesInto';
 import { projectResolveRows } from './projectResolveRows';
 import { loadPublicationsInto } from './publicationState';
 import { recoverUncapturedResolveWork } from './recoverUncapturedResolveWork';
@@ -64,6 +65,7 @@ export const loadResolveSession = async ({ set, get, sessionId }: Params): Promi
       [sessionId]: queueItems,
     },
   }));
+  await loadResolveCandidatesInto({ set, sessionId });
   await loadPublicationsInto({ set, sessionId });
   await drainResolveQueue({ set, get, sessionId });
 };

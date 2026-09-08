@@ -93,6 +93,26 @@ export type ResolveCandidateItem = Readonly<{
   itemRevision: number;
 }>;
 
+export type ResolveCheckOutcome = 'passed' | 'failed' | 'errored';
+export type ResolveCheckBreadth = 'scoped' | 'full';
+
+export type ResolveCheckRun = Readonly<{
+  id: string;
+  sessionId: SessionId;
+  candidateId: string;
+  command: string;
+  testIdentity: string | null;
+  breadth: ResolveCheckBreadth;
+  baseTree: string;
+  candidateTree: string | null;
+  acceptedSet: ReadonlyArray<string>;
+  outcome: ResolveCheckOutcome;
+  exitCode: number;
+  durationMs: number;
+  logRef: string | null;
+  createdAt: number;
+}>;
+
 export type ResolveUncapturedWorkReason = 'quarantine_failed' | 'worktree_unavailable';
 
 export type ResolveUncapturedWork = Readonly<{

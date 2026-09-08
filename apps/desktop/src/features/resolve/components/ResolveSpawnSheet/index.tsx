@@ -25,7 +25,8 @@ export const ResolveSpawnSheet = ({
   onCancel,
 }: Props) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const provider = value.provider === '' ? (getModelProvider(value.model) ?? 'anthropic') : value.provider;
+  const provider =
+    value.provider === '' ? (getModelProvider(value.model) ?? 'anthropic') : value.provider;
   const summary = `${PROVIDER_LABEL[provider]} ${modelLabel(value.model)} ${EFFORT_LABEL[value.effort]}`;
 
   if (!isExpanded) {

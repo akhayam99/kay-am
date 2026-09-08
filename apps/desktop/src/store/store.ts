@@ -137,6 +137,7 @@ import { createInitialSessionViewState } from './slices/session-view/createIniti
 import type {
   DiffFocus,
   LensKind,
+  ResolveQueueView,
   ReviewLensIntent,
   SessionCreationId,
   SessionCreationKind,
@@ -901,6 +902,20 @@ type AppActions = {
   setDiffFocus(sessionId: SessionId, focus: DiffFocus | null): void;
   openDiffLens(sessionId: SessionId, focus: DiffFocus | null): void;
   openMountDiff(sessionId: SessionId, worktreePath: string): void;
+  setResolveQueueView(params: {
+    readonly sessionId: SessionId;
+    readonly patch: Partial<ResolveQueueView>;
+  }): void;
+  openResolveDiff(params: {
+    readonly sessionId: SessionId;
+    readonly threadId: string;
+    readonly sha: string;
+    readonly path: string | null;
+    readonly line: number | null;
+    readonly order: ReadonlyArray<string>;
+    readonly scrollTop: number;
+  }): void;
+  returnFromResolveDiff(params: { readonly sessionId: SessionId }): void;
   openExternalTaskLens(sessionId: SessionId, task: SessionExternalTask): void;
   beginSessionCreation(
     sessionId: SessionId,

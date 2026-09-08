@@ -114,6 +114,8 @@ const reset = ({ mounts = [] }: { readonly mounts?: ReadonlyArray<SessionProject
     sessionStudio: {},
     diffFocus: {},
     diffMountPath: {},
+    resolveDiffReturn: {},
+    returnFromResolveDiff: () => undefined,
     focusedWorkflowRunId: {},
     lensHistory: {},
     sessionPhaseRuns: { [SESSION_ID]: [] },

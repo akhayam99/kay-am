@@ -80,6 +80,28 @@ export type ReviewLensIntent = {
   readonly mode?: ReviewMode;
 };
 
+export type ResolveQueueFilter = 'for_you' | 'everything';
+
+export type ResolveQueueView = {
+  readonly filter: ResolveQueueFilter;
+  readonly expandedThreadId: string | null;
+  readonly order: ReadonlyArray<string>;
+  readonly scrollTop: number;
+};
+
+export type ResolveDiffReturn = {
+  readonly threadId: string;
+  readonly path: string | null;
+  readonly line: number | null;
+};
+
+export const EMPTY_RESOLVE_QUEUE_VIEW: ResolveQueueView = {
+  filter: 'for_you',
+  expandedThreadId: null,
+  order: [],
+  scrollTop: 0,
+};
+
 export type SessionStudio =
   | { readonly kind: 'workflow' }
   | { readonly kind: 'mr'; readonly mountId?: MountId }
@@ -143,6 +165,8 @@ type SessionViewSliceState = {
   readonly workflowExpand: Readonly<Record<SessionId, Readonly<Record<string, boolean>>>>;
   readonly focusedWorkflowRunId: Readonly<Record<SessionId, string | null>>;
   readonly diffFocus: Readonly<Record<SessionId, DiffFocus | null>>;
+  readonly resolveQueueView: Readonly<Record<SessionId, ResolveQueueView>>;
+  readonly resolveDiffReturn: Readonly<Record<SessionId, ResolveDiffReturn | null>>;
   readonly diffMountPath: Readonly<Record<SessionId, string | null>>;
   readonly sessionCreations: Readonly<Record<SessionId, ReadonlyArray<SessionCreation>>>;
 };
@@ -162,6 +186,20 @@ type SessionViewSliceActions = {
   openExternalTaskLens(sessionId: SessionId, task: SessionExternalTask): void;
   setSessionStudio(sessionId: SessionId, studio: SessionStudio | null): void;
   setDiffFocus(sessionId: SessionId, focus: DiffFocus | null): void;
+  setResolveQueueView(params: {
+    readonly sessionId: SessionId;
+    readonly patch: Partial<ResolveQueueView>;
+  }): void;
+  openResolveDiff(params: {
+    readonly sessionId: SessionId;
+    readonly threadId: string;
+    readonly sha: string;
+    readonly path: string | null;
+    readonly line: number | null;
+    readonly order: ReadonlyArray<string>;
+    readonly scrollTop: number;
+  }): void;
+  returnFromResolveDiff(params: { readonly sessionId: SessionId }): void;
   openDiffLens(sessionId: SessionId, focus: DiffFocus | null): void;
   openMountDiff(sessionId: SessionId, worktreePath: string): void;
   beginSessionCreation(

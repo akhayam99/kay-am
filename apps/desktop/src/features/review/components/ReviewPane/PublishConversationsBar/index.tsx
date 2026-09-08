@@ -90,25 +90,25 @@ export const PublishConversationsBar = ({
         icon={PencilLine}
         label={draftCount > 0 ? `Write review (${draftCount})` : 'Write review'}
         pressed={mode === 'write_review'}
-        onClick={() => onSelectMode(mode === 'write_review' ? 'conversations' : 'write_review')}
+        onClick={() => onSelectMode(mode === 'write_review' ? 'queue' : 'write_review')}
       />
       <GhostActionButton
         icon={FileText}
         label="PR details"
         pressed={mode === 'pr_details' || mode === 'create_pr'}
-        onClick={() => onSelectMode(mode === 'pr_details' ? 'conversations' : 'pr_details')}
+        onClick={() => onSelectMode(mode === 'pr_details' ? 'queue' : 'pr_details')}
       />
       <GhostActionButton
         icon={MessageSquare}
         label="PR activity"
         pressed={mode === 'pr_activity'}
-        onClick={() => onSelectMode(mode === 'pr_activity' ? 'conversations' : 'pr_activity')}
+        onClick={() => onSelectMode(mode === 'pr_activity' ? 'queue' : 'pr_activity')}
       />
       <GhostActionButton
         icon={ListChecks}
         label="Checks"
         pressed={mode === 'checks'}
-        onClick={() => onSelectMode(mode === 'checks' ? 'conversations' : 'checks')}
+        onClick={() => onSelectMode(mode === 'checks' ? 'queue' : 'checks')}
       />
     </div>
   </div>

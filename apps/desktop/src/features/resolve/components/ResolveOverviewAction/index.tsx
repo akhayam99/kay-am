@@ -29,11 +29,7 @@ export const ResolveOverviewAction = ({ sessionId }: Props) => {
 
   if (hasActiveResolveRun({ attempts })) {
     return (
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => openReview({ sessionId, mode: 'queue' })}
-      >
+      <Button variant="ghost" size="sm" onClick={() => openReview({ sessionId, mode: 'queue' })}>
         For you
       </Button>
     );

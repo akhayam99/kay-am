@@ -15,6 +15,7 @@ import { updateResolveThread } from './updateResolveThread';
 import { acceptResolveQueueItem } from './acceptResolveQueueItem';
 import { beginResolveCandidate } from './beginResolveCandidate';
 import { captureResolveCandidate } from './captureResolveCandidate';
+import { runResolveCheck } from './runResolveCheck';
 import { invalidateIntegratedApprovals } from './invalidateIntegratedApprovals';
 import { recoverUncapturedResolveWork } from './recoverUncapturedResolveWork';
 import { deferResolveQueueItem } from './deferResolveQueueItem';
@@ -38,6 +39,7 @@ import type {
   ItemRevisionParams,
   CandidateBeginParams,
   CandidateCaptureParams,
+  CheckRunParams,
 } from './types';
 
 export const createResolveSlice = ({ set, get }: SliceParams): ResolveActions => {
@@ -73,6 +75,7 @@ export const createResolveSlice = ({ set, get }: SliceParams): ResolveActions =>
       serialize({ run: () => beginResolveCandidate({ set, get, ...params }) }),
     captureResolveCandidate: (params: CandidateCaptureParams) =>
       serialize({ run: () => captureResolveCandidate({ set, get, ...params }) }),
+    runResolveCheck: (params: CheckRunParams) => runResolveCheck({ set, get, ...params }),
     invalidateIntegratedApprovals: (params: SessionParams) =>
       serialize({ run: () => invalidateIntegratedApprovals({ set, get, ...params }) }),
     recoverUncapturedResolveWork: (params: SessionParams) =>
