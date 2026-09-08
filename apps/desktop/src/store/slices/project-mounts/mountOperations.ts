@@ -20,6 +20,7 @@ type BeginParams = {
   readonly requestId: string;
   readonly kind: MountOperationKind;
   readonly mountId: MountId | null;
+  readonly plannedMountId?: MountId;
   readonly expectedRevision: number;
   readonly input: unknown;
 };
@@ -32,11 +33,28 @@ type SettleParams = {
 
 const nowIso = (): IsoDateTime => new Date().toISOString() as IsoDateTime;
 
+const PLANNED_MOUNT_KEY = 'plannedMountId';
+
+const readPlanned = ({ input }: { readonly input: unknown }): MountId | null => {
+  if (input === null || typeof input !== 'object') {
+    return null;
+  }
+  const value = (input as Readonly<Record<string, unknown>>)[PLANNED_MOUNT_KEY];
+  return typeof value === 'string' ? (value as MountId) : null;
+};
+
+export const plannedMountId = ({
+  operation,
+}: {
+  readonly operation: MountOperation;
+}): MountId | null => readPlanned({ input: operation.input });
+
 export const beginMountOperation = async ({
   sessionId,
   requestId,
   kind,
   mountId,
+  plannedMountId: planned,
   expectedRevision,
   input,
 }: BeginParams): Promise<MountOperation> => {
@@ -45,15 +63,32 @@ export const beginMountOperation = async ({
     return existing;
   }
   const timestamp = nowIso();
+  const carried =
+    (existing === null ? null : readPlanned({ input: existing.input })) ?? planned ?? null;
+  const merged =
+    existing === null ||
+    existing.input === null ||
+    typeof existing.input !== 'object' ||
+    input === null ||
+    typeof input !== 'object'
+      ? input
+      : {
+          ...(existing.input as Readonly<Record<string, unknown>>),
+          ...(input as Readonly<Record<string, unknown>>),
+        };
+  const recorded =
+    carried === null || merged === null || typeof merged !== 'object'
+      ? merged
+      : { ...(merged as Readonly<Record<string, unknown>>), [PLANNED_MOUNT_KEY]: carried };
   const operation: MountOperation = {
     id: existing?.id ?? crypto.randomUUID(),
     sessionId,
-    mountId: existing?.mountId ?? mountId,
+    mountId,
     requestId,
     kind,
     status: 'running',
     expectedRevision,
-    input,
+    input: recorded,
     result: null,
     errorCode: null,
     createdAt: existing?.createdAt ?? timestamp,
@@ -110,13 +145,33 @@ type MatchParams = {
   readonly operation: MountOperation;
   readonly expected: Pick<MountOperationResult, 'repoRoot'> &
     Partial<Pick<MountOperationResult, 'mountId' | 'worktreePath' | 'branch'>>;
+  readonly input?: Readonly<Record<string, unknown>>;
+};
+
+export const mountOperationInputMatches = ({
+  operation,
+  expected,
+}: {
+  readonly operation: MountOperation;
+  readonly expected: Readonly<Record<string, unknown>>;
+}): boolean => {
+  const recorded = operation.input;
+  if (recorded === null || typeof recorded !== 'object') {
+    return false;
+  }
+  const fields = recorded as Readonly<Record<string, unknown>>;
+  return Object.entries(expected).every(([key, value]) => fields[key] === value);
 };
 
 export const reusableMountOperationResult = ({
   operation,
   expected,
+  input,
 }: MatchParams): MountOperationResult | null => {
   if (operation.status !== 'succeeded') {
+    return null;
+  }
+  if (input !== undefined && !mountOperationInputMatches({ operation, expected: input })) {
     return null;
   }
   const result = operation.result;

@@ -5,6 +5,7 @@ import { inspectWorktree } from '../../../features/worktree/worktree';
 import {
   failMountOperation,
   markMountOperationUncertain,
+  plannedMountId,
   succeedMountOperation,
 } from './mountOperations';
 import { applyMountViews, loadMountViews } from './mountViews';
@@ -53,7 +54,10 @@ type RecoverForkParams = {
 };
 
 const recoverFork = async ({ get, operation, views }: RecoverForkParams): Promise<boolean> => {
-  const mountId = operation.mountId;
+  const mountId =
+    operation.mountId ??
+    (readString({ source: operation.result, key: 'mountId' }) as MountId | null) ??
+    plannedMountId({ operation });
   const worktreePath = readPath({ operation });
   const repoRoot = readRepoRoot({ operation });
   const branch = readString({ source: operation.result, key: 'branch' });

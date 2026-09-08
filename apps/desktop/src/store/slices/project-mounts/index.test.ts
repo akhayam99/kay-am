@@ -152,6 +152,10 @@ vi.mock('@goodboy/db', () => ({
       h.operations.get(`${sessionId}:${requestId}`) ?? null,
   ),
   upsertMountOperation: vi.fn(async ({ operation }: { operation: Record<string, unknown> }) => {
+    const mountId = operation['mountId'];
+    if (typeof mountId === 'string' && !h.rows.has(mountId)) {
+      throw new Error('Sqlite error: FOREIGN KEY constraint failed');
+    }
     h.operations.set(`${operation['sessionId']}:${operation['requestId']}`, { ...operation });
   }),
   listMountOperations: vi.fn(async ({ sessionId }: { sessionId: string }) =>
@@ -376,12 +380,24 @@ describe('project mount lifecycle', () => {
 
   it('keeps the created directory when the mount row cannot be written', async () => {
     const { slice } = makeSlice();
-    await slice.forkMount({
-      sessionId: SESSION_ID,
+    const collidingPath = `${REPO_ROOT}/.goodboy/worktrees/foreign`;
+    h.rows.set('mount-foreign', {
+      id: 'mount-foreign',
+      sessionId: 'session-elsewhere',
       projectId: PROJECT_ID,
-      requestId: 'request-3',
+      worktreePath: collidingPath,
+      lastWorktreePath: collidingPath,
+      branch: 'ak/foreign',
+      baseBranch: 'main',
+      parallelIndex: 1,
+      mountName: 'goodboy',
+      repoSlug: null,
+      isAttached: true,
+      diskState: 'present',
+      revision: 0,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
     });
-    const collidingPath = [...h.rows.values()][0]?.worktreePath;
     h.createWorktree.mockResolvedValue({
       worktreePath: collidingPath,
       branchName: 'ak/second',
@@ -393,6 +409,57 @@ describe('project mount lifecycle', () => {
       slice.forkMount({ sessionId: SESSION_ID, projectId: PROJECT_ID, requestId: 'request-4' }),
     ).rejects.toMatchObject({ code: 'directory-occupied' });
     expect(h.operations.get(`${SESSION_ID}:request-4`)).toMatchObject({ status: 'uncertain' });
+  });
+
+  it('refuses a fork that lands in the directory of another mount of this session', async () => {
+    const { slice } = makeSlice();
+    const first = await slice.forkMount({
+      sessionId: SESSION_ID,
+      projectId: PROJECT_ID,
+      requestId: 'request-3',
+    });
+    h.createWorktree.mockResolvedValue({
+      worktreePath: first.worktreePath,
+      branchName: 'ak/second',
+      slug: 'second',
+      reused: true,
+    });
+
+    await expect(
+      slice.forkMount({ sessionId: SESSION_ID, projectId: PROJECT_ID, requestId: 'request-4' }),
+    ).rejects.toMatchObject({ code: 'directory-occupied' });
+    expect(h.operations.get(`${SESSION_ID}:request-4`)).toMatchObject({ status: 'failed' });
+    expect([...h.rows.values()]).toHaveLength(1);
+  });
+
+  it('forks a different branch under a reused request id instead of replaying it', async () => {
+    const { slice } = makeSlice();
+
+    const first = await slice.forkMount({
+      sessionId: SESSION_ID,
+      projectId: PROJECT_ID,
+      branch: 'ak/first',
+      requestId: 'request-5',
+    });
+    const second = await slice.forkMount({
+      sessionId: SESSION_ID,
+      projectId: PROJECT_ID,
+      branch: 'ak/second',
+      requestId: 'request-5',
+    });
+
+    expect(second.id).not.toBe(first.id);
+    expect(second.branch).toBe('ak/second');
+  });
+
+  it('stamps the journal with the mount id only once the mount row exists', async () => {
+    const { slice } = makeSlice();
+
+    const mount = await slice.forkMount({ sessionId: SESSION_ID, projectId: PROJECT_ID });
+
+    const operation = [...h.operations.values()][0];
+    expect(operation).toMatchObject({ status: 'succeeded', mountId: mount.id });
+    expect(h.rows.get(mount.id)).toBeDefined();
   });
 
   it('switches a mount in place and keeps its identity and directory', async () => {

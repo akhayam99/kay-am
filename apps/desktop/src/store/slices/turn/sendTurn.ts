@@ -110,7 +110,11 @@ import {
   selectMountById,
   selectWritableMounts,
 } from '../project-mounts/selectors';
-import { mountContinuationPrompt, takeMountContinuation } from './mountContinuations';
+import {
+  mountContinuationPrompt,
+  resetMountContinuationChain,
+  takeMountContinuation,
+} from './mountContinuations';
 import {
   buildTurnWritableRoots,
   repoRootsForTurn,
@@ -1501,6 +1505,9 @@ export const sendTurn = (set: SetFn, get: GetFn) => {
     });
   };
   const run = async (input: Input): Promise<SendTurnResult> => {
+    if (input.origin !== 'mount-continuation') {
+      resetMountContinuationChain({ sessionId: input.sessionId });
+    }
     const lease: TurnLease = { path: null, holder: null, token: null, attemptId: undefined };
     try {
       return await runOnce(input, lease);

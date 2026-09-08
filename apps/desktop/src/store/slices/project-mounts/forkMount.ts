@@ -11,6 +11,8 @@ import {
   beginMountOperation,
   failMountOperation,
   markMountOperationUncertain,
+  mountOperationInputMatches,
+  plannedMountId,
   reusableMountOperationResult,
   succeedMountOperation,
 } from './mountOperations';
@@ -40,45 +42,71 @@ export const forkMount = (set: SetFn, get: GetFn) => {
       mountKey: `${sessionId}:${requestId}`,
       run: async () => {
         const views = await loadMountViews({ get, sessionId });
+        const requested = input.branch?.trim() ?? '';
+        const adopt = input.adoptExistingBranch === true;
+        const recordedBase = input.baseBranch ?? project.baseBranch ?? null;
+        const identity = {
+          projectId,
+          repoRoot: project.rootPath,
+          baseBranch: recordedBase,
+          branch: requested,
+          adoptExistingBranch: adopt,
+        };
         const operation = await beginMountOperation({
           sessionId,
           requestId,
           kind: 'fork',
-          mountId: generatedMountId,
+          mountId: null,
+          plannedMountId: generatedMountId,
           expectedRevision: 0,
-          input: {
-            projectId,
-            repoRoot: project.rootPath,
-            baseBranch: input.baseBranch ?? project.baseBranch ?? null,
-            mountName: input.mountName ?? project.name,
-          },
+          input: { ...identity, mountName: input.mountName ?? project.name },
         });
         const reused = reusableMountOperationResult({
           operation,
           expected: { repoRoot: project.rootPath },
+          input: identity,
         });
         if (reused !== null) {
-          const existing = views.find((candidate) => candidate.id === reused.mountId);
+          const existing = views.find(
+            (candidate) => candidate.id === reused.mountId && candidate.branch === reused.branch,
+          );
           if (existing !== undefined) {
             applyMountViews({ set, sessionId, views });
             return existing;
           }
         }
-        const mountId = (operation.mountId ?? generatedMountId) as MountId;
+        const planned = plannedMountId({ operation });
+        const sameRequest =
+          planned !== null && mountOperationInputMatches({ operation, expected: identity });
+        const landed = sameRequest
+          ? views.find((candidate) => candidate.id === planned && candidate.worktreePath !== null)
+          : undefined;
+        if (landed !== undefined) {
+          await succeedMountOperation({
+            operation,
+            result: {
+              mountId: landed.id,
+              worktreePath: landed.worktreePath ?? '',
+              branch: landed.branch,
+              repoRoot: project.rootPath,
+            },
+          });
+          applyMountViews({ set, sessionId, views });
+          return landed;
+        }
+        const mountId = (sameRequest ? planned : generatedMountId) as MountId;
         const prefix = resolveMountBranchPrefix({ get, session, project });
         const sessionSlug = resolveSessionSlug({ get, session, prefix });
         const remoteBranches = await listBranchNames({ repoPath: project.rootPath }).catch(
           () => [] as ReadonlyArray<string>,
         );
         const taken = [...remoteBranches, ...views.map((candidate) => candidate.branch)];
-        const requested = input.branch?.trim() ?? '';
         const split = splitBranchName({ branch: requested });
         const branchPrefix = split.branchPrefix === '' ? prefix : split.branchPrefix;
         const branchSlug =
           requested === ''
             ? nextAvailableSlug({ base: sessionSlug, prefix, taken })
             : split.branchSlug;
-        const adopt = input.adoptExistingBranch === true;
         if (!adopt && requested !== '' && taken.includes(`${branchPrefix}/${branchSlug}`)) {
           await failMountOperation({ operation, errorCode: 'branch-taken' });
           throw mountError({
@@ -106,6 +134,17 @@ export const forkMount = (set: SetFn, get: GetFn) => {
             payload: { projectId, projectName: project.name, reason: formatError(error) },
           });
           throw error;
+        }
+        const occupant = views.find(
+          (candidate) =>
+            candidate.id !== mountId && candidate.worktreePath === created.worktreePath,
+        );
+        if (occupant !== undefined) {
+          await failMountOperation({ operation, errorCode: 'directory-occupied' });
+          throw mountError({
+            code: 'directory-occupied',
+            message: `that worktree already belongs to mount ${occupant.id}: ${created.worktreePath}`,
+          });
         }
         const result = {
           mountId,

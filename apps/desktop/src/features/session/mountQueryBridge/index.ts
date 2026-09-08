@@ -15,7 +15,10 @@ import {
   worktreeWriterStatus,
 } from '../../worktree/worktree';
 import { mountCleanupBlockers } from '../../../store/slices/mount-cleanup/cleanupPolicy';
-import { queueMountContinuation } from '../../../store/slices/turn/mountContinuations';
+import {
+  mountContinuationRefusal,
+  queueMountContinuation,
+} from '../../../store/slices/turn/mountContinuations';
 import { tauriDatabase } from '../../../shared/lib/db';
 import { useAppStore } from '../../../store/store';
 import { isMainWindow } from '../../workspace/window';
@@ -87,18 +90,44 @@ type ContinuationParams = {
   readonly origin: 'fork' | 'attach';
 };
 
-const requestContinuation = ({ request, mount, origin }: ContinuationParams): string => {
+type Continuation = {
+  readonly operationId: string;
+  readonly requiresNewTurn: boolean;
+  readonly note?: string;
+};
+
+const boundMountId = ({ sessionId }: { readonly sessionId: SessionId }): MountId | null => {
+  const state = useAppStore.getState();
+  const selected = state.sessionActiveMount?.[sessionId] ?? null;
+  if (selected !== null) {
+    return selected;
+  }
+  const session = state.sessions?.find((candidate) => candidate.id === sessionId);
+  return session?.activeMountId ?? null;
+};
+
+const requestContinuation = ({ request, mount, origin }: ContinuationParams): Continuation => {
   const operationId = request.requestId ?? `${origin}:${mount.id}:${mount.revision}`;
-  queueMountContinuation({
-    operationId,
-    sessionId: request.sessionId,
-    mountId: mount.id,
-    mountName: mount.mountName,
-    branch: mount.branch,
-    worktreePath: mount.worktreePath ?? '',
-    origin,
+  const outcome = queueMountContinuation({
+    continuation: {
+      operationId,
+      sessionId: request.sessionId,
+      mountId: mount.id,
+      mountName: mount.mountName,
+      branch: mount.branch,
+      worktreePath: mount.worktreePath ?? '',
+      origin,
+    },
+    boundMountId: boundMountId({ sessionId: request.sessionId }),
   });
-  return operationId;
+  if (outcome.queued) {
+    return { operationId, requiresNewTurn: true };
+  }
+  return {
+    operationId,
+    requiresNewTurn: false,
+    note: mountContinuationRefusal({ refusal: outcome.refusal }),
+  };
 };
 
 const bridgeErrorCode = (error: unknown): string | undefined => {
@@ -162,6 +191,14 @@ const loadedMount = async (request: MountBridgeRequest): Promise<SessionMountVie
   return views.find((candidate) => candidate.id === request.mountId);
 };
 
+const satisfiesBranch = ({
+  requested,
+  branch,
+}: {
+  readonly requested: string;
+  readonly branch: string;
+}): boolean => requested === '' || branch === requested || branch.endsWith(`/${requested}`);
+
 const forkFrom = async ({ request }: InspectParams): Promise<MountBridgeOutcome> => {
   const get = useAppStore.getState;
   const source = await loadedMount(request);
@@ -169,22 +206,38 @@ const forkFrom = async ({ request }: InspectParams): Promise<MountBridgeOutcome>
     return { ok: false, error: 'the source mount is not loaded', code: 'mount_unavailable' };
   }
   const base = text({ args: request.args, key: 'base' });
+  const requested = text({ args: request.args, key: 'branch' });
   const mount = await get().forkMount({
     sessionId: request.sessionId,
     projectId: source.projectId,
-    branch: text({ args: request.args, key: 'branch' }),
+    branch: requested,
     adoptExistingBranch: truthy({ args: request.args, key: 'existing' }),
     ...(request.requestId === undefined ? {} : { requestId: request.requestId }),
     ...(base === '' ? {} : { baseBranch: base }),
   });
-  const operationId = requestContinuation({ request, mount, origin: 'fork' });
+  if (mount.id === source.id) {
+    return {
+      ok: false,
+      error: `the fork returned the mount it forked from (${source.id}) instead of a new one`,
+      code: 'fork_unsatisfied',
+    };
+  }
+  if (!satisfiesBranch({ requested, branch: mount.branch })) {
+    return {
+      ok: false,
+      error: `the fork asked for ${requested} but the new mount sits on ${mount.branch}`,
+      code: 'fork_unsatisfied',
+    };
+  }
+  const continuation = requestContinuation({ request, mount, origin: 'fork' });
   return {
     ok: true,
     data: {
-      operationId,
+      operationId: continuation.operationId,
       sourceMountId: request.mountId,
       mount: mountResult(mount),
-      requiresNewTurn: true,
+      requiresNewTurn: continuation.requiresNewTurn,
+      ...(continuation.note === undefined ? {} : { note: continuation.note }),
     },
   };
 };
@@ -231,13 +284,14 @@ const attach = async ({ request }: InspectParams): Promise<MountBridgeOutcome> =
     mountId: request.mountId,
     ...(request.requestId === undefined ? {} : { requestId: request.requestId }),
   });
-  const operationId = requestContinuation({ request, mount, origin: 'attach' });
+  const continuation = requestContinuation({ request, mount, origin: 'attach' });
   return {
     ok: true,
     data: {
-      operationId,
+      operationId: continuation.operationId,
       mount: mountResult(mount),
-      requiresNewTurn: true,
+      requiresNewTurn: continuation.requiresNewTurn,
+      ...(continuation.note === undefined ? {} : { note: continuation.note }),
     },
   };
 };

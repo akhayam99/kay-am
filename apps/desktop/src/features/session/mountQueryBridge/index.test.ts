@@ -6,6 +6,7 @@ const { state, links } = vi.hoisted(() => ({
   state: {
     sessions: [{ id: 'session-1', workspaceId: 'ws-1', goal: 'split the pull request' }],
     terminalTabs: {} as Record<string, ReadonlyArray<unknown>>,
+    sessionActiveMount: {} as Record<string, string | null>,
     views: [] as Array<Record<string, unknown>>,
     loadSessionMounts: vi.fn(async () => state.views),
     forkMount: vi.fn(async () => state.views[1]),
@@ -103,6 +104,7 @@ beforeEach(() => {
     view({ id: 'mount-2', branch: 'goodboy/two' }) as unknown as Record<string, unknown>,
   ];
   links.length = 0;
+  state.sessionActiveMount = {};
   clearMountContinuations();
   for (const call of Object.values(state)) {
     if (typeof call === 'function' && 'mockClear' in call) {
@@ -146,6 +148,40 @@ describe('executeMountRequest', () => {
       worktreePath: '/wt/mount-2',
       origin: 'fork',
     });
+  });
+
+  it('refuses a fork that came back with the mount it forked from', async () => {
+    state.forkMount.mockResolvedValueOnce(state.views[0]);
+
+    const outcome = await executeMountRequest(
+      request({ verb: 'fork', args: { branch: 'goodboy/two' } }),
+    );
+
+    expect(outcome.ok).toBe(false);
+    expect(outcome.code).toBe('fork_unsatisfied');
+    expect(pendingMountContinuations({ sessionId: 'session-1' as SessionId })).toHaveLength(0);
+  });
+
+  it('refuses a fork that landed on a branch nobody asked for', async () => {
+    const outcome = await executeMountRequest(
+      request({ verb: 'fork', args: { branch: 'goodboy/elsewhere' } }),
+    );
+
+    expect(outcome.ok).toBe(false);
+    expect(outcome.code).toBe('fork_unsatisfied');
+    expect(pendingMountContinuations({ sessionId: 'session-1' as SessionId })).toHaveLength(0);
+  });
+
+  it('starts no continuation into the mount the turn already runs in', async () => {
+    state.sessionActiveMount = { 'session-1': 'mount-2' };
+
+    const outcome = await executeMountRequest(
+      request({ verb: 'fork', args: { branch: 'goodboy/two' } }),
+    );
+
+    expect(outcome.ok).toBe(true);
+    expect(outcome.data).toMatchObject({ requiresNewTurn: false });
+    expect(pendingMountContinuations({ sessionId: 'session-1' as SessionId })).toHaveLength(0);
   });
 
   it('leaves a mount activation without any continuation of its own', async () => {
