@@ -7,6 +7,53 @@ version in the same PR that bumps the version numbers (see
 `docs/release-command.md`), before the tag is pushed: the release build fails
 if it can't find a matching `## Goodboy vX.Y.Z` heading.
 
+## Goodboy v0.2.21
+
+A session can hold several branches of the same project at once. Split a
+piece of work into three pull requests and each one gets its own row in
+the overview, its own worktree, its own branch and its own pull request,
+mounted and unmounted whenever you want. Checking out a branch by hand no
+longer erases what the session knew about the request it belonged to.
+
+### [#1700] Several branches and pull requests per project
+
+Until now a session could mount a project once, on one branch, with one
+pull request. That held right up to the moment a piece of work turned out
+too big and you wanted to ship it in parts. Then the only way through was
+to drive git by hand inside the single worktree, and every checkout
+silently rewrote what the session believed it was working on and threw
+away the pull request it had already found.
+
+Now a project can own as many mounts as the work needs. Each mount is a
+row under its project in the overview, carrying its own branch, its own
+request state and its own actions, and each one mounts and unmounts on
+its own without touching its siblings. Two branches of the same
+repository show two different pull requests, and a merge on one no longer
+stops the other from being followed.
+
+Goodboy does not do the splitting. Your agent already does that well from
+a plain description of what you want, so it keeps doing it, and Goodboy
+keeps the books instead. The one thing an agent cannot leave implicit is
+intent: cutting a new branch can mean this mount moves to it, or it can
+mean a second line of work starts while the first stays alive with its
+request. Nothing in the repository tells those apart, so the agent now
+says which it meant, through commands that fork, switch, attach, unmount
+and inspect a mount by name. A session with several mounts that does not
+name one gets a refusal listing the candidates, instead of a silent guess
+at the first.
+
+Pull requests that belong to one split can be declared as a series with a
+position, so a part carries `Part of` its ticket and its place in the run
+rather than a closing reference that would shut the ticket too early.
+
+Deleting a session is now thorough on disk and gentle in the database.
+The worktree goes, with the same refusals that protect a running agent, a
+bound terminal or a busy branch, and the folder is kept rather than lost
+when removal is not safe. What the session knew stays: its mounts, the
+requests they carried and the work you spent on them still show up in
+Impact. A worktree abandoned by a deleted session can finally be found
+and cleaned up, where before its row kept the path claimed forever.
+
 ## Goodboy v0.2.20
 
 Review is one surface. The conversation list stays on screen from Fix
