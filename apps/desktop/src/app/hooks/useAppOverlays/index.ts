@@ -27,6 +27,7 @@ import {
 import { NOTIFICATIONS_STUDIO_EVENT } from '../../../features/notifications/studioEvent';
 import { REPORT_ISSUE_STUDIO_EVENT } from '../../../features/settings/reportIssueStudioEvent';
 import { ghCommitDiff } from '../../../features/github/github';
+import { openReview } from '../../../features/review/openReview';
 import { worktreeDiffCommit } from '../../../features/worktree/worktree';
 import { markStepComplete } from '../../../features/onboarding/onboarding-store';
 import { OPEN_COMMAND_PALETTE_EVENT } from '../../../features/onboarding/openCommandPaletteEvent';
@@ -522,16 +523,17 @@ export const useAppOverlays = ({
       }
       const prNumber = eventValue({ event, key: 'prNumber' });
       const threadId = eventValue({ event, key: 'threadId' });
-      setSettingsOpen(false);
-      setSessionStudio(sessionId, {
-        kind: 'github',
-        prNumber: typeof prNumber === 'number' ? prNumber : undefined,
-        threadId: typeof threadId === 'string' ? threadId : undefined,
+      closeAllStudios();
+      clearSessionStudio();
+      openReview({
+        sessionId,
+        ...(typeof prNumber === 'number' && { prNumber }),
+        ...(typeof threadId === 'string' && { threadId }),
       });
     };
     window.addEventListener('goodboy:open-github-session', handler);
     return () => window.removeEventListener('goodboy:open-github-session', handler);
-  }, [setSessionStudio]);
+  }, [clearSessionStudio, closeAllStudios]);
 
   useEffect(() => {
     const handler = (event: Event) => {

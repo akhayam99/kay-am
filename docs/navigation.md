@@ -245,6 +245,14 @@ breadcrumb IA, exit on close or Esc, and only one is open at a time.
 - **A sibling detail is a split, not a rail**: a resizable column owned by the
   pane it opens in, so it dies with that pane. There is one implementation of
   that split; reuse it rather than growing a rail.
+- **Review is the pull request destination for GitHub, and it has no second
+  copy.** One lens holds the review conversations, the PR details, the PR
+  activity, the checks, the create-a-PR form and the reviewer's own draft
+  review; they are detail modes of that one surface, switched from its dock,
+  and the conversation list never leaves the screen while a mode is open. There
+  is no GitHub studio layered over a session: a saved `pr` lens on a GitHub
+  session lands on Review. The code-host lens keeps serving GitLab and
+  Bitbucket, which still open their own studios.
 - **A lens surface is reached from the overview, never from a rail.** Rows and
   chips inside the overview route to it, expanding in place or opening a side
   panel; counts and dots are read-only signals on the row that routes there.

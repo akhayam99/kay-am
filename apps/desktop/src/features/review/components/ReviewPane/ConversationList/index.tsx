@@ -31,7 +31,6 @@ type Props = {
   readonly isFixDisabled: boolean;
   readonly fixDisabledReason?: string;
   readonly emptyState?: ReactNode;
-  readonly localNotes?: ReactNode;
   readonly onRetryLoad: () => void;
   readonly onFocus: (threadId: string) => void;
   readonly onOpen: (threadId: string) => void;
@@ -76,7 +75,6 @@ export const ConversationList = ({
   isFixDisabled,
   fixDisabledReason,
   emptyState,
-  localNotes,
   onRetryLoad,
   onFocus,
   onOpen,
@@ -149,7 +147,6 @@ export const ConversationList = ({
       ) : groups.length === 0 ? (
         <div className={cn('flex min-h-0 flex-1 flex-col gap-4', PANE_RHYTHM.rail.body)}>
           {emptyState}
-          {localNotes}
         </div>
       ) : (
         <ScrollFade className="min-h-0 flex-1">
@@ -184,7 +181,6 @@ export const ConversationList = ({
                 </ul>
               </Collapsible>
             )}
-            {localNotes}
           </div>
         </ScrollFade>
       )}

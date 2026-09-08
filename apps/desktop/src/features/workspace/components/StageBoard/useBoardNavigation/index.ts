@@ -3,6 +3,7 @@ import type { Session, SessionId } from '@goodboy/types';
 import { useAppStore } from '../../../../../store';
 import { openInEditor } from '../../../../../shared/lib/editor';
 import { markStepComplete } from '../../../../onboarding/onboarding-store';
+import { openReview } from '../../../../review/openReview';
 
 export type BoardNavigation = {
   readonly selectCard: (session: Session) => void;
@@ -72,9 +73,7 @@ export const useBoardNavigation = (): BoardNavigation => {
     const openGithub = (session: Session): void => {
       const id = session.id as SessionId;
       void setCurrentSession(id).then(() => {
-        window.dispatchEvent(
-          new CustomEvent('goodboy:open-github-session', { detail: { sessionId: id } }),
-        );
+        openReview({ sessionId: id });
       });
     };
 

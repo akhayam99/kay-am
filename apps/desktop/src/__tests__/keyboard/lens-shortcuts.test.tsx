@@ -263,14 +263,12 @@ describe('App lens shortcuts on darwin', () => {
   it('reaches the integration lenses that had no binding before', () => {
     render(<App />);
 
-    press({ code: 'KeyB', key: 'b', metaKey: true, altKey: true });
     press({ code: 'Digit2', key: '2', metaKey: true, altKey: true });
     press({ code: 'Digit3', key: '3', metaKey: true, altKey: true });
     press({ code: 'Digit4', key: '4', metaKey: true, altKey: true });
     press({ code: 'Digit6', key: '6', metaKey: true, altKey: true });
 
     expect(setActiveLens.mock.calls).toEqual([
-      ['session-1', 'review'],
       ['session-1', 'linear'],
       ['session-1', 'gitlab_issues'],
       ['session-1', 'slack_threads'],
@@ -332,7 +330,7 @@ describe('App lens shortcuts on darwin', () => {
     expect(setActiveLens).not.toHaveBeenCalled();
   });
 
-  it('reaches the Resolve lens on its own binding', () => {
+  it('reaches the Review lens on the one lens binding it has', () => {
     render(<App />);
 
     press({ code: 'KeyR', key: 'r', metaKey: true, altKey: true });

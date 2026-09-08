@@ -46,7 +46,7 @@ export const PublishBar = ({ provider, draftCount, publishing, onPublish }: Prop
           onClick={() => onPublish({ verdict: provider === 'gitlab' ? 'comment' : verdict, body })}
           disabled={!canPublish}
         >
-          {publishing ? 'Publishing…' : `Publish review (${draftCount})`}
+          {publishing ? 'Submitting…' : `Submit review (${draftCount})`}
         </Button>
       </div>
       {provider === 'gitlab' ? (

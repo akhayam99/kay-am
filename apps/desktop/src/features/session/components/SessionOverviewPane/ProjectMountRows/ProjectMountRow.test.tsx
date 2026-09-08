@@ -12,8 +12,9 @@ import type {
   WorktreeStatus,
 } from '@goodboy/types';
 
-const { store, remoteKind } = vi.hoisted(() => ({
+const { store, remoteKind, openReviewMock } = vi.hoisted(() => ({
   remoteKind: { current: 'github' as string | null },
+  openReviewMock: vi.fn(),
   store: {
     setSessionActiveProject: vi.fn(async () => undefined),
     setScriptsLensScope: vi.fn(),
@@ -47,6 +48,9 @@ vi.mock('./ProjectDetachMenu', () => ({
 }));
 vi.mock('../../../../worktree/useRemoteHostKind', () => ({
   useRemoteHostKind: () => remoteKind.current,
+}));
+vi.mock('../../../../review/openReview', () => ({
+  openReview: openReviewMock,
 }));
 vi.mock('../../../../../app/components/Toast', () => ({
   useToast: () => ({ showToast: vi.fn() }),
@@ -140,6 +144,7 @@ const renderRow = ({
   );
 
 beforeEach(() => {
+  openReviewMock.mockClear();
   store.setSessionActiveProject.mockClear();
   store.setSessionActiveProject.mockResolvedValue(undefined);
   remoteKind.current = 'github';
@@ -161,18 +166,14 @@ afterEach(cleanup);
 
 describe('ProjectMountRow create pr action', () => {
   it('offers create pr when there are changes and no pr, targeting the mount project', async () => {
-    const listener = vi.fn();
-    window.addEventListener('goodboy:open-github-session', listener);
     renderRow({ diffStat: { additions: 3, deletions: 1 } });
 
     const action = screen.getByRole('button', { name: 'Create a PR for API' });
     fireEvent.click(action);
 
-    await waitFor(() => expect(listener).toHaveBeenCalledTimes(1));
-    const event = listener.mock.calls[0]?.[0] as CustomEvent<{ sessionId: SessionId }>;
-    expect(event.detail).toEqual({ sessionId });
+    await waitFor(() => expect(openReviewMock).toHaveBeenCalledTimes(1));
+    expect(openReviewMock).toHaveBeenCalledWith({ sessionId, mode: 'create_pr' });
     expect(store.setSessionActiveProject).toHaveBeenCalledWith({ sessionId, projectId: 'api' });
-    window.removeEventListener('goodboy:open-github-session', listener);
   });
 
   it('blocks create pr while an agent is opening one', () => {
@@ -198,6 +199,17 @@ describe('ProjectMountRow create pr action', () => {
     });
     expect(screen.queryByRole('button', { name: 'Create a PR for API' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Open PR #12' })).toBeDefined();
+  });
+
+  it('opens the existing pull request in Review, on its number', () => {
+    renderRow({
+      diffStat: { additions: 3, deletions: 1 },
+      pullRequest: { number: 12, state: 'open', isDraft: false } as PullRequestState,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open PR #12' }));
+
+    expect(openReviewMock).toHaveBeenCalledWith({ sessionId, prNumber: 12 });
   });
 
   it('offers create mr on a gitlab remote', () => {

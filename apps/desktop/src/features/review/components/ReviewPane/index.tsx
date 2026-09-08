@@ -6,12 +6,14 @@ import type {
   PrCheckRun,
   PrComment,
   PrReviewDraft,
+  PullRequestState,
   ResolveAttempt,
   ResolveThread,
   Session,
   SessionId,
 } from '@goodboy/types';
 import { EMPTY_ARRAY, useAppStore, useDiffComments } from '../../../../store';
+import { selectActiveProjectPrs } from '../../../../store/slices/github/activeProjectPrs';
 import { useSessionRepo } from '../../../../store/slices/worktrees/useSessionRepo';
 import { useToast } from '../../../../app/components/Toast';
 import { StudioDetailLayout } from '../../../../shared/components/StudioDetail';
@@ -22,7 +24,9 @@ import { openUrl } from '../../../../shared/lib/editor';
 import { GithubConnectionEmptyState } from '../../../github/components/GithubConnectionEmptyState';
 import { useGithubConnection } from '../../../integrations/github/useGithubConnection';
 import { usePrDraftAgentRunning } from '../../../github/usePrDraftAgentRunning';
+import type { ActionBusy } from '../../../github/components/GitHubStudio/PrActionBar';
 import { groupThreads, type CommentThread } from '../../../github/comment-threads';
+import { buildCommentAgentArgs } from '../../../chat/spawn-from-comment';
 import { kindRouting } from '../../../session/agent-kind';
 import { contextWindowFor } from '../../../session/contextWindowFor';
 import { useAgentMetrics } from '../../../session/hooks/useAgentMetrics';
@@ -31,24 +35,27 @@ import type { ConversationVerb } from '../../conversationPresentation';
 import { useConversationChanges } from '../../hooks/useConversationChanges';
 import { useReviewSelection } from '../../hooks/useReviewSelection';
 import { groupConversations, selectConversations } from '../../selectConversations';
+import type { ReviewMode } from '../../reviewMode';
 import { startFixAttempt, type FixMode } from '../../startFixAttempt';
 import { ConversationDetail } from './ConversationDetail';
 import { ConversationList } from './ConversationList';
+import { PrActionsMenu } from './PrActionsMenu';
 import { PrContextRow } from './PrContextRow';
 import { PublishConversationsBar, type PublishScope } from './PublishConversationsBar';
 import type { PreviewBlockerAction } from './PublishConversationsBar/PublicationPreview';
-import { LocalNotesSection } from './LocalNotesSection';
 import { NoPullRequestState, NothingToFixState } from './ReviewEmptyStates';
 import { openDiffComments } from '../../../session/resolve/openDiffComments';
+import { ChecksMode } from './modes/ChecksMode';
+import { CreatePrMode } from './modes/CreatePrMode';
+import { PrActivityMode } from './modes/PrActivityMode';
+import { PrDetailsMode } from './modes/PrDetailsMode';
+import { WriteReviewMode } from './modes/WriteReviewMode';
 import { PublishBar } from './WriteReview/PublishBar';
-import { WriteReview } from './WriteReview';
 
 type Props = {
   readonly session: Session;
   readonly eyebrow?: ReactNode;
 };
-
-type ReviewMode = 'conversations' | 'write_review';
 
 type PreviewScope =
   | { readonly kind: 'all' }
@@ -61,6 +68,7 @@ const TICK_MS = 30_000;
 const EMPTY_ATTEMPTS: ReadonlyArray<ResolveAttempt> = [];
 const EMPTY_ROWS: ReadonlyArray<ResolveThread> = [];
 const EMPTY_CHECKS: ReadonlyArray<PrCheckRun> = [];
+const EMPTY_PRS: ReadonlyArray<PullRequestState> = [];
 
 export const ReviewPane = ({ session, eyebrow }: Props) => {
   const sessionId = session.id as SessionId;
@@ -76,11 +84,13 @@ export const ReviewPane = ({ session, eyebrow }: Props) => {
   const [isNarrow, setIsNarrow] = useState(false);
   const [isDetailShown, setIsDetailShown] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
+  const [lifecycleBusy, setLifecycleBusy] = useState<ActionBusy>(null);
   const [listWidth, setListWidth] = useColumnWidth(STORAGE_KEYS.reviewBoardListWidth, 320);
   const { showToast } = useToast();
 
   const github = useAppStore((s) => s.sessionGithub[sessionId] ?? null);
-  const pr = github?.pr ?? null;
+  const branchPrs = useAppStore((s) => selectActiveProjectPrs({ state: s, sessionId }));
+  const selectedPrNumber = useAppStore((s) => s.sessionSelectedPrNumber[sessionId] ?? null);
   const comments = useAppStore(
     (s) =>
       s.sessionGithub[sessionId]?.detail?.comments ?? (EMPTY_ARRAY as ReadonlyArray<PrComment>),
@@ -99,7 +109,14 @@ export const ReviewPane = ({ session, eyebrow }: Props) => {
   const reviewLensIntent = useAppStore((s) => s.reviewLensIntent);
   const setReviewLensIntent = useAppStore((s) => s.setReviewLensIntent);
   const loadResolveSession = useAppStore((s) => s.loadResolveSession);
+  const refreshSessionPr = useAppStore((s) => s.refreshSessionPr);
   const refreshSessionPrDetail = useAppStore((s) => s.refreshSessionPrDetail);
+  const selectSessionPr = useAppStore((s) => s.selectSessionPr);
+  const markPrReady = useAppStore((s) => s.markPrReady);
+  const convertPrToDraft = useAppStore((s) => s.convertPrToDraft);
+  const mergePr = useAppStore((s) => s.mergePr);
+  const closePr = useAppStore((s) => s.closePr);
+  const reopenPr = useAppStore((s) => s.reopenPr);
   const preparePublication = useAppStore((s) => s.preparePublication);
   const publishConversations = useAppStore((s) => s.publishConversations);
   const retryPublication = useAppStore((s) => s.retryPublication);
@@ -123,6 +140,16 @@ export const ReviewPane = ({ session, eyebrow }: Props) => {
   const githubConnection = useGithubConnection({ workspaceId: session.workspaceId });
   const isDraftAgentRunning = usePrDraftAgentRunning({ sessionId });
   const metrics = useAgentMetrics({ sessionId });
+
+  const canonicalPr = github?.pr ?? null;
+  const prOptions = useMemo(() => {
+    if (branchPrs.length > 0) {
+      return branchPrs;
+    }
+    return canonicalPr === null ? EMPTY_PRS : [canonicalPr];
+  }, [branchPrs, canonicalPr]);
+  const pr =
+    prOptions.find((candidate) => candidate.number === selectedPrNumber) ?? canonicalPr ?? null;
 
   useEffect(() => {
     void loadResolveSession({ sessionId });
@@ -177,7 +204,7 @@ export const ReviewPane = ({ session, eyebrow }: Props) => {
     if (reviewLensIntent === null || reviewLensIntent.sessionId !== sessionId) {
       return;
     }
-    setMode('conversations');
+    setMode(reviewLensIntent.mode ?? 'conversations');
     if (reviewLensIntent.threadId !== undefined) {
       setFocusedThreadId(reviewLensIntent.threadId);
       setIsDetailShown(true);
@@ -208,6 +235,29 @@ export const ReviewPane = ({ session, eyebrow }: Props) => {
     worktreePath,
     shaByThreadId,
   });
+
+  const onMutated = useCallback(() => {
+    void refreshSessionPr(sessionId, { force: true });
+    void refreshSessionPrDetail(sessionId, { force: true });
+  }, [refreshSessionPr, refreshSessionPrDetail, sessionId]);
+
+  const runLifecycle = useCallback(
+    async (kind: Exclude<ActionBusy, null>, action: () => Promise<void>) => {
+      if (lifecycleBusy !== null) {
+        return;
+      }
+      setLifecycleBusy(kind);
+      try {
+        await action();
+        onMutated();
+      } catch (error) {
+        showToast('error', formatError(error));
+      } finally {
+        setLifecycleBusy(null);
+      }
+    },
+    [lifecycleBusy, onMutated, showToast],
+  );
 
   const startFix = useCallback(
     async ({
@@ -271,6 +321,40 @@ export const ReviewPane = ({ session, eyebrow }: Props) => {
       threadsByThreadId,
       worktreePath,
     ],
+  );
+
+  const startGeneralFix = useCallback(
+    (thread: CommentThread) => {
+      if (pr === null) {
+        return;
+      }
+      if (worktreePath === null) {
+        showToast('error', 'Materialize the project first.');
+        return;
+      }
+      const routing = kindRouting({ kind: 'resolver', roleModels });
+      const args = buildCommentAgentArgs(
+        thread.head,
+        pr,
+        {
+          ...(routing.provider !== undefined && { provider: routing.provider }),
+          ...(routing.model !== undefined && { model: routing.model }),
+        },
+        thread.replies,
+      );
+      void spawnAgent(sessionId, {
+        name: args.name,
+        ...(routing.provider !== undefined && { provider: routing.provider }),
+        ...(routing.model !== undefined && { model: routing.model }),
+        ...(routing.effort !== undefined && routing.effort !== null && { effort: routing.effort }),
+        initialPrompt: args.initialPrompt,
+        kindOverride: 'resolver',
+        sourceCommentUrl: args.sourceCommentUrl,
+        sourceKind: args.sourceKind,
+        focus: 'none',
+      }).catch((error: unknown) => showToast('error', formatError(error)));
+    },
+    [pr, roleModels, sessionId, showToast, spawnAgent, worktreePath],
   );
 
   const priorContextFor = useCallback(
@@ -557,18 +641,6 @@ export const ReviewPane = ({ session, eyebrow }: Props) => {
     };
   }, [attempts, forceCloseResolver, sessionId, stopAttemptId]);
 
-  const header =
-    pr === null ? null : (
-      <PrContextRow
-        pr={pr}
-        repo={repo?.repoRoot ?? null}
-        checks={checks}
-        isRefreshing={github?.detailLoading === true}
-        onRefresh={() => void refreshSessionPrDetail(sessionId, { force: true })}
-        onOpenOnGithub={() => void openUrl(pr.url)}
-      />
-    );
-
   if (pr === null && (!isGithubConnected || repo === null)) {
     return (
       <StudioDetailLayout header={<div />} eyebrow={eyebrow} fit="bleed">
@@ -586,15 +658,40 @@ export const ReviewPane = ({ session, eyebrow }: Props) => {
   if (pr === null) {
     return (
       <StudioDetailLayout header={<div />} eyebrow={eyebrow} fit="bleed">
-        <div className={cn('flex min-h-0 flex-1 flex-col', PANE_RHYTHM.body)}>
-          <NoPullRequestState
-            isDraftAgentRunning={isDraftAgentRunning}
-            onDraft={() => setActiveLens(sessionId, 'pr')}
+        {mode === 'create_pr' ? (
+          <CreatePrMode
+            sessionId={sessionId}
+            defaultTitle={session.goal}
+            closedPr={null}
+            onBack={() => setMode('conversations')}
+            onCreated={() => {
+              setMode('conversations');
+              onMutated();
+            }}
+            onCancel={() => setMode('conversations')}
           />
-        </div>
+        ) : (
+          <div className={cn('flex min-h-0 flex-1 flex-col', PANE_RHYTHM.body)}>
+            <NoPullRequestState
+              isDraftAgentRunning={isDraftAgentRunning}
+              onDraft={() =>
+                isDraftAgentRunning ? setActiveLens(sessionId, 'agents') : setMode('create_pr')
+              }
+            />
+          </div>
+        )}
       </StudioDetailLayout>
     );
   }
+
+  const isTerminal = pr.state === 'merged' || pr.state === 'closed';
+  const isClosed = pr.state === 'closed';
+  const canMerge = !isTerminal && !pr.isDraft && pr.mergeable !== false;
+  const mergeReason = pr.isDraft
+    ? 'mark the PR ready before merging'
+    : pr.mergeable === false
+      ? 'PR has conflicts, resolve them first'
+      : 'squash merge this PR';
 
   const siblingsOfFocused =
     focused === null
@@ -619,6 +716,37 @@ export const ReviewPane = ({ session, eyebrow }: Props) => {
       ? null
       : (metrics.aggregatesByAgentId.get(focusedAgentId)?.estimatedCostUsd ?? null);
 
+  const header = (
+    <PrContextRow
+      pr={pr}
+      prs={prOptions}
+      repo={repo?.repoRoot ?? null}
+      checks={checks}
+      isRefreshing={github?.detailLoading === true}
+      actions={
+        <PrActionsMenu
+          pr={pr}
+          busy={lifecycleBusy}
+          canMerge={canMerge}
+          mergeReason={mergeReason}
+          canCreateNew={!isDraftAgentRunning}
+          onMarkReady={() => void runLifecycle('ready', () => markPrReady(sessionId, pr.number))}
+          onConvertDraft={() =>
+            void runLifecycle('undraft', () => convertPrToDraft(sessionId, pr.number))
+          }
+          onClosePr={() => void runLifecycle('close', () => closePr(sessionId, pr.number))}
+          onReopen={() => void runLifecycle('reopen', () => reopenPr(sessionId, pr.number))}
+          onMerge={() => runLifecycle('merge', () => mergePr(sessionId, pr.number))}
+          onCreateNew={() => setMode('create_pr')}
+        />
+      }
+      onSelectPr={(prNumber) => void selectSessionPr(sessionId, prNumber)}
+      onRefresh={() => void refreshSessionPrDetail(sessionId, { force: true })}
+      onOpenChecks={() => setMode('checks')}
+      onOpenOnGithub={() => void openUrl(pr.url)}
+    />
+  );
+
   const list = (
     <ConversationList
       listId={`review-conversations-${sessionId}`}
@@ -636,12 +764,6 @@ export const ReviewPane = ({ session, eyebrow }: Props) => {
       isFixDisabled={isFixDisabled}
       {...(isFixDisabled && { fixDisabledReason: 'Materialize the project first' })}
       emptyState={<NothingToFixState prNumber={pr.number} />}
-      localNotes={
-        <LocalNotesSection
-          comments={localNotes}
-          onOpen={() => openDiffLens(sessionId, { kind: 'working', path: null })}
-        />
-      }
       onRetryLoad={() => void refreshSessionPrDetail(sessionId, { force: true })}
       onFocus={setFocusedThreadId}
       onOpen={(threadId) => {
@@ -655,7 +777,7 @@ export const ReviewPane = ({ session, eyebrow }: Props) => {
     />
   );
 
-  const detail =
+  const conversationDetail =
     focused === null ? (
       <div className={cn('flex min-h-0 flex-1 flex-col', PANE_RHYTHM.body)}>
         <NothingToFixState prNumber={pr.number} />
@@ -693,6 +815,53 @@ export const ReviewPane = ({ session, eyebrow }: Props) => {
       />
     );
 
+  const backToConversations = isNarrow ? () => setMode('conversations') : null;
+
+  const detail =
+    mode === 'pr_details' ? (
+      <PrDetailsMode
+        sessionId={sessionId}
+        pr={pr}
+        detail={github?.detail ?? null}
+        onBack={backToConversations}
+        onSelectLens={(lens) => setActiveLens(sessionId, lens)}
+        onMutated={onMutated}
+      />
+    ) : mode === 'pr_activity' ? (
+      <PrActivityMode
+        pr={pr}
+        comments={comments}
+        localNotes={localNotes}
+        onBack={backToConversations}
+        onOpenUrl={(url) => void openUrl(url)}
+        onOpenLocalNotes={() => openDiffLens(sessionId, { kind: 'working', path: null })}
+        onFix={startGeneralFix}
+      />
+    ) : mode === 'checks' ? (
+      <ChecksMode
+        checks={checks}
+        fallbackUrl={pr.url}
+        onBack={backToConversations}
+        onOpenUrl={(url) => void openUrl(url)}
+      />
+    ) : mode === 'create_pr' ? (
+      <CreatePrMode
+        sessionId={sessionId}
+        defaultTitle={session.goal}
+        closedPr={isClosed ? { number: pr.number, url: pr.url } : null}
+        onBack={backToConversations}
+        onCreated={() => {
+          setMode('conversations');
+          onMutated();
+        }}
+        onCancel={() => setMode('pr_details')}
+      />
+    ) : (
+      conversationDetail
+    );
+
+  const isListHidden = mode !== 'conversations' && isNarrow;
+
   return (
     <StudioDetailLayout
       header={header}
@@ -712,7 +881,7 @@ export const ReviewPane = ({ session, eyebrow }: Props) => {
             selectedCount={selection.selected.size}
             selectedReadyCount={selection.selectedReadyIds.length}
             draftCount={openDrafts.length}
-            isWriteReviewActive={false}
+            mode={mode}
             preview={previewScope === null ? null : preview}
             titleByThreadId={titleByThreadId}
             staleNote={staleNote}
@@ -735,28 +904,23 @@ export const ReviewPane = ({ session, eyebrow }: Props) => {
                 onAct({ threadId: focusedThreadId, verb: 'recheck_fix' });
               }
             }}
-            onWriteReview={() => setMode('write_review')}
+            onSelectMode={setMode}
           />
         )
       }
     >
       <div ref={paneRef} className="flex min-h-0 flex-1">
         {mode === 'write_review' ? (
-          <div className="flex min-h-0 flex-1 flex-col">
-            <div className={cn('flex shrink-0 items-center', PANE_RHYTHM.rail.header)}>
-              <button
-                type="button"
-                onClick={() => setMode('conversations')}
-                className="rounded-md text-2xs font-medium text-muted-foreground underline-offset-2 motion-safe:transition-colors hover:text-foreground hover:underline"
-              >
-                Back to conversations
-              </button>
-            </div>
-            <WriteReview session={session} listWidth={listWidth} />
-          </div>
+          <WriteReviewMode
+            session={session}
+            listWidth={listWidth}
+            onBack={() => setMode('conversations')}
+          />
         ) : isNarrow ? (
-          isDetailShown && focused !== null ? (
+          isListHidden ? (
             detail
+          ) : isDetailShown && focused !== null ? (
+            conversationDetail
           ) : (
             list
           )
