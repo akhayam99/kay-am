@@ -265,13 +265,15 @@ describe('story: an agent works from its own project and reads the others', () =
     } as never);
     storySpies.runTurn.mockImplementation(() => {
       queueMountContinuation({
-        operationId: 'req-fork',
-        sessionId: SESSION_ID,
-        mountId: 'mount-b' as never,
-        mountName: 'app 2',
-        branch: 'goodboy/second',
-        worktreePath: SECOND_MOUNT_PATH,
-        origin: 'fork',
+        continuation: {
+          operationId: 'req-fork',
+          sessionId: SESSION_ID,
+          mountId: 'mount-b' as never,
+          mountName: 'app 2',
+          branch: 'goodboy/second',
+          worktreePath: SECOND_MOUNT_PATH,
+          origin: 'fork',
+        },
       });
       return emptyTurnStream();
     });

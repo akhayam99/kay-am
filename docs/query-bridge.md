@@ -103,7 +103,9 @@ answer does not open a duplicate.
 
 A refusal may carry a machine-readable code beside its sentence:
 `ambiguous_mount`, `mount_unavailable`, `branch_mismatch`, `branch_in_use`,
-`unsafe_cleanup`, `operation_pending`, `request_conflict`. Codes are additive;
+`unsafe_cleanup`, `operation_pending`, `request_conflict`, `fork_unsatisfied`.
+`fork_unsatisfied` says the fork came back with the mount it forked from, or on
+a branch other than the one asked for, so no new turn starts. Codes are additive;
 the envelope stays `{ok, data, error}`.
 
 ## No verb writes an event

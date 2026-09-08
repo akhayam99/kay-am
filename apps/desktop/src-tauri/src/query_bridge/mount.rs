@@ -445,6 +445,14 @@ fn operation_kind(verb: &str) -> &'static str {
     }
 }
 
+fn journalled_mount<'a>(kind: &str, mount_id: &'a str) -> Option<&'a str> {
+    if kind == "fork" {
+        None
+    } else {
+        Some(mount_id)
+    }
+}
+
 fn intent_of(raw: &str) -> Result<&'static str, BridgeError> {
     match raw {
         "switch" => Ok("switch"),
@@ -561,7 +569,7 @@ pub(super) async fn dispatch(
         scope.session,
         &request_id,
         kind,
-        Some(&mount.id),
+        journalled_mount(kind, &mount.id),
         &input,
     )?;
     handoff(
@@ -797,6 +805,13 @@ mod tests {
             );
         }
         assert_eq!(operation_kind("resolve"), "switch");
+    }
+
+    #[test]
+    fn a_fork_journals_no_mount_id_because_its_mount_does_not_exist_yet() {
+        assert_eq!(journalled_mount("fork", "mount-1"), None);
+        assert_eq!(journalled_mount("switch", "mount-1"), Some("mount-1"));
+        assert_eq!(journalled_mount("attach", "mount-1"), Some("mount-1"));
     }
 
     #[test]
