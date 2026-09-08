@@ -156,7 +156,8 @@ export const createResolveQueryMocks = () => {
         item === undefined ||
         item.sessionId !== sessionId ||
         item.supersededAt !== null ||
-        item.deliveredAt !== null
+        item.deliveredAt !== null ||
+        item.integratedSha !== null
       ) {
         return false;
       }

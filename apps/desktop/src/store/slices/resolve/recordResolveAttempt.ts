@@ -7,6 +7,7 @@ import {
 import type { ResolveAttempt } from '@goodboy/types';
 import { tauriDatabase } from '../../../shared/lib/db';
 import { agentThreadIds } from '../../../features/session/agentThreadIds';
+import { beginResolveCandidate } from './beginResolveCandidate';
 import { createResolveThread } from './createResolveThread';
 import { threadOutcome } from './threadOutcome';
 import { projectResolveRows } from './projectResolveRows';
@@ -55,6 +56,11 @@ export const recordResolveAttempt = async ({
     createdAt: queued?.createdAt ?? now,
   };
   await insertResolveAttempt({ db, attempt });
+  if (phase === 'running') {
+    await beginResolveCandidate({ set, get, sessionId, attemptId: attempt.id }).catch(
+      () => undefined,
+    );
+  }
   const rows = await listResolveThreads({ db, sessionId });
   const claimed = threadIds ?? attempt.threadIds;
   for (const threadId of claimed) {

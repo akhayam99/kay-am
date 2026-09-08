@@ -59,6 +59,7 @@ export type ResolveQueueItem = Readonly<{
   approvalState: ResolveQueueApprovalState;
   approvedRevision: number | null;
   approvedReplyHash: string | null;
+  integratedSha: string | null;
   deferredAt: number | null;
   deliveredAt: number | null;
   supersededAt: number | null;
@@ -69,6 +70,27 @@ export type ResolveQueueItem = Readonly<{
 export type ResolveQueueItemWithThread = Readonly<{
   item: ResolveQueueItem;
   thread: ResolveThread;
+}>;
+
+export type ResolveCandidateState = 'building' | 'ready' | 'integrated' | 'stale' | 'discarded';
+
+export type ResolveCandidate = Readonly<{
+  id: string;
+  sessionId: SessionId;
+  revision: number;
+  baseSha: string;
+  candidateSha: string;
+  worktreePath: string;
+  state: ResolveCandidateState;
+  integratedSha: string | null;
+  createdAt: number;
+  updatedAt: number;
+}>;
+
+export type ResolveCandidateItem = Readonly<{
+  candidateId: string;
+  queueItemId: string;
+  itemRevision: number;
 }>;
 
 export type ResolvePublicationPhase =

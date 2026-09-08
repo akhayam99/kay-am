@@ -12,6 +12,7 @@ import type { ResolveThread } from '@goodboy/types';
 import { tauriDatabase } from '../../../shared/lib/db';
 import { agentThreadIds } from '../../../features/session/agentThreadIds';
 import { resolverTurnOutcomes } from '../../../features/session/resolverTurnOutcomes';
+import { captureResolveCandidate } from './captureResolveCandidate';
 import { createResolveThread } from './createResolveThread';
 import { outcomePatch } from './outcomePatch';
 import { projectResolveRows } from './projectResolveRows';
@@ -146,6 +147,7 @@ export const persistResolveTurn = async ({
           approvalState: 'none',
           approvedRevision: null,
           approvedReplyHash: null,
+          integratedSha: null,
           deferredAt: null,
           deliveredAt: null,
           supersededAt: null,
@@ -153,6 +155,15 @@ export const persistResolveTurn = async ({
           updatedAt: now,
         },
       });
+    }
+    if (attempt !== undefined) {
+      await captureResolveCandidate({
+        set,
+        get,
+        sessionId,
+        attemptId: attempt.id,
+        threadIds: owned,
+      }).catch(() => null);
     }
     projectResolveRows({
       set,

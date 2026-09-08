@@ -174,6 +174,199 @@ pub struct ChangeBranchArgs {
     pub create_new: bool,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct IntegrateCandidateArgs {
+    #[serde(rename = "worktreePath")]
+    pub worktree_path: String,
+    #[serde(rename = "candidateId")]
+    pub candidate_id: String,
+    #[serde(rename = "candidateSha")]
+    pub candidate_sha: String,
+    #[serde(rename = "expectedHead")]
+    pub expected_head: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct QuarantineCandidateArgs {
+    #[serde(rename = "worktreePath")]
+    pub worktree_path: String,
+    #[serde(rename = "candidateId")]
+    pub candidate_id: String,
+    #[serde(rename = "baseSha")]
+    pub base_sha: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct IntegratedCandidate {
+    pub sha: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct QuarantinedCandidate {
+    pub sha: Option<String>,
+    #[serde(rename = "baseSha")]
+    pub base_sha: String,
+}
+
+fn candidate_ref(candidate_id: &str) -> String {
+    format!("refs/goodboy/candidates/{}", sanitize_slug(candidate_id))
+}
+
+fn journal_path(cwd: &Path, candidate_id: &str) -> Result<PathBuf, WorktreeError> {
+    let git_dir = git(cwd, &["rev-parse", "--absolute-git-dir"])?;
+    let dir = Path::new(git_dir.trim()).join("goodboy-candidate-integrations");
+    Ok(dir.join(format!("{}.journal", sanitize_slug(candidate_id))))
+}
+
+fn is_ancestor(cwd: &Path, ancestor: &str, descendant: &str) -> bool {
+    ancestor == descendant
+        || git(cwd, &["merge-base", "--is-ancestor", ancestor, descendant]).is_ok()
+}
+
+fn ensure_integrable_tree(cwd: &Path) -> Result<(), WorktreeError> {
+    let tree = read_working_tree(cwd);
+    let blocking = match tree {
+        GitWorkingTree::Known {
+            staged,
+            unstaged,
+            unmerged,
+            ..
+        } => staged + unstaged + unmerged,
+        GitWorkingTree::Unknown { .. } => {
+            return Err(WorktreeError::Git {
+                message: "cannot verify the working tree because git status failed".to_string(),
+            })
+        }
+    };
+    if blocking > 0 {
+        return Err(WorktreeError::Git {
+            message: format!(
+                "{blocking} uncommitted change(s) in the worktree: integrating would overwrite them"
+            ),
+        });
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn worktree_integrate_candidate(
+    args: IntegrateCandidateArgs,
+) -> Result<IntegratedCandidate, WorktreeError> {
+    tauri::async_runtime::spawn_blocking(move || worktree_integrate_candidate_blocking(args))
+        .await
+        .map_err(|error| WorktreeError::Io(std::io::Error::other(error.to_string())))?
+}
+
+fn worktree_integrate_candidate_blocking(
+    args: IntegrateCandidateArgs,
+) -> Result<IntegratedCandidate, WorktreeError> {
+    let path = Path::new(&args.worktree_path);
+    if !path.exists() {
+        return Err(WorktreeError::RepoNotFound(args.worktree_path));
+    }
+    let expected = resolve_commit(path, &args.expected_head)?;
+    let candidate = resolve_commit(path, &args.candidate_sha)?;
+    let actual = resolve_commit(path, "HEAD")?;
+    let journal = journal_path(path, &args.candidate_id)?;
+    if journal.exists() {
+        let recorded = std::fs::read_to_string(&journal)?;
+        if recorded.trim() != candidate {
+            return Err(WorktreeError::Git {
+                message: "the integration journal holds a different commit for this candidate"
+                    .to_string(),
+            });
+        }
+        if is_ancestor(path, &candidate, &actual) {
+            return Ok(IntegratedCandidate { sha: candidate });
+        }
+    }
+    if actual != expected {
+        return Err(WorktreeError::Git {
+            message: format!(
+                "the branch moved: expected head {}, found {}",
+                short_of(&expected),
+                short_of(&actual)
+            ),
+        });
+    }
+    if !is_ancestor(path, &expected, &candidate) {
+        return Err(WorktreeError::Git {
+            message: "the candidate is not based on the expected branch head".to_string(),
+        });
+    }
+    ensure_integrable_tree(path)?;
+    let journal_dir = journal.parent().ok_or_else(|| WorktreeError::Git {
+        message: "the integration journal has no parent directory".to_string(),
+    })?;
+    std::fs::create_dir_all(journal_dir)?;
+    let pending = journal.with_extension("pending");
+    std::fs::write(&pending, format!("{candidate}\n"))?;
+    std::fs::rename(&pending, &journal)?;
+    git(path, &["update-ref", "HEAD", &candidate, &expected])?;
+    git(path, &["reset", "--hard", "--quiet", &candidate])?;
+    Ok(IntegratedCandidate { sha: candidate })
+}
+
+#[tauri::command]
+pub async fn worktree_quarantine_candidate(
+    args: QuarantineCandidateArgs,
+) -> Result<QuarantinedCandidate, WorktreeError> {
+    tauri::async_runtime::spawn_blocking(move || worktree_quarantine_candidate_blocking(args))
+        .await
+        .map_err(|error| WorktreeError::Io(std::io::Error::other(error.to_string())))?
+}
+
+fn worktree_quarantine_candidate_blocking(
+    args: QuarantineCandidateArgs,
+) -> Result<QuarantinedCandidate, WorktreeError> {
+    let path = Path::new(&args.worktree_path);
+    if !path.exists() {
+        return Err(WorktreeError::RepoNotFound(args.worktree_path));
+    }
+    let base = resolve_commit(path, &args.base_sha)?;
+    let head = resolve_commit(path, "HEAD")?;
+    if !is_ancestor(path, &base, &head) {
+        return Err(WorktreeError::Git {
+            message: "the branch head is not built on the recorded candidate base".to_string(),
+        });
+    }
+    let is_dirty = match read_working_tree(path) {
+        GitWorkingTree::Known { changed, .. } => changed > 0,
+        GitWorkingTree::Unknown { .. } => {
+            return Err(WorktreeError::Git {
+                message: "cannot verify the working tree because git status failed".to_string(),
+            })
+        }
+    };
+    if is_dirty {
+        git(path, &["add", "--all"])?;
+        git(
+            path,
+            &[
+                "commit",
+                "--no-verify",
+                "--quiet",
+                "-m",
+                &format!("candidate {}", sanitize_slug(&args.candidate_id)),
+            ],
+        )?;
+    }
+    let tip = resolve_commit(path, "HEAD")?;
+    if tip == base {
+        return Ok(QuarantinedCandidate {
+            sha: None,
+            base_sha: base,
+        });
+    }
+    git(path, &["update-ref", &candidate_ref(&args.candidate_id), &tip])?;
+    git(path, &["update-ref", "HEAD", &base, &tip])?;
+    git(path, &["reset", "--hard", "--quiet", &base])?;
+    Ok(QuarantinedCandidate {
+        sha: Some(tip),
+        base_sha: base,
+    })
+}
+
 pub fn sanitize_slug(input: &str) -> String {
     let lowered = input.to_ascii_lowercase();
     let alnum_dash = Regex::new(r"[^a-z0-9-]+").unwrap();
@@ -3880,5 +4073,203 @@ mod teardown_tests {
 
         assert!(outcome.is_err(), "{outcome:?}");
         assert!(outside.exists(), "a path outside the folder was deleted");
+    }
+}
+
+#[cfg(test)]
+mod candidate_tests {
+    use super::{
+        worktree_integrate_candidate_blocking, worktree_quarantine_candidate_blocking,
+        IntegrateCandidateArgs, QuarantineCandidateArgs,
+    };
+    use std::path::{Path, PathBuf};
+
+    fn temp_root(name: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "goodboy-{name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        root
+    }
+
+    fn git_ok(cwd: &Path, args: &[&str]) -> String {
+        super::git(cwd, args)
+            .unwrap_or_else(|err| panic!("git {} failed: {err}", args.join(" ")))
+            .trim()
+            .to_string()
+    }
+
+    fn init_repo(name: &str) -> PathBuf {
+        let root = temp_root(name);
+        git_ok(&root, &["init", "-b", "main"]);
+        git_ok(&root, &["config", "user.email", "test@example.com"]);
+        git_ok(&root, &["config", "user.name", "test"]);
+        git_ok(&root, &["config", "commit.gpgsign", "false"]);
+        root
+    }
+
+    fn commit(root: &Path, file: &str, body: &str, message: &str) -> String {
+        std::fs::write(root.join(file), body).unwrap();
+        git_ok(root, &["add", file]);
+        git_ok(root, &["commit", "--no-verify", "-m", message]);
+        git_ok(root, &["rev-parse", "HEAD"])
+    }
+
+    fn head(root: &Path) -> String {
+        git_ok(root, &["rev-parse", "HEAD"])
+    }
+
+    fn quarantine(root: &Path, id: &str, base: &str) -> Option<String> {
+        worktree_quarantine_candidate_blocking(QuarantineCandidateArgs {
+            worktree_path: root.to_string_lossy().into_owned(),
+            candidate_id: id.to_string(),
+            base_sha: base.to_string(),
+        })
+        .unwrap()
+        .sha
+    }
+
+    fn integrate(
+        root: &Path,
+        id: &str,
+        candidate: &str,
+        expected: &str,
+    ) -> Result<String, super::WorktreeError> {
+        worktree_integrate_candidate_blocking(IntegrateCandidateArgs {
+            worktree_path: root.to_string_lossy().into_owned(),
+            candidate_id: id.to_string(),
+            candidate_sha: candidate.to_string(),
+            expected_head: expected.to_string(),
+        })
+        .map(|done| done.sha)
+    }
+
+    #[test]
+    fn quarantine_moves_the_branch_back_and_keeps_the_work_alive() {
+        let root = init_repo("candidate-quarantine");
+        let base = commit(&root, "base.txt", "base", "base");
+        commit(&root, "fix.txt", "fix", "fix");
+        std::fs::write(root.join("loose.txt"), "loose").unwrap();
+
+        let candidate = quarantine(&root, "cand-1", &base).expect("a candidate was produced");
+
+        assert_eq!(head(&root), base, "the branch tip still carries the work");
+        assert!(!root.join("fix.txt").exists(), "the tree was not reset");
+        assert_eq!(
+            git_ok(&root, &["status", "--porcelain=v1"]),
+            "",
+            "the worktree is not clean"
+        );
+        assert_eq!(
+            git_ok(&root, &["rev-parse", "refs/goodboy/candidates/cand-1"]),
+            candidate,
+            "the candidate ref does not hold the work"
+        );
+        assert!(
+            git_ok(&root, &["show", &format!("{candidate}:loose.txt")]).contains("loose"),
+            "uncommitted work was not captured into the candidate"
+        );
+    }
+
+    #[test]
+    fn quarantine_reports_nothing_when_the_agent_produced_no_change() {
+        let root = init_repo("candidate-quarantine-empty");
+        let base = commit(&root, "base.txt", "base", "base");
+
+        assert_eq!(quarantine(&root, "cand-empty", &base), None);
+        assert_eq!(head(&root), base);
+    }
+
+    #[test]
+    fn integration_fast_forwards_the_branch_and_the_worktree() {
+        let root = init_repo("candidate-integrate");
+        let base = commit(&root, "base.txt", "base", "base");
+        commit(&root, "fix.txt", "fix", "fix");
+        let candidate = quarantine(&root, "cand-1", &base).unwrap();
+
+        let integrated = integrate(&root, "cand-1", &candidate, &base).unwrap();
+
+        assert_eq!(integrated, candidate);
+        assert_eq!(head(&root), candidate);
+        assert!(root.join("fix.txt").exists(), "the worktree was not synced");
+    }
+
+    #[test]
+    fn integration_refuses_when_the_head_moved_under_the_candidate() {
+        let root = init_repo("candidate-head-moved");
+        let base = commit(&root, "base.txt", "base", "base");
+        commit(&root, "fix.txt", "fix", "fix");
+        let candidate = quarantine(&root, "cand-1", &base).unwrap();
+        let moved = commit(&root, "other.txt", "other", "external");
+
+        let outcome = integrate(&root, "cand-1", &candidate, &base);
+
+        assert!(outcome.is_err(), "{outcome:?}");
+        assert_eq!(head(&root), moved, "the branch was moved anyway");
+        assert!(
+            super::git(&root, &["merge-base", "--is-ancestor", &candidate, &moved]).is_err(),
+            "the candidate leaked into the branch tip"
+        );
+    }
+
+    #[test]
+    fn a_replayed_integration_after_a_crash_does_not_integrate_twice() {
+        let root = init_repo("candidate-replay");
+        let base = commit(&root, "base.txt", "base", "base");
+        commit(&root, "fix.txt", "fix", "fix");
+        let candidate = quarantine(&root, "cand-1", &base).unwrap();
+        integrate(&root, "cand-1", &candidate, &base).unwrap();
+        let after_first = head(&root);
+        let follow_up = commit(&root, "later.txt", "later", "later");
+
+        let replayed = integrate(&root, "cand-1", &candidate, &base).unwrap();
+
+        assert_eq!(replayed, candidate, "the replay reported another commit");
+        assert_eq!(after_first, candidate);
+        assert_eq!(head(&root), follow_up, "the replay moved the branch");
+        assert_eq!(
+            git_ok(&root, &["rev-list", "--count", &format!("{base}..HEAD")]),
+            "2",
+            "the candidate was integrated twice"
+        );
+    }
+
+    #[test]
+    fn a_journal_naming_another_commit_is_refused() {
+        let root = init_repo("candidate-journal-mismatch");
+        let base = commit(&root, "base.txt", "base", "base");
+        commit(&root, "fix.txt", "fix", "fix");
+        let first = quarantine(&root, "cand-1", &base).unwrap();
+        integrate(&root, "cand-1", &first, &base).unwrap();
+        commit(&root, "second.txt", "second", "second");
+        let second = quarantine(&root, "cand-1", &first).unwrap();
+
+        let outcome = integrate(&root, "cand-1", &second, &first);
+
+        assert!(outcome.is_err(), "{outcome:?}");
+        assert_eq!(head(&root), first);
+    }
+
+    #[test]
+    fn a_deferred_candidate_never_becomes_reachable_from_the_tip() {
+        let root = init_repo("candidate-deferred");
+        let base = commit(&root, "base.txt", "base", "base");
+        commit(&root, "a.txt", "a", "a");
+        let accepted = quarantine(&root, "cand-a", &base).unwrap();
+        integrate(&root, "cand-a", &accepted, &base).unwrap();
+        commit(&root, "b.txt", "b", "b");
+        let deferred = quarantine(&root, "cand-b", &accepted).unwrap();
+
+        assert_eq!(head(&root), accepted);
+        assert!(
+            super::git(&root, &["merge-base", "--is-ancestor", &deferred, &accepted]).is_err(),
+            "the deferred candidate is reachable from the branch tip"
+        );
+        assert!(!root.join("b.txt").exists(), "deferred work is in the tree");
     }
 }

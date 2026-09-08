@@ -244,6 +244,8 @@ pub fn run() {
             worktree::worktree_list_local_branches,
             worktree::worktree_list_branch_names,
             worktree::worktree_change_branch,
+            worktree::worktree_integrate_candidate,
+            worktree::worktree_quarantine_candidate,
             providers::get_provider_status,
             providers::refresh_provider_status,
             providers::get_cursor_status,

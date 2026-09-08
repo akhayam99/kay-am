@@ -35,6 +35,12 @@ export type AttemptParams = SessionParams & {
 export type CancelAttemptParams = SessionParams & {
   readonly attemptId: string;
 };
+export type CandidateBeginParams = SessionParams & {
+  readonly attemptId: string;
+};
+export type CandidateCaptureParams = CandidateBeginParams & {
+  readonly threadIds: ReadonlyArray<string>;
+};
 export type PhaseParams = SessionParams & {
   readonly agentId: AgentId;
   readonly attemptId?: string;
@@ -90,6 +96,9 @@ export type ResolveActions = {
   readonly recordResolveAttempt: (params: AttemptParams) => Promise<string>;
   readonly cancelResolveAttempt: (params: CancelAttemptParams) => Promise<void>;
   readonly recordResolvePhase: (params: PhaseParams) => Promise<void>;
+  readonly beginResolveCandidate: (params: CandidateBeginParams) => Promise<void>;
+  readonly captureResolveCandidate: (params: CandidateCaptureParams) => Promise<string | null>;
+  readonly invalidateIntegratedApprovals: (params: SessionParams) => Promise<number>;
   readonly drainResolveQueue: (params: DrainParams) => Promise<void>;
   readonly drainResolveWorktree: (params: WorktreeDrainParams) => Promise<void>;
   readonly reconcileResolveDrains: () => Promise<void>;

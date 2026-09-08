@@ -46,7 +46,7 @@ type ReopenParams = ItemParams & {
 const ITEM_COLUMNS = `id, session_id AS sessionId, thread_id AS threadId, generation,
   reopened_from_item_id AS reopenedFromItemId, candidate_revision AS candidateRevision,
   approval_state AS approvalState, approved_revision AS approvedRevision,
-  approved_reply_hash AS approvedReplyHash, deferred_at AS deferredAt,
+  approved_reply_hash AS approvedReplyHash, integrated_sha AS integratedSha, deferred_at AS deferredAt,
   delivered_at AS deliveredAt, superseded_at AS supersededAt,
   created_at AS createdAt, updated_at AS updatedAt`;
 
@@ -81,6 +81,7 @@ export const listResolveQueueItems = async ({
        q.reopened_from_item_id AS reopenedFromItemId, q.candidate_revision AS candidateRevision,
        q.approval_state AS approvalState, q.approved_revision AS approvedRevision,
        q.approved_reply_hash AS approvedReplyHash, q.deferred_at AS deferredAt,
+       q.integrated_sha AS integratedSha,
        q.delivered_at AS deliveredAt, q.superseded_at AS supersededAt,
        q.created_at AS createdAt, q.updated_at AS updatedAt,
        r.id AS threadRowId, r.project_id AS projectId, r.pr_number AS prNumber,
@@ -108,6 +109,7 @@ export const listResolveQueueItems = async ({
       approvalState: row.approvalState,
       approvedRevision: row.approvedRevision,
       approvedReplyHash: row.approvedReplyHash,
+      integratedSha: row.integratedSha,
       deferredAt: row.deferredAt,
       deliveredAt: row.deliveredAt,
       supersededAt: row.supersededAt,
@@ -164,7 +166,7 @@ export const deferResolveQueueItem = async ({
 }: ItemParams): Promise<boolean> => {
   const now = Date.now();
   const result = await db.execute(
-    `UPDATE resolve_queue_items SET approval_state = 'deferred', approved_revision = NULL, approved_reply_hash = NULL, deferred_at = ?, updated_at = ? WHERE id = ? AND session_id = ? AND superseded_at IS NULL AND delivered_at IS NULL`,
+    `UPDATE resolve_queue_items SET approval_state = 'deferred', approved_revision = NULL, approved_reply_hash = NULL, deferred_at = ?, updated_at = ? WHERE id = ? AND session_id = ? AND superseded_at IS NULL AND delivered_at IS NULL AND integrated_sha IS NULL`,
     [now, now, itemId, sessionId],
   );
   return result.rowsAffected === 1;
@@ -232,6 +234,7 @@ export const reopenResolveQueueItem = async ({
       approvalState: 'none',
       approvedRevision: null,
       approvedReplyHash: null,
+      integratedSha: null,
       deferredAt: null,
       deliveredAt: null,
       supersededAt: null,
