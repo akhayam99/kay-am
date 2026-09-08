@@ -374,6 +374,20 @@ describe('PrPane', () => {
     expect(gitlabEvents[0]?.detail).toEqual({ sessionId: SESSION_ID });
   });
 
+  it('shows the GitHub pull request instead of a connect prompt in a multi-provider session', () => {
+    withGithubPr();
+    h.store.sessionBitbucketPr = {
+      [SESSION_ID]: { pr: { id: 42, title: 'Raise the fuel constant', state: 'OPEN' } },
+    };
+
+    render(<PrPane session={session} />);
+
+    expect(screen.getByRole('tab', { name: 'GitHub' })).toBeDefined();
+    expect(screen.getByRole('heading', { name: 'Refactor authentication' })).toBeDefined();
+    expect(screen.queryByRole('heading', { name: 'Connect GitHub' })).toBeNull();
+    expect(screen.queryByText(/does not have a GitHub remote/i)).toBeNull();
+  });
+
   it('never opens a GitHub studio: Review owns the pull request', () => {
     withGithubPr();
     const githubEvents: Array<CustomEvent> = [];

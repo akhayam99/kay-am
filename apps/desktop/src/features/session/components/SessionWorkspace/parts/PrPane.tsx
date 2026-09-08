@@ -5,6 +5,7 @@ import type { Session, SessionId } from '@goodboy/types';
 import { pullRequestMeta } from '../../../../github/components/PullRequestChip';
 import { GitlabMrStrip } from '../../../../context/components/ContextPanel/strips/GitlabMrStrip';
 import { BitbucketPrStrip } from '../../../../context/components/ContextPanel/strips/BitbucketPrStrip';
+import { GithubPrStrip } from '../../../../context/components/ContextPanel/strips/GithubPrStrip';
 import { GithubConnectionEmptyState } from '../../../../github/components/GithubConnectionEmptyState';
 import { useGithubConnection } from '../../../../integrations/github/useGithubConnection';
 import { useRemoteHostKind } from '../../../../worktree/useRemoteHostKind';
@@ -214,17 +215,43 @@ export const PrPane = ({ session, eyebrow }: Props) => {
       eyebrow={eyebrow}
       header={
         <HeaderBand
-          title={hostTitle({ remoteKind, providerCount, activeProvider })}
-          meta={<SessionBranchTag branch={sessionBranch} />}
+          title={pullRequest?.title ?? hostTitle({ remoteKind, providerCount, activeProvider })}
+          meta={
+            <>
+              {pullRequest != null ? (
+                <span className="text-2xs font-medium text-muted-foreground">
+                  {hostTitle({ remoteKind, providerCount, activeProvider })}
+                </span>
+              ) : null}
+              <SessionBranchTag branch={sessionBranch} />
+              {pullRequest != null ? (
+                <span className="font-mono text-2xs tabular-nums text-muted-foreground">
+                  #{pullRequest.number}
+                </span>
+              ) : null}
+              {pullRequest != null ? (
+                <StateBadge>
+                  {
+                    pullRequestMeta({ state: pullRequest.isDraft ? 'draft' : pullRequest.state })
+                      .label
+                  }
+                </StateBadge>
+              ) : null}
+            </>
+          }
         />
       }
       {...(providerTabs != null && { tabs: providerTabs })}
     >
-      <GithubConnectionEmptyState
-        workspaceId={session.workspaceId}
-        isConnected={isGithubConnected}
-        onConnected={() => void githubConnection.refresh()}
-      />
+      {pullRequest != null ? (
+        <GithubPrStrip sessionId={sessionId} pullRequest={pullRequest} />
+      ) : (
+        <GithubConnectionEmptyState
+          workspaceId={session.workspaceId}
+          isConnected={isGithubConnected}
+          onConnected={() => void githubConnection.refresh()}
+        />
+      )}
     </StudioDetailLayout>
   );
 };
