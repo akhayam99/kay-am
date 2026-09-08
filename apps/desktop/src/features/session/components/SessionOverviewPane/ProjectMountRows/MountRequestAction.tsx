@@ -3,7 +3,6 @@ import type { MountPullRequestProvider, SessionId } from '@goodboy/types';
 import type { RemoteHostKind } from '../../../../../shared/lib/remoteHost';
 import { useAppStore } from '../../../../../store';
 import type { MountRowView } from '../../../../../store/slices/project-mounts/mountRowModel';
-import { PullRequestChip } from '../../../../github/components/PullRequestChip';
 import { usePrDraftAgentRunning } from '../../../../github/usePrDraftAgentRunning';
 
 type Props = {
@@ -25,28 +24,7 @@ export const MountRequestAction = ({ sessionId, row, label, hasChanges, remoteKi
   const request = row.request;
 
   if (request !== null) {
-    return (
-      <button
-        type="button"
-        aria-label={`Open ${request.label} of ${label}`}
-        onClick={() =>
-          void openMountRequest({
-            sessionId,
-            mountId: row.mountId,
-            provider: request.provider,
-            requestNumber: request.number,
-          })
-        }
-        className="flex shrink-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-xs hover:bg-muted/40"
-      >
-        <PullRequestChip
-          state={request.isDraft ? 'draft' : request.state}
-          variant="badge"
-          iconSize={9}
-        />
-        <span className="font-mono">#{request.number}</span>
-      </button>
-    );
+    return null;
   }
 
   const provider = remoteKind === null ? undefined : CREATABLE[remoteKind];

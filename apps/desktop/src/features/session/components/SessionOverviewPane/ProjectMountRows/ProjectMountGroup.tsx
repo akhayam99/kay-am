@@ -26,15 +26,10 @@ const ICON_BUTTON =
 
 type LabelParams = {
   readonly row: MountRowView;
-  readonly isGrouped: boolean;
 };
 
-const rowLabel = ({ row, isGrouped }: LabelParams): string => {
-  if (!isGrouped || row.branch === '') {
-    return row.projectName;
-  }
-  return `${row.projectName} on ${row.branch}`;
-};
+const rowLabel = ({ row }: LabelParams): string =>
+  row.branch === '' ? row.projectName : `${row.projectName} on ${row.branch}`;
 
 export const ProjectMountGroup = ({
   sessionId,
@@ -45,8 +40,6 @@ export const ProjectMountGroup = ({
   onSelectLens,
 }: Props) => {
   const [isCompletedShown, setIsCompletedShown] = useState(false);
-  const total = group.rows.length + group.completedRows.length;
-  const isGrouped = total > 1;
   const canFork = group.projectKind === 'repo';
   const GlyphIcon = projectGlyph({ kind: group.projectKind });
   const headPath =
@@ -59,11 +52,8 @@ export const ProjectMountGroup = ({
       key={row.mountId}
       sessionId={sessionId}
       row={row}
-      label={rowLabel({ row, isGrouped })}
+      label={rowLabel({ row })}
       workspaceId={group.workspaceId}
-      isGrouped={isGrouped}
-      canDetachProject={!isGrouped}
-      canFork={canFork && !isGrouped}
       diffStat={row.worktreePath === null ? null : (diffStats.get(row.worktreePath) ?? null)}
       worktreeStatus={
         row.worktreePath === null ? null : (worktreeStatuses.get(row.worktreePath) ?? null)
@@ -74,67 +64,65 @@ export const ProjectMountGroup = ({
   );
 
   return (
-    <div className="flex flex-col">
-      {isGrouped ? (
-        <div className="flex min-h-9 w-full items-center gap-2 border-b border-border-soft px-3 py-1.5">
-          <GlyphIcon
-            size={ICON_SIZE.control}
-            aria-hidden
-            className="shrink-0 text-muted-foreground"
-          />
-          <span className="truncate text-sm font-medium text-foreground">{group.projectName}</span>
-          {group.seriesProgress === null ? null : (
-            <Tooltip content="Positions you declared for this split, not a stack">
-              <span className="truncate text-2xs tabular-nums text-muted-foreground">
-                {group.seriesProgress}
-              </span>
-            </Tooltip>
-          )}
-          <div className="ml-auto flex shrink-0 items-center gap-1">
-            {canFork ? (
-              <NewBranchMountAction
-                sessionId={sessionId}
-                projectId={group.projectId}
-                projectName={group.projectName}
-              />
-            ) : null}
-            <ProjectDetachMenu
+    <div className="flex flex-col overflow-hidden rounded-lg border border-border-soft bg-elevated/30">
+      <div className="flex min-h-9 w-full items-center gap-2 border-b border-border-soft px-3 py-1.5">
+        <GlyphIcon
+          size={ICON_SIZE.control}
+          aria-hidden
+          className="shrink-0 text-muted-foreground"
+        />
+        <span className="truncate text-sm font-medium text-foreground">{group.projectName}</span>
+        {group.seriesProgress === null ? null : (
+          <Tooltip content="Positions you declared for this split, not a stack">
+            <span className="truncate text-2xs tabular-nums text-muted-foreground">
+              {group.seriesProgress}
+            </span>
+          </Tooltip>
+        )}
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          {canFork ? (
+            <NewBranchMountAction
               sessionId={sessionId}
               projectId={group.projectId}
-              workspaceId={group.workspaceId ?? undefined}
               projectName={group.projectName}
-              worktreePath={headPath}
-              worktreeStatus={worktreeStatuses.get(headPath) ?? null}
-              triggerClassName={ICON_BUTTON}
             />
-          </div>
+          ) : null}
+          <ProjectDetachMenu
+            sessionId={sessionId}
+            projectId={group.projectId}
+            workspaceId={group.workspaceId ?? undefined}
+            projectName={group.projectName}
+            worktreePath={headPath}
+            worktreeStatus={worktreeStatuses.get(headPath) ?? null}
+            triggerClassName={ICON_BUTTON}
+          />
         </div>
-      ) : null}
-      <ul aria-label={`${group.projectName} branch mounts`} className="flex flex-col">
+      </div>
+      <ul aria-label={`${group.projectName} branch mounts`} className="flex flex-col pl-3">
+        {group.completedRows.length === 0 ? null : (
+          <li className="flex flex-col border-b border-border-soft last:border-b-0">
+            <div className="flex px-3 py-1">
+              <CountToggle
+                label="Completed"
+                itemsLabel="branch mounts"
+                count={group.completedRows.length}
+                isShown={isCompletedShown}
+                icon={ChevronDown}
+                onChange={setIsCompletedShown}
+              />
+            </div>
+            {isCompletedShown ? (
+              <ul
+                aria-label={`${group.projectName} completed branch mounts`}
+                className="flex flex-col border-t border-border-soft"
+              >
+                {group.completedRows.map(renderRow)}
+              </ul>
+            ) : null}
+          </li>
+        )}
         {group.rows.map(renderRow)}
       </ul>
-      {group.completedRows.length === 0 ? null : (
-        <div className="flex flex-col border-b border-border-soft last:border-b-0">
-          <div className="flex px-3 py-1">
-            <CountToggle
-              label="Completed"
-              itemsLabel="branch mounts"
-              count={group.completedRows.length}
-              isShown={isCompletedShown}
-              icon={ChevronDown}
-              onChange={setIsCompletedShown}
-            />
-          </div>
-          {isCompletedShown ? (
-            <ul
-              aria-label={`${group.projectName} completed branch mounts`}
-              className="flex flex-col"
-            >
-              {group.completedRows.map(renderRow)}
-            </ul>
-          ) : null}
-        </div>
-      )}
     </div>
   );
 };

@@ -51,9 +51,6 @@ vi.mock('./ProjectDetachMenu', () => ({
     <span data-testid="detach-menu">{menuLabel}</span>
   ),
 }));
-vi.mock('./NewBranchMountAction', () => ({
-  NewBranchMountAction: () => <span data-testid="fork-action" />,
-}));
 vi.mock('./MountBranchDecision', () => ({
   MountBranchDecision: () => <div data-testid="branch-decision" />,
 }));
@@ -149,9 +146,6 @@ const renderRow = ({
         row={row}
         label={label}
         workspaceId={'ws-1' as WorkspaceId}
-        isGrouped={false}
-        canDetachProject
-        canFork
         diffStat={diffStat}
         worktreeStatus={worktreeStatus}
         isStatusPending={isStatusPending}
@@ -267,10 +261,10 @@ describe('ProjectMountRow availability', () => {
     isOnDisk: true,
   };
 
-  it('offers mount on an unmounted row and keeps the worktree note', async () => {
+  it('offers mount on an unmounted row and states the kept worktree in the state slot', async () => {
     renderRow({ row: detached });
 
-    expect(screen.getByText('Unmounted, worktree kept')).toBeDefined();
+    expect(screen.getByText('Worktree kept')).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: 'Mount API' }));
 
     await waitFor(() =>
@@ -309,6 +303,65 @@ describe('ProjectMountRow availability', () => {
     });
 
     expect(screen.getByTestId('branch-decision')).toBeDefined();
+  });
+});
+
+const openRequest: MountRowView['request'] = {
+  provider: 'github',
+  identity: null,
+  number: 12,
+  state: 'open',
+  isDraft: false,
+  url: 'https://github.com/acme/api/pull/12',
+  title: 'Split one',
+  label: 'PR #12',
+};
+
+const slotsOf = (): ReadonlyArray<Element> =>
+  Array.from(screen.getByRole('listitem').firstElementChild?.children ?? []);
+
+describe('ProjectMountRow column grammar', () => {
+  const detached: MountRowView = { ...baseRow, isAttached: false, worktreePath: null };
+
+  it('lays every state of a row on the same slots in the same order', () => {
+    renderRow({
+      diffStat: { additions: 3, deletions: 1 },
+      row: { ...baseRow, request: openRequest },
+    });
+    const attached = slotsOf().map((slot) => slot.className);
+    cleanup();
+    renderRow({ row: detached });
+    const unmounted = slotsOf().map((slot) => slot.className);
+
+    expect(attached).toHaveLength(9);
+    expect(unmounted).toEqual(attached);
+  });
+
+  it('holds the unmounted status in the slot the request state uses', () => {
+    renderRow({
+      diffStat: { additions: 3, deletions: 1 },
+      row: { ...baseRow, request: openRequest },
+    });
+    expect(slotsOf()[4]?.textContent).toBe('In review');
+    expect(slotsOf()[5]?.textContent).toBe('#12');
+    cleanup();
+
+    renderRow({ row: detached });
+    expect(slotsOf()[4]?.textContent).toBe('Worktree kept');
+    expect(slotsOf()[5]?.textContent).toBe('');
+  });
+
+  it('keeps the mount action in the action slot and the menu last', () => {
+    renderRow({ row: detached });
+    const slots = slotsOf();
+
+    expect(slots[6]?.textContent).toBe('Mount');
+    expect(slots.at(-1)?.querySelector('[data-testid="detach-menu"]')).not.toBeNull();
+  });
+
+  it('leaves the diff slot empty rather than letting the next column slide left', () => {
+    renderRow({ row: detached });
+    expect(slotsOf()[3]?.textContent).toBe('');
   });
 });
 

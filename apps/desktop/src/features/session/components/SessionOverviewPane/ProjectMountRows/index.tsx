@@ -38,12 +38,9 @@ export const ProjectMountRows = ({ session, onSelectLens }: Props) => {
   }, [session.id]);
 
   return (
-    <section
-      aria-label="Mounted projects"
-      className="overflow-hidden rounded-lg border border-border-soft bg-elevated/30"
-    >
+    <section aria-label="Mounted projects" className="flex flex-col gap-4">
       {groups.length === 0 ? (
-        <div className="flex min-h-12 items-center justify-between gap-3 px-3 py-2">
+        <div className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-border-soft bg-elevated/30 px-3 py-2">
           <span className="text-sm text-muted-foreground">No project mounted yet</span>
           <MountProjectAction
             sessionId={session.id}

@@ -6,6 +6,7 @@ import { useToast } from '../../../../../app/components/Toast';
 import { useAppStore } from '../../../../../store';
 import { BranchSwitchPanel } from '../../../../worktree/BranchSwitchPanel';
 import { VITAL_CHIP_FOCUS, VITAL_CHIP_FRAME, VITAL_CHIP_HOVER } from '../vitalChip';
+import { splitBranchLabel } from './branchLabel';
 
 type Props = {
   readonly sessionId: SessionId;
@@ -37,6 +38,8 @@ export const ProjectBranchChip = ({ sessionId, projectId, mountId, branch, canSw
     return null;
   }
 
+  const { head, tail } = splitBranchLabel({ branch });
+
   const openSwitch = async () => {
     await setSessionActiveProject({
       sessionId,
@@ -50,6 +53,7 @@ export const ProjectBranchChip = ({ sessionId, projectId, mountId, branch, canSw
     <span
       className={cn(
         VITAL_CHIP_FRAME,
+        'min-w-0 shrink',
         copied ? 'border-success/30 bg-success/10 text-success' : VITAL_CHIP_HOVER,
       )}
     >
@@ -64,7 +68,10 @@ export const ProjectBranchChip = ({ sessionId, projectId, mountId, branch, canSw
           )}
         >
           {copied ? <Check size={11} aria-hidden /> : <GitBranch size={11} aria-hidden />}
-          <span className="max-w-40 truncate font-mono">{branch}</span>
+          <span title={branch} className="flex min-w-0 max-w-52 items-center font-mono">
+            <span className="truncate">{head}</span>
+            {tail === '' ? null : <span className="shrink-0">{tail}</span>}
+          </span>
         </button>
       </Tooltip>
       {canSwitch ? (

@@ -111,6 +111,45 @@ const githubState = ({ number, state }: { readonly number: number; readonly stat
   host: 'github.com',
 });
 
+const seriesOfTwo = () => ({
+  id: 'series-1',
+  sessionId: 'session-1',
+  projectId: 'api',
+  name: 'restyle',
+  plannedCount: 6,
+  workItemIdentifier: null,
+  workItemUrl: null,
+  parentRequest: null,
+  createdAt: '2026-09-08T10:00:00.000Z',
+  updatedAt: '2026-09-08T10:00:00.000Z',
+  members: [
+    {
+      id: 'member-1',
+      seriesId: 'series-1',
+      mountId: 'mount-1',
+      branch: 'feat/one',
+      ordinal: 1,
+      label: '1/6',
+      status: 'active',
+      request: { state: 'merged' },
+      createdAt: '2026-09-08T10:00:00.000Z',
+      updatedAt: '2026-09-08T10:00:00.000Z',
+    },
+    {
+      id: 'member-2',
+      seriesId: 'series-1',
+      mountId: 'mount-2',
+      branch: 'feat/two',
+      ordinal: 2,
+      label: '2/6',
+      status: 'active',
+      request: { state: 'open' },
+      createdAt: '2026-09-08T10:00:00.000Z',
+      updatedAt: '2026-09-08T10:00:00.000Z',
+    },
+  ],
+});
+
 describe('ProjectMountRows', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -129,6 +168,51 @@ describe('ProjectMountRows', () => {
     store.prSeries = {};
   });
   afterEach(cleanup);
+
+  it('gives a project owning a single mount the same header as a project owning several', () => {
+    store.projects = [
+      ...store.projects,
+      { id: 'web', workspaceId: 'workspace-1', name: 'WEB', kind: 'repo', rootPath: '/repo/web' },
+    ];
+    store.sessionMounts = {
+      'session-1': [
+        mountView({ id: 'mount-1', branch: 'feat/one', path: '/api-one' }),
+        mountView({ id: 'mount-2', branch: 'feat/two', path: '/api-two' }),
+        {
+          ...mountView({ id: 'mount-3', branch: 'feat/three', path: '/web-one' }),
+          projectId: 'web',
+        },
+      ],
+    };
+    render(<ProjectMountRows session={session} onSelectLens={vi.fn()} />);
+
+    expect(screen.getByRole('list', { name: 'API branch mounts' })).toBeDefined();
+    expect(screen.getByRole('list', { name: 'WEB branch mounts' })).toBeDefined();
+    expect(screen.getAllByRole('button', { name: 'New branch mount' })).toHaveLength(2);
+    expect(screen.getByRole('listitem', { name: 'WEB on feat/three' })).toBeDefined();
+  });
+
+  it('gives each project its own block instead of one shared surface', () => {
+    store.projects = [
+      ...store.projects,
+      { id: 'web', workspaceId: 'workspace-1', name: 'WEB', kind: 'repo', rootPath: '/repo/web' },
+    ];
+    store.sessionMounts = {
+      'session-1': [
+        mountView({ id: 'mount-1', branch: 'feat/one', path: '/api-one' }),
+        { ...mountView({ id: 'mount-2', branch: 'feat/two', path: '/web-one' }), projectId: 'web' },
+      ],
+    };
+    render(<ProjectMountRows session={session} onSelectLens={vi.fn()} />);
+
+    const blocks = Array.from(screen.getByRole('region', { name: 'Mounted projects' }).children);
+
+    expect(blocks).toHaveLength(2);
+    for (const block of blocks) {
+      expect(block.className).toContain('border');
+      expect(within(block as HTMLElement).getAllByTestId('project-mount-row')).toHaveLength(1);
+    }
+  });
 
   it('renders one row per branch mount of the same project', () => {
     store.sessionMounts = {
@@ -203,21 +287,43 @@ describe('ProjectMountRows', () => {
     );
   });
 
-  it('keeps completed mounts behind a count toggle', () => {
+  it('keeps completed mounts behind a count toggle, in their declared position', () => {
     store.sessionMounts = {
       'session-1': [
         mountView({ id: 'mount-1', branch: 'feat/one', path: '/api-one' }),
         mountView({ id: 'mount-2', branch: 'feat/two', path: '/api-two' }),
       ],
     };
-    store.mountGithub = { 'mount-2': githubState({ number: 12, state: 'merged' }) };
+    store.mountGithub = { 'mount-1': githubState({ number: 11, state: 'merged' }) };
+    store.prSeries = { 'session-1': [seriesOfTwo()] };
     render(<ProjectMountRows session={session} onSelectLens={vi.fn()} />);
 
     expect(screen.getAllByTestId('project-mount-row')).toHaveLength(1);
     const toggle = screen.getByRole('button', { name: /Completed \(1\)/ });
     fireEvent.click(toggle);
 
-    expect(screen.getAllByTestId('project-mount-row')).toHaveLength(2);
+    const rows = screen.getAllByTestId('project-mount-row');
+    expect(rows.map((row) => row.getAttribute('aria-label'))).toEqual([
+      'API on feat/one',
+      'API on feat/two',
+    ]);
+  });
+
+  it('orders the mounts of a series by the position it declares', () => {
+    store.sessionMounts = {
+      'session-1': [
+        mountView({ id: 'mount-2', branch: 'feat/two', path: '/api-two' }),
+        mountView({ id: 'mount-1', branch: 'feat/one', path: '/api-one' }),
+      ],
+    };
+    store.prSeries = { 'session-1': [seriesOfTwo()] };
+    render(<ProjectMountRows session={session} onSelectLens={vi.fn()} />);
+
+    const rows = screen.getAllByTestId('project-mount-row');
+    expect(rows.map((row) => row.getAttribute('aria-label'))).toEqual([
+      'API on feat/one',
+      'API on feat/two',
+    ]);
   });
 
   it('reads out the progress of a six part series', () => {
@@ -227,48 +333,7 @@ describe('ProjectMountRows', () => {
         mountView({ id: 'mount-2', branch: 'feat/two', path: '/api-two' }),
       ],
     };
-    store.prSeries = {
-      'session-1': [
-        {
-          id: 'series-1',
-          sessionId: 'session-1',
-          projectId: 'api',
-          name: 'restyle',
-          plannedCount: 6,
-          workItemIdentifier: null,
-          workItemUrl: null,
-          parentRequest: null,
-          createdAt: '2026-09-08T10:00:00.000Z',
-          updatedAt: '2026-09-08T10:00:00.000Z',
-          members: [
-            {
-              id: 'member-1',
-              seriesId: 'series-1',
-              mountId: 'mount-1',
-              branch: 'feat/one',
-              ordinal: 1,
-              label: '1/6',
-              status: 'active',
-              request: { state: 'merged' },
-              createdAt: '2026-09-08T10:00:00.000Z',
-              updatedAt: '2026-09-08T10:00:00.000Z',
-            },
-            {
-              id: 'member-2',
-              seriesId: 'series-1',
-              mountId: 'mount-2',
-              branch: 'feat/two',
-              ordinal: 2,
-              label: '2/6',
-              status: 'active',
-              request: { state: 'open' },
-              createdAt: '2026-09-08T10:00:00.000Z',
-              updatedAt: '2026-09-08T10:00:00.000Z',
-            },
-          ],
-        },
-      ],
-    };
+    store.prSeries = { 'session-1': [seriesOfTwo()] };
     render(<ProjectMountRows session={session} onSelectLens={vi.fn()} />);
 
     expect(screen.getByText('1 merged · 2 of 6 created')).toBeDefined();

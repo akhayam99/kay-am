@@ -47,7 +47,7 @@ export const MountCleanupProposals = ({ sessionId }: Props) => {
   };
 
   return (
-    <div className="flex flex-col gap-1.5 border-t border-border-soft px-3 py-2">
+    <div className="flex flex-col gap-1.5 rounded-lg border border-border-soft bg-elevated/30 px-3 py-2">
       {proposals.map((proposal) => (
         <div key={proposal.requestId} className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 flex-col">

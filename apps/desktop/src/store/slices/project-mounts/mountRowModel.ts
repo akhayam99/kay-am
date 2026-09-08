@@ -215,6 +215,15 @@ export const seriesProgressLabel = ({ series }: ProgressParams): string | null =
   return `${merged} merged \u00b7 ${created} of ${total} created`;
 };
 
+const byDeclaredOrder = (left: MountRowView, right: MountRowView): number => {
+  const leftPosition = left.series?.position ?? Number.MAX_SAFE_INTEGER;
+  const rightPosition = right.series?.position ?? Number.MAX_SAFE_INTEGER;
+  if (leftPosition !== rightPosition) {
+    return leftPosition - rightPosition;
+  }
+  return left.parallelIndex - right.parallelIndex;
+};
+
 type FallbackParams = {
   readonly mounts: ReadonlyArray<SessionProjectMount>;
   readonly sessionId: SessionId;
@@ -309,8 +318,8 @@ export const buildMountRows = ({
         projectName: head.projectName,
         projectKind: head.projectKind,
         workspaceId: project?.workspaceId ?? null,
-        rows: rows.filter((row) => !row.isCompleted),
-        completedRows: rows.filter((row) => row.isCompleted),
+        rows: [...rows.filter((row) => !row.isCompleted)].sort(byDeclaredOrder),
+        completedRows: [...rows.filter((row) => row.isCompleted)].sort(byDeclaredOrder),
         seriesProgress: seriesProgressLabel({
           series: series.filter((view) => view.projectId === projectId),
         }),
