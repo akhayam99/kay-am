@@ -18,6 +18,7 @@ type Props = {
   onClose: () => void;
   viewSelector?: React.ReactNode;
   layoutToggle?: React.ReactNode;
+  resolveAction?: React.ReactNode;
   presentation?: 'bar' | 'actions';
 };
 
@@ -34,6 +35,7 @@ export const DiffToolbar = ({
   onClose,
   viewSelector,
   layoutToggle,
+  resolveAction,
   presentation = 'bar',
 }: Props) => {
   const titleText = title ?? (prNumber !== undefined ? `PR #${prNumber} diff` : 'Diff');
@@ -93,6 +95,7 @@ export const DiffToolbar = ({
         ) : null}
 
         {layoutToggle}
+        {resolveAction}
 
         <div className="flex shrink-0 items-center gap-0.5">
           {onRefresh ? (

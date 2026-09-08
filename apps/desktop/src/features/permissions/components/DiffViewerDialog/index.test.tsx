@@ -18,6 +18,8 @@ const { showToast, state, fixtures } = vi.hoisted(() => ({
   showToast: vi.fn<(kind: string, message: string, opts?: ToastOptions) => void>(),
   state: {
     settings: {} as Record<string, string>,
+    sessionGithub: {} as Record<string, { pr: unknown } | undefined>,
+    sessionResolveAttempts: {} as Record<string, ReadonlyArray<unknown>>,
     sessionPhaseRuns: {} as Record<string, ReadonlyArray<unknown>>,
     sessionProjectMounts: {} as Record<string, ReadonlyArray<{ projectId: string }>>,
     projects: [] as ReadonlyArray<{ id: string; baseBranch?: string | null }>,
@@ -41,6 +43,7 @@ const { showToast, state, fixtures } = vi.hoisted(() => ({
     beginSessionCreation: vi.fn(() => 'creation-1'),
     endSessionCreation: vi.fn(),
     spawnAgent: vi.fn(async () => 'a1'),
+    setAgentConfig: vi.fn(async () => undefined),
     sendTurn: vi.fn(async () => undefined),
     recordSessionEvent: vi.fn(async () => undefined),
   },

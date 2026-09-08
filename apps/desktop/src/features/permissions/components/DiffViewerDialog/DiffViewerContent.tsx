@@ -54,6 +54,7 @@ import {
   worktreeStatus,
 } from '../../../../features/worktree/worktree';
 import { DiffViewSelector } from '../DiffViewSelector';
+import { ResolveOverviewAction } from '../../../resolve/components/ResolveOverviewAction';
 import { DIFF_CAPPED_COLUMN_CLASS, TOOLBAR_ICON_BTN, type ReviewState } from './lib';
 import { FileRail } from './FileTree/FileRail';
 import { FileDiffCard } from './FileDiffCard';
@@ -825,6 +826,7 @@ export const DiffViewerContent = ({
                 onClose={onClose}
                 presentation="actions"
                 layoutToggle={<DiffLayoutToggle mode={layoutMode} onChange={setLayoutMode} />}
+                resolveAction={sessionId ? <ResolveOverviewAction sessionId={sessionId} /> : null}
                 viewSelector={
                   isGitAware ? (
                     <DiffViewSelector
@@ -928,6 +930,7 @@ export const DiffViewerContent = ({
               showClose={showToolbarClose}
               onClose={onClose}
               layoutToggle={<DiffLayoutToggle mode={layoutMode} onChange={setLayoutMode} />}
+              resolveAction={sessionId ? <ResolveOverviewAction sessionId={sessionId} /> : null}
               viewSelector={
                 isGitAware ? (
                   <DiffViewSelector

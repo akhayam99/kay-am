@@ -16,6 +16,7 @@ import { useReviewDiff } from '../../../review/components/ReviewPane/WriteReview
 import { DEFAULT_AGENT_SPAWN_CONFIG } from '../../../session/components/AgentSpawnConfig/defaultAgentSpawnConfig';
 import type { AgentSpawnConfigValue } from '../../../session/components/AgentSpawnConfig/AgentSpawnConfigValue';
 import { useResolveDeliveryReceipts } from '../../hooks/useResolveDeliveryReceipts';
+import { startResolveRun } from '../../startResolveRun';
 import { buildResolveQueueRows } from '../../buildResolveQueueRows';
 import { groupResolveQueue } from '../../groupResolveQueue';
 import { buildResolveQueueChecksByThreadId } from '../../resolveQueueChecksSummary';
@@ -124,26 +125,7 @@ export const ResolveQueueHome = ({ session }: Props) => {
     }
     setIsSpawning(true);
     try {
-      const agentId = await spawnAgent(sessionId, {
-        name: `Resolve PR #${pr.number}`,
-        ...(spawnConfig.provider !== '' && { provider: spawnConfig.provider }),
-        model: spawnConfig.model,
-        effort: spawnConfig.effort,
-        initialPrompt:
-          `Resolve the outstanding review comments on PR #${pr.number} (${pr.title}). ` +
-          `Check each unresolved thread and propose a fix or a reply.${
-            spawnConfig.hint.trim() === '' ? '' : ` ${spawnConfig.hint.trim()}`
-          }`,
-        kindOverride: 'resolver',
-        sourceCommentUrl: pr.url,
-        sourceKind: 'review_comment',
-        focus: 'none',
-      });
-      await setAgentConfig(sessionId, agentId, {
-        ...(spawnConfig.provider !== '' && { providerOverride: spawnConfig.provider }),
-        modelOverride: spawnConfig.model,
-        effort: spawnConfig.effort,
-      });
+      await startResolveRun({ sessionId, pr, spawnConfig, spawnAgent, setAgentConfig });
     } finally {
       setIsSpawning(false);
     }
