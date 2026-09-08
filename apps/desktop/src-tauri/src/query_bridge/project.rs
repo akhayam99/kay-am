@@ -218,6 +218,7 @@ mod tests {
             session_id: "session-1".to_string(),
             project: String::new(),
             mount: String::new(),
+            run_id: String::new(),
             provider: "project".to_string(),
             verb: "materialize".to_string(),
             args: args

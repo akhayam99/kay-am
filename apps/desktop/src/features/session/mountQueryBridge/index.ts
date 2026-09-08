@@ -15,6 +15,7 @@ import {
   worktreeWriterStatus,
 } from '../../worktree/worktree';
 import { mountCleanupBlockers } from '../../../store/slices/mount-cleanup/cleanupPolicy';
+import { queueMountContinuation } from '../../../store/slices/turn/mountContinuations';
 import { tauriDatabase } from '../../../shared/lib/db';
 import { useAppStore } from '../../../store/store';
 import { isMainWindow } from '../../workspace/window';
@@ -76,6 +77,26 @@ export const mountResult = (view: SessionMountView): Record<string, unknown> => 
   diskState: view.diskState,
   revision: view.revision,
 });
+
+type ContinuationParams = {
+  readonly request: MountBridgeRequest;
+  readonly mount: SessionMountView;
+  readonly origin: 'fork' | 'attach';
+};
+
+const requestContinuation = ({ request, mount, origin }: ContinuationParams): string => {
+  const operationId = request.requestId ?? `${origin}:${mount.id}:${mount.revision}`;
+  queueMountContinuation({
+    operationId,
+    sessionId: request.sessionId,
+    mountId: mount.id,
+    mountName: mount.mountName,
+    branch: mount.branch,
+    worktreePath: mount.worktreePath ?? '',
+    origin,
+  });
+  return operationId;
+};
 
 const bridgeErrorCode = (error: unknown): string | undefined => {
   const code = (error as { readonly code?: unknown } | null)?.code;
@@ -153,10 +174,11 @@ const forkFrom = async ({ request }: InspectParams): Promise<MountBridgeOutcome>
     ...(request.requestId === undefined ? {} : { requestId: request.requestId }),
     ...(base === '' ? {} : { baseBranch: base }),
   });
+  const operationId = requestContinuation({ request, mount, origin: 'fork' });
   return {
     ok: true,
     data: {
-      operationId: request.requestId ?? null,
+      operationId,
       sourceMountId: request.mountId,
       mount: mountResult(mount),
       requiresNewTurn: true,
@@ -206,10 +228,11 @@ const attach = async ({ request }: InspectParams): Promise<MountBridgeOutcome> =
     mountId: request.mountId,
     ...(request.requestId === undefined ? {} : { requestId: request.requestId }),
   });
+  const operationId = requestContinuation({ request, mount, origin: 'attach' });
   return {
     ok: true,
     data: {
-      operationId: request.requestId ?? null,
+      operationId,
       mount: mountResult(mount),
       requiresNewTurn: true,
     },

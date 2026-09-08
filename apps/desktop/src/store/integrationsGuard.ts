@@ -72,6 +72,11 @@ export const QUERY_BRIDGE_VERBS: Readonly<
   slack: ['channels', 'thread-heads', 'thread', 'permalink', 'users', 'reply', 'reaction-add'],
 };
 
+const MOUNT_SCOPED_PROVIDERS: ReadonlyArray<IntegrationBindingProvider> = ['github', 'gitlab'];
+
+const MOUNT_SCOPE_LINE =
+  'The verbs that read or write a checkout (push, pr-create, mr-create) act on ONE mount. They default to the mount this turn is bound to; pass `--mount <id>` to reach another one.';
+
 type GuardParams = {
   readonly providers: ReadonlyArray<IntegrationBindingProvider>;
   readonly isBridgeServing: boolean;
@@ -96,6 +101,9 @@ export const buildIntegrationsGuard = ({ providers, isBridgeServing }: GuardPara
     ...listed.map((provider) => `${provider}: ${QUERY_BRIDGE_VERBS[provider].join(', ')}`),
     'Call it as `"$GOODBOY_BIN" query <provider> <verb> [arguments]`, for example `"$GOODBOY_BIN" query linear issue ENG-123`. Keep the quotes around it: the path can contain spaces.',
     'Run `"$GOODBOY_BIN" query <provider> --help` for the exact arguments of a verb. Output is plain text; add --json for the raw payload.',
+    ...(listed.some((provider) => MOUNT_SCOPED_PROVIDERS.includes(provider))
+      ? [MOUNT_SCOPE_LINE]
+      : []),
     'Prefer it over scraping a web UI, and never invent a verb that is not listed here.',
     '[/integrations]',
   ].join('\n');

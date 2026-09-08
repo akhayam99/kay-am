@@ -42,6 +42,10 @@ vi.mock('../../worktree/worktree', () => ({
 }));
 
 import { executeMountRequest, mountResult } from './index';
+import {
+  clearMountContinuations,
+  pendingMountContinuations,
+} from '../../../store/slices/turn/mountContinuations';
 
 const view = ({ id, branch }: { readonly id: string; readonly branch: string }) =>
   ({
@@ -82,6 +86,7 @@ beforeEach(() => {
     view({ id: 'mount-2', branch: 'goodboy/two' }) as unknown as Record<string, unknown>,
   ];
   links.length = 0;
+  clearMountContinuations();
   for (const call of Object.values(state)) {
     if (typeof call === 'function' && 'mockClear' in call) {
       (call as { mockClear: () => void }).mockClear();
@@ -108,6 +113,28 @@ describe('executeMountRequest', () => {
       requiresNewTurn: true,
       mount: { mountId: 'mount-2' },
     });
+  });
+
+  it('queues exactly one continuation for a fork, however often it is retried', async () => {
+    const fork = request({ verb: 'fork', args: { branch: 'goodboy/two' } });
+
+    await executeMountRequest(fork);
+    await executeMountRequest(fork);
+
+    const queued = pendingMountContinuations({ sessionId: 'session-1' as SessionId });
+    expect(queued).toHaveLength(1);
+    expect(queued[0]).toMatchObject({
+      operationId: 'req-1',
+      mountId: 'mount-2',
+      worktreePath: '/wt/mount-2',
+      origin: 'fork',
+    });
+  });
+
+  it('leaves a mount activation without any continuation of its own', async () => {
+    await executeMountRequest(request({ verb: 'activate', args: {} }));
+
+    expect(pendingMountContinuations({ sessionId: 'session-1' as SessionId })).toHaveLength(0);
   });
 
   it('switches the mount it is given and names the branch it left', async () => {

@@ -1,9 +1,10 @@
-import type { Project, SessionProjectMount } from '@goodboy/types';
+import type { MountId, Project, SessionProjectMount } from '@goodboy/types';
 
 type ScopeGuardParams = {
   readonly workingDir: string;
   readonly projects: ReadonlyArray<Project>;
   readonly mounts: ReadonlyArray<SessionProjectMount>;
+  readonly activeMountId?: MountId | null;
   readonly isBridgeServing: boolean;
   readonly isSessionDirScope: boolean;
   readonly canWrite: boolean;
@@ -62,6 +63,11 @@ const mountCommandLines = ({
   }
   return [
     'Each mount has an id: `"$GOODBOY_BIN" query mount list` shows them, and `mount inspect|fork|switch|attach|unmount|activate --mount <id> --reason "<why>" --request-id <unique>` acts on one. Cutting a branch to start a second line of work with its own pull request is `mount fork`; moving this mount onto another branch is `mount switch`. Declare which one you mean, Goodboy never infers it from git.',
+    'Before you begin an independent pull request line, run `mount fork --mount <id> --branch <name>`. The fork starts from the configured origin base unless you pass `--base <branch>`, and it answers with a new mount id.',
+    'A fork or an attach only takes effect on the next turn: this process keeps the directory and the write permissions it was started with. Work in the returned mount on that next turn, then cherry-pick what belongs there and resolve conflicts normally.',
+    'Use `mount switch --mount <id> --branch <name>` only when you intend to replace THIS mount current branch. Pull requests stay linked to the mount, so earlier ones become history rather than moving with the branch.',
+    'Push and open requests through the mount-scoped commands: `"$GOODBOY_BIN" query github push --mount <id>` and `"$GOODBOY_BIN" query github pr-create --mount <id> --title "<title>"`.',
+    'NEVER use a raw `git checkout -b` as a way of declaring a fork. Goodboy reads an unexpected HEAD as a mismatch to resolve, never as intent, and refuses to guess whether you meant a switch or a fork.',
   ];
 };
 
@@ -94,18 +100,56 @@ const guardTag = ({ mounts, isSessionDirScope }: TagParams): GuardTag => {
   return isSessionDirScope ? 'session-directory-scope' : 'worktree-scope';
 };
 
+const availabilityOf = ({ mount }: { readonly mount: SessionProjectMount }): string => {
+  if (mount.isAttached === false) {
+    return 'detached';
+  }
+  const diskState = mount.diskState ?? 'present';
+  if (diskState === 'missing' || diskState === 'removed') {
+    return `attached, directory ${diskState}`;
+  }
+  return 'attached';
+};
+
+const mountInventoryLine = ({
+  mount,
+  projects,
+}: {
+  readonly mount: SessionProjectMount;
+  readonly projects: ReadonlyArray<Project>;
+}): string => {
+  const project = projects.find((candidate) => candidate.id === mount.projectId);
+  const identity = mount.mountId === undefined ? '' : ` [mount ${mount.mountId}]`;
+  const branch = mount.branch === '' ? 'no branch' : `branch ${mount.branch}`;
+  return `- ${mount.mountName}${identity} project ${project?.name ?? mount.projectId} ${branch} at ${mount.worktreePath} (${availabilityOf({ mount })})`;
+};
+
 type HeadParams = {
   readonly tag: GuardTag;
   readonly workingDir: string;
   readonly mounts: ReadonlyArray<SessionProjectMount>;
+  readonly projects: ReadonlyArray<Project>;
+  readonly activeMountId: MountId | null;
 };
 
-const headLines = ({ tag, workingDir, mounts }: HeadParams): ReadonlyArray<string> => {
+const headLines = ({
+  tag,
+  workingDir,
+  mounts,
+  projects,
+  activeMountId,
+}: HeadParams): ReadonlyArray<string> => {
+  const boundLine =
+    activeMountId === null
+      ? []
+      : [
+          `This turn is bound to mount ${activeMountId}. It stays bound for the whole turn: \`mount activate\` and anything the owner clicks change only where the NEXT turn starts.`,
+        ];
   if (tag === 'worktree-scope') {
-    return [`You are operating inside an isolated git worktree at: ${workingDir}`];
+    return [`You are operating inside an isolated git worktree at: ${workingDir}`, ...boundLine];
   }
   if (tag === 'session-directory-scope') {
-    return [`You are operating inside this session directory: ${workingDir}`];
+    return [`You are operating inside this session directory: ${workingDir}`, ...boundLine];
   }
   if (mounts.length === 0) {
     return [
@@ -115,12 +159,10 @@ const headLines = ({ tag, workingDir, mounts }: HeadParams): ReadonlyArray<strin
   }
   return [
     `You are operating inside the active project mount at: ${workingDir}`,
+    ...boundLine,
     `This session has ${mounts.length} materialized project mounts:`,
-    ...mounts.map(
-      (mount) =>
-        `- ${mount.mountName} at ${mount.worktreePath}${mount.branch === '' ? '' : ` (branch ${mount.branch})`}`,
-    ),
-    'Each mount is a separate git repository on its own branch. Run git commands inside the relevant mount.',
+    ...mounts.map((mount) => mountInventoryLine({ mount, projects })),
+    'Two mounts of the same project are worktrees of one repository and share its history and its remotes, they are not separate clones. Run every git command inside the mount you mean.',
   ];
 };
 
@@ -144,6 +186,7 @@ export const buildScopeGuard = ({
   workingDir,
   projects,
   mounts,
+  activeMountId = null,
   isBridgeServing,
   isSessionDirScope,
   canWrite,
@@ -171,7 +214,7 @@ export const buildScopeGuard = ({
   const mountCommands = canWrite ? mountCommandLines({ isBridgeServing, mounts }) : [];
   return [
     `[${tag}]`,
-    ...headLines({ tag, workingDir, mounts }),
+    ...headLines({ tag, workingDir, mounts, projects, activeMountId }),
     ...teachingLines,
     ...mountCommands,
     `[/${tag}]`,

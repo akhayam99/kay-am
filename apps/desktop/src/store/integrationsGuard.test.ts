@@ -91,7 +91,22 @@ describe('buildIntegrationsGuard', () => {
       isBridgeServing: true,
     });
 
-    expect(guard.split('\n')).toHaveLength(13);
+    expect(guard.split('\n')).toHaveLength(14);
+  });
+
+  it('names the mount scope only for the providers that write to a checkout', () => {
+    const withRequests = buildIntegrationsGuard({
+      providers: ['linear', 'github'],
+      isBridgeServing: true,
+    });
+    const withoutRequests = buildIntegrationsGuard({
+      providers: ['linear', 'slack'],
+      isBridgeServing: true,
+    });
+
+    expect(withRequests).toContain('act on ONE mount');
+    expect(withRequests).toContain('pass `--mount <id>` to reach another one');
+    expect(withoutRequests).not.toContain('act on ONE mount');
   });
 
   it('ignores a provider the bridge cannot serve', () => {

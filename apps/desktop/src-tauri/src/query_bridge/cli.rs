@@ -1,6 +1,6 @@
 use super::protocol::{
-    self, help_text, parse_argv, ArgvOutcome, QueryRequest, QueryResponse, SESSION_ENV, SOCKET_ENV,
-    SUBCOMMAND, WORKSPACE_ENV,
+    self, help_text, parse_argv, ArgvOutcome, QueryRequest, QueryResponse, MOUNT_ENV, RUN_ENV,
+    SESSION_ENV, SOCKET_ENV, SUBCOMMAND, WORKSPACE_ENV,
 };
 
 pub(crate) fn dispatch() -> Option<i32> {
@@ -44,10 +44,8 @@ fn run(argv: &[String]) -> Result<String, String> {
             .trim()
             .to_string(),
         project: project_scope(&parsed.args, argv),
-        mount: named_value(argv, "mount")
-            .unwrap_or_default()
-            .trim()
-            .to_string(),
+        mount: bound_value(argv, "mount", MOUNT_ENV),
+        run_id: bound_value(argv, "run", RUN_ENV),
         provider: parsed.provider,
         verb: parsed.verb,
         args: parsed.args,
@@ -61,6 +59,14 @@ fn run(argv: &[String]) -> Result<String, String> {
         return serde_json::to_string_pretty(&data).map_err(|error| error.to_string());
     }
     Ok(render(&data))
+}
+
+fn bound_value(argv: &[String], name: &str, variable: &str) -> String {
+    named_value(argv, name)
+        .or_else(|| std::env::var(variable).ok())
+        .unwrap_or_default()
+        .trim()
+        .to_string()
 }
 
 fn help_provider(argv: &[String]) -> Option<&str> {
@@ -281,6 +287,21 @@ mod tests {
         let printed = refusal(&QueryResponse::failed("unknown project: app"));
 
         assert_eq!(printed, "unknown project: app");
+    }
+
+    #[test]
+    fn the_turn_mount_is_inherited_from_the_environment_and_argv_still_wins() {
+        let variable = "GOODBOY_TEST_BOUND_MOUNT";
+        std::env::set_var(variable, "  mount-turn  ");
+
+        assert_eq!(bound_value(&[], "mount", variable), "mount-turn");
+        assert_eq!(
+            bound_value(&["--mount=mount-other".to_string()], "mount", variable),
+            "mount-other"
+        );
+
+        std::env::remove_var(variable);
+        assert_eq!(bound_value(&[], "mount", variable), "");
     }
 
     #[test]

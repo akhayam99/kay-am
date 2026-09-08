@@ -57,6 +57,9 @@ export const storySpies = {
   })),
   removeSessionDirectory: vi.fn(async (_args: unknown) => undefined),
   worktreeStatus: vi.fn(async (_path: string) => cleanWorkingTree),
+  gitCommonDirectory: vi.fn(
+    async (_args: { readonly repoPath: string }): Promise<string | null> => null,
+  ),
   worktreeChangedFiles: vi.fn(async (_path: string) => ({ files: [], numstat: '' })),
   insertSession: vi.fn(async () => undefined),
   insertSessionEvent: vi.fn(
@@ -66,6 +69,7 @@ export const storySpies = {
   deleteSessionWorktreeForProject: vi.fn(async () => undefined),
   updateSessionWorktreeBranch: vi.fn(async () => undefined),
   updateSessionActiveProject: vi.fn(async () => undefined),
+  updateSessionActiveMount: vi.fn(async () => true),
   listWorktreesForSession: vi.fn(async () => [] as ReadonlyArray<never>),
   getWorkspaceById: vi.fn(async () => null),
   listProjectsForWorkspace: vi.fn(async () => [] as ReadonlyArray<never>),
@@ -96,6 +100,9 @@ export const resetStorySpies = () => {
   );
   storySpies.worktreeWriterStatus.mockImplementation(async ({ path }: { path: string }) =>
     freeWriterLease({ path }),
+  );
+  storySpies.gitCommonDirectory.mockImplementation(
+    async ({ repoPath }: { readonly repoPath: string }) => `${repoPath}/.git`,
   );
 };
 
@@ -140,6 +147,7 @@ export const dbModuleMock = () => ({
   updateSessionWorktreeBranch: storySpies.updateSessionWorktreeBranch,
   updateSessionWorktreeRepoSlug: vi.fn(async () => undefined),
   updateSessionActiveProject: storySpies.updateSessionActiveProject,
+  updateSessionActiveMount: storySpies.updateSessionActiveMount,
   upsertSessionExternalTask: storySpies.upsertSessionExternalTask,
   deleteSessionExternalTask: vi.fn(),
   listExternalTasksForWorkspace: vi.fn(async () => []),
@@ -286,6 +294,7 @@ export const worktreeModuleMock = () => ({
   scratchDirRemove: (args: unknown) => storySpies.scratchDirRemove(args),
   worktreeChangedFiles: (path: string) => storySpies.worktreeChangedFiles(path),
   worktreeStatus: (path: string) => storySpies.worktreeStatus(path),
+  gitCommonDirectory: (args: { readonly repoPath: string }) => storySpies.gitCommonDirectory(args),
   changeWorktreeBranch: vi.fn(async () => undefined),
   invalidateLocalBranchesCache: vi.fn(),
 });

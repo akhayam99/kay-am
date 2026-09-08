@@ -109,6 +109,12 @@ import {
   selectMountById,
   selectWritableMounts,
 } from '../project-mounts/selectors';
+import { mountContinuationPrompt, takeMountContinuation } from './mountContinuations';
+import {
+  buildTurnWritableRoots,
+  repoRootsForTurn,
+  resolveGitCommonDirs,
+} from './turnWritableRoots';
 import { createResolveCandidateWriter } from './createResolveCandidateWriter';
 import { completeResolvedAgent } from './completeResolvedAgent';
 import { resolvePhaseAgent } from './resolvePhaseAgent';
@@ -141,7 +147,7 @@ type Input = {
   attachments?: ReadonlyArray<AttachmentInput>;
   override?: TurnProviderOverride;
   force?: boolean;
-  origin?: 'operator';
+  origin?: 'operator' | 'mount-continuation';
   retry?: {
     readonly attempt: number;
     readonly provider: ProviderId;
@@ -814,7 +820,7 @@ export const sendTurn = (set: SetFn, get: GetFn) => {
     const filesTouchedThisTurn = new Set<string>();
 
     const resumeSessionId =
-      agentRowEarly?.providerSessionProviderId === provider
+      origin !== 'mount-continuation' && agentRowEarly?.providerSessionProviderId === provider
         ? agentRowEarly.providerSessionId
         : undefined;
 
@@ -854,6 +860,7 @@ export const sendTurn = (set: SetFn, get: GetFn) => {
       workingDir,
       projects: workspaceProjects,
       mounts: scopeMounts,
+      activeMountId: turnMountId,
       isBridgeServing,
       isSessionDirScope,
       canWrite: kindWritesFiles(earlyAgentKind),
@@ -892,11 +899,14 @@ export const sendTurn = (set: SetFn, get: GetFn) => {
       .filter((block) => block.length > 0)
       .join('\n\n');
     const fullSystemPrompt = kindSystemPrompt ? `${guards}\n\n${kindSystemPrompt}` : guards;
-    const writableRoots = Array.from(
-      new Set(
-        scopeMounts.filter((mount) => mount.branch !== '').map((mount) => `${mount.repoRoot}/.git`),
-      ),
-    );
+    const gitDirs = await resolveGitCommonDirs({
+      repoRoots: repoRootsForTurn({ mounts: scopeMounts }),
+    });
+    const writableRoots = buildTurnWritableRoots({
+      mounts: scopeMounts,
+      workingDir,
+      gitDirs,
+    });
 
     if (provider !== 'anthropic') {
       resolvedPrompt = `${guards}\n\n${
@@ -919,6 +929,7 @@ export const sendTurn = (set: SetFn, get: GetFn) => {
         binary: providerInfo?.binary,
         workspaceId: session.workspaceId,
         sessionId,
+        ...(turnMountId !== null && { mountId: turnMountId }),
         ...(resumeSessionId !== undefined && { resumeSessionId }),
         systemPrompt: fullSystemPrompt,
         ...(effortFlag !== undefined && { effort: effortFlag }),
@@ -1460,6 +1471,30 @@ export const sendTurn = (set: SetFn, get: GetFn) => {
     }
     return NOT_BLOCKED;
   };
+  const continueOnRequestedMount = async ({ input }: { readonly input: Input }): Promise<void> => {
+    const continuation = takeMountContinuation({ sessionId: input.sessionId });
+    if (continuation === null) {
+      return;
+    }
+    const target = selectMountById({
+      state: get(),
+      sessionId: input.sessionId,
+      mountId: continuation.mountId,
+    });
+    if (target === null) {
+      return;
+    }
+    await get().setSessionActiveMount({
+      sessionId: input.sessionId,
+      mountId: continuation.mountId,
+    });
+    await run({
+      sessionId: input.sessionId,
+      ...(input.agentId !== undefined && { agentId: input.agentId }),
+      content: mountContinuationPrompt({ continuation }),
+      origin: 'mount-continuation',
+    });
+  };
   const run = async (input: Input): Promise<SendTurnResult> => {
     const lease: TurnLease = { path: null, holder: null, token: null, attemptId: undefined };
     try {
@@ -1473,6 +1508,9 @@ export const sendTurn = (set: SetFn, get: GetFn) => {
           ...(attemptId !== undefined && { endedAttemptId: attemptId }),
         });
       }
+      void continueOnRequestedMount({ input }).catch((error) =>
+        console.error('mount continuation failed', error),
+      );
     }
   };
   return run;

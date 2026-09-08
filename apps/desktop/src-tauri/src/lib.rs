@@ -221,6 +221,7 @@ pub fn run() {
             scratch_dir::scratch_dir_remove,
             worktree::worktree_create,
             worktree::worktree_inspect,
+            worktree::worktree_git_common_dir,
             worktree::worktree_remove_checked,
             worktree::worktree_directory_size,
             worktree::worktree_tidy_goodboy,

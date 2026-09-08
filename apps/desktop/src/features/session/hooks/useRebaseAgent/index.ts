@@ -48,16 +48,31 @@ type RebaseTarget = {
 
 const REBASE_AGENT_PREFIX = 'Rebase on ';
 
-const rebasePromptFor = ({ baseBranch }: { readonly baseBranch: string }): string =>
-  [
+export const rebasePromptFor = ({
+  baseBranch,
+  mountId,
+  worktreePath,
+}: {
+  readonly baseBranch: string;
+  readonly mountId: MountId | null;
+  readonly worktreePath: string | null;
+}): string => {
+  const mountFlag = mountId === null ? '' : ` --mount ${mountId}`;
+  return [
     `Rebase this session branch onto origin/${baseBranch}.`,
+    ...(mountId === null
+      ? []
+      : [
+          `- This rebase belongs to mount ${mountId}${worktreePath === null ? '' : ` at ${worktreePath}`}. Run every git command there and never in a sibling mount.`,
+        ]),
     `- Fetch origin ${baseBranch} before rebasing.`,
     `- Rebase the session branch onto origin/${baseBranch} and resolve conflicts by favoring the branch's intent.`,
     "- Run the repository's typecheck to confirm nothing broke.",
-    '- Push the rebased branch with "$GOODBOY_BIN" query github push --force-with-lease; fall back to git push --force-with-lease only if the bridge is unavailable.',
+    `- Push the rebased branch with "$GOODBOY_BIN" query github push${mountFlag} --force-with-lease; fall back to git push --force-with-lease only if the bridge is unavailable.`,
     '- Never merge and never touch other branches.',
     '- If a conflict cannot be resolved confidently, stop and report the conflicting files.',
   ].join('\n');
+};
 
 export const useRebaseAgent = ({ sessionId, status, onError }: Params): Result => {
   const [isStarting, setIsStarting] = useState(false);
@@ -207,7 +222,11 @@ export const useRebaseAgent = ({ sessionId, status, onError }: Params): Result =
     try {
       const agentId = await spawnAgent(sessionId, {
         name: `${REBASE_AGENT_PREFIX}${target.baseBranch}`,
-        initialPrompt: rebasePromptFor({ baseBranch: target.baseBranch }),
+        initialPrompt: rebasePromptFor({
+          baseBranch: target.baseBranch,
+          mountId: target.mountId,
+          worktreePath: target.worktreePath,
+        }),
         model: config.model,
         provider: config.provider,
         effort: config.effort,

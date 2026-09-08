@@ -797,6 +797,17 @@ pub async fn worktree_inspect(
 }
 
 #[tauri::command]
+pub async fn worktree_git_common_dir(repo_path: String) -> Option<String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        common_git_dir_with(Path::new(&repo_path), &mut |cwd, args| git(cwd, args))
+            .map(|path| path.to_string_lossy().into_owned())
+    })
+    .await
+    .ok()
+    .flatten()
+}
+
+#[tauri::command]
 pub async fn worktree_remove_checked(
     repo_path: String,
     worktree_path: String,

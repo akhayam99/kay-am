@@ -77,6 +77,8 @@ pub struct SpawnArgs {
     #[serde(default)]
     pub session_id: Option<String>,
     #[serde(default)]
+    pub mount_id: Option<String>,
+    #[serde(default)]
     pub api_key_env: Option<String>,
     #[serde(default)]
     pub credential_id: Option<String>,
@@ -306,6 +308,7 @@ struct SpawnOneArgs<'a> {
     pub credential_id: Option<&'a str>,
     pub workspace_id: Option<&'a str>,
     pub session_id: Option<&'a str>,
+    pub mount_id: Option<&'a str>,
     pub cursor_max_mode: bool,
     pub writer_lease: Option<&'a WriterLeaseBinding>,
 }
@@ -372,7 +375,15 @@ fn spawn_one(
         command.env("GITHUB_TOKEN", &token);
     }
 
-    crate::query_bridge::apply_env(&mut command, args.workspace_id, args.session_id);
+    crate::query_bridge::apply_turn_env(
+        &mut command,
+        crate::query_bridge::TurnBinding {
+            workspace_id: args.workspace_id,
+            session_id: args.session_id,
+            mount_id: args.mount_id,
+            run_id: Some(args.run_id),
+        },
+    );
 
     let cli_args = build_provider_cli_args(args.binary, &args);
     for a in &cli_args {
@@ -485,6 +496,7 @@ pub async fn turn_spawn(
             credential_id: args.credential_id.as_deref(),
             workspace_id: args.workspace_id.as_deref(),
             session_id: args.session_id.as_deref(),
+            mount_id: args.mount_id.as_deref(),
             cursor_max_mode: args.cursor_max_mode,
             writer_lease: args.writer_lease.as_ref(),
         },
@@ -622,6 +634,7 @@ mod tests {
             credential_id: None,
             workspace_id: None,
             session_id: None,
+            mount_id: None,
             cursor_max_mode: false,
             writer_lease: None,
         };
@@ -653,6 +666,7 @@ mod tests {
             credential_id: None,
             workspace_id: None,
             session_id: None,
+            mount_id: None,
             cursor_max_mode: false,
             writer_lease: None,
         }
@@ -836,6 +850,35 @@ mod tests {
     }
 
     #[test]
+    fn codex_args_add_sibling_worktrees_without_their_parent_directory() {
+        let empty: Vec<String> = vec![];
+        let roots = vec![
+            "/repo/one/.goodboy/worktrees/second".to_string(),
+            "/repo/one/.git".to_string(),
+        ];
+        let mut args = make_args(None, None, &empty);
+        args.working_dir = "/repo/one/.goodboy/worktrees/first";
+        args.writable_roots = &roots;
+        let cli = build_provider_cli_args("codex", &args);
+        let added_directories: Vec<&str> = cli
+            .windows(2)
+            .filter(|pair| pair[0] == "--add-dir")
+            .map(|pair| pair[1].as_str())
+            .collect();
+
+        assert_eq!(
+            added_directories,
+            vec![
+                "/repo/one/.goodboy/worktrees/second",
+                "/repo/one/.git",
+                "/tmp/goodboy-query"
+            ]
+        );
+        assert!(!added_directories.contains(&"/repo/one"));
+        assert!(!added_directories.contains(&"/repo/one/.goodboy/worktrees"));
+    }
+
+    #[test]
     fn codex_args_include_reasoning_effort_when_set() {
         let empty: Vec<String> = vec![];
         let mut args = make_args(None, None, &empty);
@@ -982,6 +1025,7 @@ mod tests {
             credential_id: None,
             workspace_id: None,
             session_id: None,
+            mount_id: None,
             cursor_max_mode: false,
             writer_lease: None,
         };

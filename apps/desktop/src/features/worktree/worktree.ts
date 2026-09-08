@@ -214,6 +214,14 @@ export const removeWorktreeChecked = async ({
   return invoke<WorktreeRemovalResult>('worktree_remove_checked', { repoPath, worktreePath });
 };
 
+export const gitCommonDirectory = async ({
+  repoPath,
+}: {
+  readonly repoPath: string;
+}): Promise<string | null> => {
+  return invoke<string | null>('worktree_git_common_dir', { repoPath });
+};
+
 type WorktreeDirectorySizeParams = {
   readonly path: string;
 };
