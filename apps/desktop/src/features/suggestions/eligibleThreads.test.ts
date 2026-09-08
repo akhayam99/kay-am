@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Agent, PendingResolution, PrComment, SessionId } from '@goodboy/types';
+import type { PrComment, ResolveThread, ResolveThreadState } from '@goodboy/types';
 import type { SessionGithubState } from '../../store/types';
-import type { ResolverIndex, ResolverStatus } from '../session/resolver-linkage';
 import { eligibleReviewThreadCount, eligibleReviewThreads } from './eligibleThreads';
 
 const comment = ({
@@ -32,41 +31,25 @@ const githubWith = ({
   readonly comments: ReadonlyArray<PrComment>;
 }): SessionGithubState => ({ detail: { comments } }) as unknown as SessionGithubState;
 
-const resolverIndexWith = ({
-  byThreadId = {},
+const row = ({
+  threadId,
+  state,
 }: {
-  readonly byThreadId?: Readonly<Record<string, ResolverStatus>>;
-}): ResolverIndex => ({
-  links: [],
-  byThreadId: new Map(
-    Object.entries(byThreadId).map(([threadId, status]) => [
-      threadId,
-      { agent: {} as Agent, status },
-    ]),
-  ),
-  byCommentUrl: new Map(),
-  byDiffAgentId: new Map(),
-});
-
-const pending = ({ threadId }: { readonly threadId: string }): PendingResolution =>
-  ({
-    id: `pending-${threadId}`,
-    sessionId: 'session-1' as SessionId,
-    threadId,
-  }) as unknown as PendingResolution;
+  readonly threadId: string;
+  readonly state: ResolveThreadState;
+}): ResolveThread => ({ threadId, state }) as unknown as ResolveThread;
 
 describe('eligibleReviewThreads', () => {
-  it('keeps unresolved review threads without a resolver', () => {
+  it('keeps an unresolved review thread that has no durable row yet', () => {
     const threads = eligibleReviewThreads({
       github: githubWith({ comments: [comment({ id: '1', threadId: 't1' })] }),
-      pendingResolutions: [],
-      resolverIndex: resolverIndexWith({}),
+      rows: [],
     });
 
     expect(threads.map((thread) => thread.head.threadId)).toEqual(['t1']);
   });
 
-  it('excludes resolved threads, issue comments, and pending resolutions', () => {
+  it('excludes threads resolved on GitHub, issue comments, and threads already worked', () => {
     const count = eligibleReviewThreadCount({
       github: githubWith({
         comments: [
@@ -75,32 +58,24 @@ describe('eligibleReviewThreads', () => {
           comment({ id: '3', threadId: 't3' }),
         ],
       }),
-      pendingResolutions: [pending({ threadId: 't3' })],
-      resolverIndex: resolverIndexWith({}),
+      rows: [row({ threadId: 't3', state: 'working' })],
     });
 
     expect(count).toBe(0);
   });
 
-  it('excludes a running resolver and includes a failed one', () => {
+  it('excludes a fixed row and includes a failed one so a retry stays offered', () => {
     const count = eligibleReviewThreadCount({
       github: githubWith({
         comments: [comment({ id: '1', threadId: 't1' }), comment({ id: '2', threadId: 't2' })],
       }),
-      pendingResolutions: [],
-      resolverIndex: resolverIndexWith({ byThreadId: { t1: 'running', t2: 'failed' } }),
+      rows: [row({ threadId: 't1', state: 'fixed' }), row({ threadId: 't2', state: 'failed' })],
     });
 
     expect(count).toBe(1);
   });
 
   it('counts nothing without github detail', () => {
-    expect(
-      eligibleReviewThreadCount({
-        github: null,
-        pendingResolutions: [],
-        resolverIndex: resolverIndexWith({}),
-      }),
-    ).toBe(0);
+    expect(eligibleReviewThreadCount({ github: null, rows: [] })).toBe(0);
   });
 });

@@ -143,7 +143,7 @@ parked beside it.
   shortcuts into a place that already has a parent, and none of them may rewrite
   it. History is what Back is for.
 - **A child hangs off the overview section that owns it**: a step under its
-  run under Workflows, an ad-hoc agent under Agents, a resolver under Resolve.
+  run under Workflows, an ad-hoc agent under Agents, a fix attempt under Review.
   The overlay's back target still prefers the surface the user was standing
   in, so Back returns where you were while the trail states where you are.
 - **A crumb with siblings is a switcher**: plain text when the agent is alone

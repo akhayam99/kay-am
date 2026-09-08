@@ -10,7 +10,6 @@ import { useAgentMetrics } from '../../hooks/useAgentMetrics';
 import { AgentKindChip } from '../AgentKindChip';
 import { AgentStatusBadge } from '../../../workspace/components/WorkspacesSidebar/parts/AgentStatusBadge';
 import { AgentHeaderActions } from '../AgentHeaderActions';
-import { ResolverDetailPane } from '../ResolverDetailPane';
 import { AgentBrief } from './AgentBrief';
 import { AgentTitle } from './AgentTitle';
 
@@ -59,18 +58,6 @@ export const AgentDetailPane = ({ session, agent, isChatActive, onBack, eyebrow 
       window.removeEventListener('goodboy:reveal-chat', revealTranscript);
     };
   }, []);
-
-  if (kind === 'resolver') {
-    return (
-      <ResolverDetailPane
-        session={session}
-        agent={agent}
-        isChatActive={isChatActive}
-        onBack={onBack}
-        eyebrow={eyebrow}
-      />
-    );
-  }
 
   const status = turnState?.kind === 'running' ? 'running' : agent.status;
   const planned =

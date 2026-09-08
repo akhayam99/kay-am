@@ -6,7 +6,7 @@ export const LENS_LABEL: Record<LensKind, string> = {
   questions: 'Questions',
   agents: 'Agents',
   workflows: 'Workflows',
-  review: 'Review board',
+  review: 'Review',
   plans: 'Plans',
   scripts: 'Scripts',
   terminal: 'Terminal',

@@ -125,7 +125,8 @@ type SessionViewSliceState = {
   readonly scriptsLensScope: { readonly projectId: ProjectId } | null;
   readonly reviewLensIntent: {
     readonly sessionId: SessionId;
-    readonly agentId: AgentId;
+    readonly threadId?: string;
+    readonly attemptId?: string;
   } | null;
   readonly sessionViewPrefs: Readonly<Record<WorkspaceId, SessionViewPrefs>>;
   readonly activeLens: Readonly<Record<SessionId, LensKind | null>>;
@@ -144,7 +145,11 @@ type SessionViewSliceState = {
 type SessionViewSliceActions = {
   setScriptsLensScope(params: { readonly scope: { readonly projectId: ProjectId } | null }): void;
   setReviewLensIntent(params: {
-    readonly intent: { readonly sessionId: SessionId; readonly agentId: AgentId } | null;
+    readonly intent: {
+      readonly sessionId: SessionId;
+      readonly threadId?: string;
+      readonly attemptId?: string;
+    } | null;
   }): void;
   getSessionViewPrefs(workspaceId: WorkspaceId): SessionViewPrefs;
   setSessionSort(workspaceId: WorkspaceId, sort: SessionSortKey): void;

@@ -45,10 +45,10 @@ export const ResolverKickoffCard = ({ item, sessionId = null }: Props) => {
             grouped
             tone="neutral"
             eyebrow="instructions"
-            preview="what the resolver was told to do"
+            preview="what the fix attempt was told to do"
             open={open}
             onToggle={() => setOpen((value) => !value)}
-            aria-label={open ? 'Collapse resolver instructions' : 'Expand resolver instructions'}
+            aria-label={open ? 'Collapse resolve instructions' : 'Expand resolve instructions'}
           />
         }
       >

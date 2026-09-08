@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { ChevronRight } from 'lucide-react';
-import { StatusDot, Tooltip } from '@goodboy/ui';
-import type { Agent, AgentId, Session, SessionId } from '@goodboy/types';
+import { Chip, StatusDot, Tooltip } from '@goodboy/ui';
+import type { Agent, AgentId, ResolveAttempt, Session, SessionId } from '@goodboy/types';
 import {
   EMPTY_ARRAY,
   useAppStore,
@@ -16,13 +16,15 @@ import { isAgentFinished } from '../../agent-lifecycle';
 import { useResolverIndex } from '../../hooks/useResolverIndex';
 import type { ResolverStatus } from '../../resolver-linkage';
 import { AgentStatusIcon } from '../AgentCard/AgentStatusIcon';
-import { ResolverStateBadge } from '../ResolverStateBadge';
 import { PlainCrumb } from './PlainCrumb';
 import { AgentSwitcherCrumb } from './AgentSwitcherCrumb';
 import { WorkflowAdvance } from './WorkflowAdvance';
 import { switcherPeers } from './switcherPeers';
 import type { SwitcherEntry } from './switcherEntry';
+
 import { ICON_SIZE } from '../../../../shared/components/conceptIcons';
+
+const EMPTY_ATTEMPTS: ReadonlyArray<ResolveAttempt> = [];
 
 type SessionCrumbsProps = {
   readonly session: Session;
@@ -42,6 +44,9 @@ const SessionCrumbs = ({ session }: SessionCrumbsProps) => {
   const agentKindOverride = useAppStore((state) => state.agentKindOverride);
   const selectAgent = useAppStore((state) => state.selectAgent);
   const selectedWorkflowRun = useSelectedWorkflowRun({ session });
+  const resolveAttempts = useAppStore(
+    (state) => state.sessionResolveAttempts[sessionId] ?? EMPTY_ATTEMPTS,
+  );
   const resolverIndex = useResolverIndex(sessionId);
   const resolverStatusByAgentId = useMemo(() => {
     const map = new Map<AgentId, ResolverStatus>();
@@ -55,9 +60,9 @@ const SessionCrumbs = ({ session }: SessionCrumbsProps) => {
     () => phaseRuns.find((agent) => agent.id === selectedAgentId) ?? null,
     [phaseRuns, selectedAgentId],
   );
-  const pendingResolverCount = useMemo(
-    () => resolverIndex.links.filter(({ status }) => status === 'pending').length,
-    [resolverIndex.links],
+  const queuedAttemptCount = useMemo(
+    () => resolveAttempts.filter((attempt) => attempt.phase === 'queued').length,
+    [resolveAttempts],
   );
 
   const rootAgent = useMemo(() => {
@@ -151,8 +156,8 @@ const SessionCrumbs = ({ session }: SessionCrumbsProps) => {
         const accessory =
           isLast && crumb.id === 'selected-child' && selectedAgent != null ? (
             <AgentStatusIcon status={selectedAgent.status} />
-          ) : activeLens === 'review' && crumb.id === 'lens-review' && pendingResolverCount > 0 ? (
-            <ResolverStateBadge state="queued" count={pendingResolverCount} />
+          ) : activeLens === 'review' && crumb.id === 'lens-review' && queuedAttemptCount > 0 ? (
+            <Chip size="3xs" tone="info" bordered={false} label={`${queuedAttemptCount} queued`} />
           ) : (
             crumb.accessory
           );

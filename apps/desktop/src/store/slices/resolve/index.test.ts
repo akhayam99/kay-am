@@ -3,6 +3,7 @@ import { createStore } from 'zustand/vanilla';
 import {
   hasResolveImport,
   insertMessage,
+  insertOpenQuestion,
   listResolveThreads,
   migrate,
   upsertResolveThread,
@@ -10,13 +11,12 @@ import {
 } from '@goodboy/db';
 import { makeTestDatabase } from '@goodboy/db/test-helpers';
 import type { Agent, AgentId, IsoDateTime, MessageId, SessionId } from '@goodboy/types';
-import { resolverMissingVerdicts } from '../../../features/session/resolverMissingVerdicts';
-import { resolverThreadSettlements } from '../../../features/session/resolverThreadSettlements';
 import { resolverStatus } from '../../../features/workspace/components/WorkspacesSidebar/lib';
 import type { GetFn, SetFn } from './types';
 import { createResolveSlice } from './index';
 import { resolveInitialState } from './state';
 import { createResolveThread } from './createResolveThread';
+import { threadOutcome } from './threadOutcome';
 
 const h = vi.hoisted(() => ({
   execute: vi.fn(),
@@ -81,17 +81,14 @@ const statusFor = ({ get }: StatusParams) =>
     new Set(),
     get().resolverState[AGENT_ID],
   );
-const missingVerdictsFor = ({ get }: StatusParams) =>
-  resolverMissingVerdicts({
-    settlements: resolverThreadSettlements({
-      threadIds: ['PRRT_1', 'PRRT_2'],
-      outcomes: get().resolverThreadOutcomes[AGENT_ID] ?? {},
-      pendingResolutions: [],
-      closedThreadIds: new Set<string>(),
-    }),
-    status: 'done',
-    isBusy: false,
+const missingVerdictsFor = ({ get }: StatusParams) => {
+  const rows = get().sessionResolveThreads[SESSION_ID] ?? [];
+  const threadIds = ['PRRT_1', 'PRRT_2'].filter((threadId) => {
+    const row = rows.find((item) => item.threadId === threadId);
+    return row === undefined || threadOutcome({ row }) === null;
   });
+  return threadIds.length === 0 ? null : { threadIds };
+};
 
 beforeEach(async () => {
   h.listLiveRunIds.mockReset().mockResolvedValue(new Set());
@@ -715,5 +712,148 @@ describe('durable resolve store', () => {
       state: 'failed',
       stateReason: 'failed:interrupted',
     });
+  });
+
+  const askQuestion = async ({ agentId = AGENT_ID }: { readonly agentId?: AgentId } = {}) =>
+    insertOpenQuestion(db, {
+      id: `question-${agentId}` as never,
+      sessionId: SESSION_ID,
+      createdByAgentId: agentId,
+      text: 'Which timeout applies?',
+      suggestedAnswers: [],
+    });
+
+  it('turns every unreported thread of a combined agent into a question, not a missing result', async () => {
+    const live = createHarness();
+    await live.actions.loadResolveSession({ sessionId: SESSION_ID });
+    await askQuestion();
+
+    await live.actions.persistResolveTurn({
+      sessionId: SESSION_ID,
+      agent,
+      assistantText: 'I need to know which timeout applies before I touch either thread.',
+    });
+
+    const rows = await listResolveThreads({ db, sessionId: SESSION_ID });
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(row.state).toBe('needs_answer');
+      expect(row.stateReason).toBe('question');
+      expect(row.question).toBe('Which timeout applies?');
+    }
+  });
+
+  it('leaves a sibling that already reported a fix alone when the same agent asks a question', async () => {
+    const live = createHarness();
+    await live.actions.loadResolveSession({ sessionId: SESSION_ID });
+    await live.actions.persistResolveTurn({
+      sessionId: SESSION_ID,
+      agent,
+      assistantText: ASSISTANT_TEXT,
+    });
+    await askQuestion();
+
+    await live.actions.recordResolveAttempt({
+      sessionId: SESSION_ID,
+      agent,
+      provider: 'anthropic',
+      model: 'model',
+      effort: null,
+      instructions: null,
+      phase: 'running',
+      threadIds: [],
+    });
+    await live.actions.persistResolveTurn({
+      sessionId: SESSION_ID,
+      agent,
+      assistantText: 'One more question before I finish.',
+    });
+
+    const rows = await listResolveThreads({ db, sessionId: SESSION_ID });
+    expect(rows.find((row) => row.threadId === 'PRRT_1')).toMatchObject({
+      state: 'fixed',
+      commitShas: ['abcdef1234567890'],
+    });
+  });
+
+  it('reopens only the threads a resume is allowed to touch', async () => {
+    const live = createHarness();
+    await live.actions.loadResolveSession({ sessionId: SESSION_ID });
+    await live.actions.persistResolveTurn({
+      sessionId: SESSION_ID,
+      agent,
+      assistantText: ASSISTANT_TEXT,
+    });
+
+    await live.actions.recordResolveAttempt({
+      sessionId: SESSION_ID,
+      agent,
+      provider: 'anthropic',
+      model: 'model',
+      effort: null,
+      instructions: null,
+      phase: 'running',
+      threadIds: ['PRRT_2'],
+    });
+
+    const rows = await listResolveThreads({ db, sessionId: SESSION_ID });
+    expect(rows.find((row) => row.threadId === 'PRRT_1')?.state).toBe('fixed');
+    expect(rows.find((row) => row.threadId === 'PRRT_2')?.state).toBe('working');
+  });
+
+  it('cancels a queued attempt and gives its threads their previous state back', async () => {
+    const live = createHarness();
+    await live.actions.loadResolveSession({ sessionId: SESSION_ID });
+    await live.actions.persistResolveTurn({
+      sessionId: SESSION_ID,
+      agent,
+      assistantText: ASSISTANT_TEXT,
+    });
+    const attemptId = await live.actions.recordResolveAttempt({
+      sessionId: SESSION_ID,
+      agent,
+      provider: 'anthropic',
+      model: 'model',
+      effort: null,
+      instructions: 'retry both',
+      phase: 'queued',
+    });
+
+    expect(
+      (await listResolveThreads({ db, sessionId: SESSION_ID })).every(
+        (row) => row.state === 'working',
+      ),
+    ).toBe(true);
+
+    await live.actions.cancelResolveAttempt({ sessionId: SESSION_ID, attemptId });
+
+    const rows = await listResolveThreads({ db, sessionId: SESSION_ID });
+    expect(rows.find((row) => row.threadId === 'PRRT_1')).toMatchObject({
+      state: 'fixed',
+      activeAttemptId: null,
+    });
+    expect(rows.find((row) => row.threadId === 'PRRT_2')?.state).toBe('answered');
+  });
+
+  it('refuses to cancel an attempt that is already running', async () => {
+    const live = createHarness();
+    await live.actions.loadResolveSession({ sessionId: SESSION_ID });
+    const attemptId = await live.actions.recordResolveAttempt({
+      sessionId: SESSION_ID,
+      agent,
+      provider: 'anthropic',
+      model: 'model',
+      effort: null,
+      instructions: null,
+      phase: 'running',
+    });
+
+    await live.actions.cancelResolveAttempt({ sessionId: SESSION_ID, attemptId });
+
+    expect(
+      (await listResolveThreads({ db, sessionId: SESSION_ID })).every(
+        (row) => row.state === 'working',
+      ),
+    ).toBe(true);
   });
 });

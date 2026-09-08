@@ -35,7 +35,7 @@ import { LinkTicketPopover } from './parts/IntegrationPane/LinkTicketPopover';
 import { isStandaloneAgent, resolveRootAgent } from '../../agent-kind';
 import { useResolverIndex } from '../../hooks/useResolverIndex';
 import { SessionOverviewLoading } from './parts/SessionOverviewLoading';
-import { ReviewBoardPane } from '../../../review/components/ReviewBoardPane';
+import { ReviewPane } from '../../../review/components/ReviewPane';
 import { useIsBranchlessSession } from '../../hooks/useIsBranchlessSession';
 import { resolveSessionRepo } from '../../../../store/slices/worktrees/resolveSessionRepo';
 import { resolveActiveMountPath } from '../../../../store/slices/worktrees/resolveActiveMountPath';
@@ -100,12 +100,15 @@ export const SessionWorkspace = ({ session, isActive }: SessionWorkspaceProps) =
       if (!(event instanceof CustomEvent)) {
         return;
       }
-      const detail = event.detail as { sessionId?: unknown; agentId?: unknown };
-      if (detail.sessionId !== sessionId || typeof detail.agentId !== 'string') {
+      const detail = event.detail as { sessionId?: unknown; threadId?: unknown };
+      if (detail.sessionId !== sessionId) {
         return;
       }
       useAppStore.getState().setReviewLensIntent({
-        intent: { sessionId, agentId: detail.agentId as AgentId },
+        intent: {
+          sessionId,
+          ...(typeof detail.threadId === 'string' && { threadId: detail.threadId }),
+        },
       });
       setActiveLens(sessionId, 'review');
     };
@@ -225,9 +228,7 @@ export const SessionWorkspace = ({ session, isActive }: SessionWorkspaceProps) =
           {lens === 'pr' ? (
             <PrPane session={session} onSelectLens={onSelectLens} eyebrow={sessionEyebrow} />
           ) : null}
-          {lens === 'review' ? (
-            <ReviewBoardPane session={session} eyebrow={sessionEyebrow} />
-          ) : null}
+          {lens === 'review' ? <ReviewPane session={session} eyebrow={sessionEyebrow} /> : null}
           {lens === 'linear' ? (
             <IntegrationPane
               sessionId={sessionId}

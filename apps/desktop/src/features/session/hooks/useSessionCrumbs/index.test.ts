@@ -157,7 +157,7 @@ describe('useSessionCrumbs', () => {
   });
 
   it('gives a resolver opened from the feed the review home as parent', () => {
-    expect(labelsOf(null, RESOLVER_AGENT_ID)).toEqual(['Overview', 'Review board', 'resolve one']);
+    expect(labelsOf(null, RESOLVER_AGENT_ID)).toEqual(['Overview', 'Review', 'resolve one']);
   });
 
   it('parents a cluster child on its father, under the run', () => {

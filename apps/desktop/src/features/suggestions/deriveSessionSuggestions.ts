@@ -130,8 +130,8 @@ export const deriveSessionSuggestions = ({
       id: `resolve-threads:${sessionId}`,
       kind: 'resolve-threads',
       priority: 30,
-      title: 'Resolve review comments',
-      detail: `${eligibleThreadCount} ${eligibleThreadCount === 1 ? 'comment' : 'comments'}`,
+      title: 'Fix review conversations',
+      detail: `${eligibleThreadCount} ${eligibleThreadCount === 1 ? 'conversation' : 'conversations'}`,
       sessionId,
       payload: { eligibleThreadCount },
     });
