@@ -40,7 +40,7 @@ rusqlite = { version = "0.40", features = ["bundled"] }
 dirs = "6"
 regex = "1"
 sha2 = "0.10"
-base64 = "0.22"
+base64 = "0.23"
 tauri-plugin-dialog = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
