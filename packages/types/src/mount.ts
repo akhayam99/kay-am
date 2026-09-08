@@ -84,3 +84,36 @@ export type RetainedWorktreePath = Readonly<{
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
 }>;
+
+export type SessionMountView = SessionMount &
+  Readonly<{
+    projectId: ProjectId;
+    mountName: string;
+    repoRoot: string;
+  }>;
+
+export type MountBranchObservationState = 'matched' | 'mismatch' | 'detached' | 'unavailable';
+
+export type MountBranchObservation = Readonly<{
+  mountId: MountId;
+  sessionId: SessionId;
+  state: MountBranchObservationState;
+  recordedBranch: string;
+  observedBranch: string | null;
+  revision: number;
+  observedAt: IsoDateTime;
+}>;
+
+export type MountRecoveryCode =
+  | 'branch-mismatch'
+  | 'branch-missing'
+  | 'branch-taken'
+  | 'directory-busy'
+  | 'directory-occupied'
+  | 'mount-missing'
+  | 'project-missing'
+  | 'repository-unavailable'
+  | 'revision-conflict'
+  | 'unknown-state';
+
+export type MountBranchResolution = 'adopt-observed' | 'keep-both';

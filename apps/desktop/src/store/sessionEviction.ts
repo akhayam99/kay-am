@@ -15,6 +15,8 @@ export const SESSION_EVICTION = [
   { key: 'sessionWorktrees', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionWorktreeRecords', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionProjectMounts', keyedBy: 'session', evictOn: 'archive' },
+  { key: 'sessionMounts', keyedBy: 'session', evictOn: 'archive' },
+  { key: 'mountBranchObservations', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionLanguageAnchor', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionActiveProject', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionBranches', keyedBy: 'session', evictOn: 'archive' },

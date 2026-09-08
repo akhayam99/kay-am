@@ -9,6 +9,10 @@ const {
   tidyRepoGoodboyDir,
   listWorktreesForSession,
   updateSessionWorktreeBranch,
+  listSessionMounts,
+  updateSessionMountBranch,
+  getMountOperation,
+  upsertMountOperation,
   deleteSession,
   purgeSessionForDelete,
   deleteFileVersionsForSession,
@@ -25,6 +29,10 @@ const {
   tidyRepoGoodboyDir: vi.fn(async () => undefined),
   listWorktreesForSession: vi.fn(async () => [] as ReadonlyArray<unknown>),
   updateSessionWorktreeBranch: vi.fn(async () => undefined),
+  listSessionMounts: vi.fn(async () => [] as ReadonlyArray<unknown>),
+  updateSessionMountBranch: vi.fn(async () => true),
+  getMountOperation: vi.fn(async () => null),
+  upsertMountOperation: vi.fn(async () => undefined),
   deleteSession: vi.fn(async () => undefined),
   purgeSessionForDelete: vi.fn(async () => undefined),
   deleteFileVersionsForSession: vi.fn(async () => undefined),
@@ -38,6 +46,10 @@ vi.mock('@goodboy/db', () => ({
   archiveSession,
   listWorktreesForSession,
   updateSessionWorktreeBranch,
+  listSessionMounts,
+  updateSessionMountBranch,
+  getMountOperation,
+  upsertMountOperation,
   deleteSession,
   purgeSessionForDelete,
   deleteFileVersionsForSession,
@@ -101,6 +113,7 @@ type MountRow = {
 };
 
 type Mount = {
+  mountId: string;
   projectId: string;
   mountName: string;
   repoRoot: string;
@@ -124,6 +137,8 @@ type Store = {
   sessionBranches: Record<string, string>;
   sessionWorktrees: Record<string, ReadonlyArray<string>>;
   sessionProjectMounts: Record<string, ReadonlyArray<Mount>>;
+  sessionMounts: Record<string, ReadonlyArray<unknown>>;
+  mountBranchObservations: Record<string, ReadonlyArray<unknown>>;
   sessionActiveProject: Record<string, string>;
   sessionGithub: Record<string, unknown>;
   sessionProjectPrs: Record<string, Readonly<Record<string, ReadonlyArray<unknown>>>>;
@@ -161,6 +176,8 @@ const makeStore = ({ projects, mounts, branch, activeProjectId }: MakeStoreParam
     [SESSION_ID]: [CONTAINER_PATH, ...mounts.map((mount) => mount.worktreePath)],
   },
   sessionProjectMounts: { [SESSION_ID]: mounts },
+  sessionMounts: {},
+  mountBranchObservations: {},
   sessionActiveProject: activeProjectId === undefined ? {} : { [SESSION_ID]: activeProjectId },
   sessionGithub: {},
   sessionProjectPrs: {},
@@ -184,6 +201,25 @@ const rowsFor = (mounts: ReadonlyArray<Mount>, containerBranch: string): Array<M
   })),
 ];
 
+const mountRowsFor = (mounts: ReadonlyArray<Mount>): Array<Record<string, unknown>> =>
+  mounts.map((mount, index) => ({
+    id: mount.mountId,
+    sessionId: SESSION_ID,
+    projectId: mount.projectId,
+    worktreePath: mount.worktreePath,
+    lastWorktreePath: mount.worktreePath,
+    branch: mount.branch,
+    baseBranch: null,
+    parallelIndex: index + 1,
+    mountName: mount.mountName,
+    repoSlug: null,
+    isAttached: true,
+    diskState: 'present',
+    revision: 0,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  }));
+
 const folderStore = () =>
   makeStore({
     projects: [
@@ -197,6 +233,7 @@ const folderStore = () =>
     ],
     mounts: [
       {
+        mountId: 'mount-project',
         projectId: API_PROJECT_ID,
         mountName: 'project',
         repoRoot: '/root',
@@ -221,6 +258,7 @@ const repoStore = () =>
     ],
     mounts: [
       {
+        mountId: 'mount-api',
         projectId: API_PROJECT_ID,
         mountName: 'api',
         repoRoot: API_REPO_ROOT,
@@ -252,6 +290,7 @@ const twoProjectStore = (activeProjectId?: string) =>
     ],
     mounts: [
       {
+        mountId: 'mount-api',
         projectId: API_PROJECT_ID,
         mountName: 'api',
         repoRoot: API_REPO_ROOT,
@@ -259,6 +298,7 @@ const twoProjectStore = (activeProjectId?: string) =>
         branch: API_BRANCH,
       },
       {
+        mountId: 'mount-web',
         projectId: WEB_PROJECT_ID,
         mountName: 'web',
         repoRoot: WEB_REPO_ROOT,
@@ -351,9 +391,7 @@ describe('story: a branchless folder session lives and dies without git', () => 
 describe('story: a repo-backed session keeps its git lifecycle', () => {
   it('still switches the mount branch and updates its database row', async () => {
     const store = repoStore();
-    listWorktreesForSession.mockResolvedValueOnce(
-      rowsFor(store.sessionProjectMounts[SESSION_ID]!, API_BRANCH),
-    );
+    listSessionMounts.mockResolvedValue(mountRowsFor(store.sessionProjectMounts[SESSION_ID]!));
 
     await changeSessionBranch(vi.fn(), (() => store) as never)(SESSION_ID, {
       branch: 'main',
@@ -437,9 +475,7 @@ describe('story: a two-project session routes git work through the active mount'
 
   it('changes the active mount branch and updates its database row', async () => {
     const store = twoProjectStore(WEB_PROJECT_ID);
-    listWorktreesForSession.mockResolvedValueOnce(
-      rowsFor(store.sessionProjectMounts[SESSION_ID]!, API_BRANCH),
-    );
+    listSessionMounts.mockResolvedValue(mountRowsFor(store.sessionProjectMounts[SESSION_ID]!));
 
     await changeSessionBranch(vi.fn(), (() => store) as never)(SESSION_ID, {
       branch: 'gb/web-next',
@@ -452,11 +488,8 @@ describe('story: a two-project session routes git work through the active mount'
       branch: 'gb/web-next',
       createNew: false,
     });
-    expect(updateSessionWorktreeBranch).toHaveBeenCalledWith(
-      expect.anything(),
-      SESSION_ID,
-      2,
-      'gb/web-next',
+    expect(updateSessionMountBranch).toHaveBeenCalledWith(
+      expect.objectContaining({ mountId: 'mount-web', branch: 'gb/web-next' }),
     );
   });
 

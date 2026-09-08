@@ -49,6 +49,7 @@ import type {
   TurnProviderOverride,
   SessionExternalTaskProvider,
   SessionExternalTask,
+  SessionMountView,
   SessionProjectMount,
   SessionEventKind,
   SessionEventPayload,
@@ -171,6 +172,18 @@ import type { AddProjectResult, ProjectAttachConflict } from './slices/projects/
 import type { AddProjectsResult } from './slices/projects/addProjects';
 import type { AdoptProjectResult } from './slices/projects/adoptProject';
 import { createProjectMountsSlice } from './slices/project-mounts';
+import { projectMountsInitialState } from './slices/project-mounts/state';
+import type {
+  AttachMountInput,
+  ForkMountInput,
+  InspectMountResult,
+  MountKeyInput,
+  ResolveMountBranchInput,
+  SessionKeyInput,
+  SwitchMountInput,
+  UnmountMountInput,
+  UnmountMountResult,
+} from './slices/project-mounts/types';
 import { createPresenceSlice } from './slices/presence';
 import { createTurnSlice } from './slices/turn';
 import type { SendTurnResult } from './slices/turn/types';
@@ -395,6 +408,14 @@ type AppActions = {
     taskIdentifiers?: ReadonlyArray<string>;
   }): Promise<SessionProjectMount>;
   detachProject(input: { sessionId: SessionId; projectId: ProjectId }): Promise<void>;
+  loadSessionMounts(input: SessionKeyInput): Promise<ReadonlyArray<SessionMountView>>;
+  forkMount(input: ForkMountInput): Promise<SessionMountView>;
+  switchMount(input: SwitchMountInput): Promise<SessionMountView>;
+  attachMount(input: AttachMountInput): Promise<SessionMountView>;
+  unmountMount(input: UnmountMountInput): Promise<UnmountMountResult>;
+  inspectMount(input: MountKeyInput): Promise<InspectMountResult>;
+  recoverMountOperations(input: SessionKeyInput): Promise<number>;
+  resolveMountBranchMismatch(input: ResolveMountBranchInput): Promise<SessionMountView>;
   linkSessionExternalTask(
     sessionId: SessionId,
     task: Omit<SessionExternalTask, 'sessionId'>,
@@ -944,6 +965,7 @@ export const initialState: AppState = {
   sessionWorktreeRecords: {},
   orphanWorktrees: {},
   sessionProjectMounts: {},
+  ...projectMountsInitialState,
   sessionLanguageAnchor: {},
   sessionActiveProject: {},
   sessionBranches: {},

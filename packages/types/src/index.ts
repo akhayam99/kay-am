@@ -24,6 +24,9 @@ export type {
   IntegrationBindingId,
 } from './ids';
 export type {
+  MountBranchObservation,
+  MountBranchObservationState,
+  MountBranchResolution,
   MountDiskState,
   MountOperation,
   MountOperationKind,
@@ -31,9 +34,11 @@ export type {
   MountPullRequestLink,
   MountPullRequestProvider,
   MountPullRequestState,
+  MountRecoveryCode,
   RetainedWorktreePath,
   RetainedWorktreeReason,
   SessionMount,
+  SessionMountView,
 } from './mount';
 export type { FileVersion, FileVersionChangeKind, FileVersionSnapshotSource } from './file-version';
 export type { IntegrationCredential, IntegrationCredentialUsage } from './integration-credential';

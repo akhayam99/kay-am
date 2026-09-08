@@ -1134,18 +1134,23 @@ describe('store contract', () => {
         expect.objectContaining({
           repoPath: '/tmp/repo',
           parentDir: '/tmp/repo/.goodboy/worktrees',
-          dirName: expect.stringMatching(/^study-plan-[a-f0-9]{8}$/),
+          dirName: expect.stringMatching(
+            /^study-plan-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          ),
         }),
       );
       expect(store.getState().sessionProjectMounts[session.id]).toEqual([
-        {
+        expect.objectContaining({
           mountId: expect.any(String),
           projectId: PROJECT_ID,
           mountName: 'repo',
           worktreePath: MOUNT_PATH,
           repoRoot: '/tmp/repo',
           branch: 'goodboy/study-plan',
-        },
+          isAttached: true,
+          diskState: 'present',
+          revision: 0,
+        }),
       ]);
       expect(store.getState().sessionWorktrees[session.id]).toEqual([MOUNT_PATH]);
       expect(store.getState().sessionBranches[session.id]).toBe('goodboy/study-plan');

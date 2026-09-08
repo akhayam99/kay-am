@@ -21,11 +21,16 @@ export const buildSessionProjectMounts = ({
     return [
       {
         mountId: row.id as MountId,
+        sessionId: row.sessionId,
         projectId: row.projectId,
         mountName: row.mountName ?? project.name,
         worktreePath: row.worktreePath,
+        lastWorktreePath: row.worktreePath,
         repoRoot: project.rootPath,
         branch: row.branch,
+        baseBranch: project.baseBranch ?? null,
+        parallelIndex: row.parallelIndex,
+        isAttached: true,
       },
     ];
   });
