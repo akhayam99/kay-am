@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { SessionExternalTask, SessionId } from '@goodboy/types';
+import type { MountId, SessionExternalTask, SessionId } from '@goodboy/types';
 import {
   Button,
   Checkbox,
@@ -35,6 +35,7 @@ type CreateMode = 'manual' | 'agent';
 
 type Props = {
   readonly sessionId: SessionId;
+  readonly mountId?: MountId | null;
   readonly defaultTitle: string;
   readonly closedPr?: { number: number; url: string };
   readonly onCreated: () => void;
@@ -43,6 +44,7 @@ type Props = {
 
 export const CreatePrPanel = ({
   sessionId,
+  mountId = null,
   defaultTitle,
   closedPr,
   onCreated,
@@ -142,7 +144,14 @@ export const CreatePrPanel = ({
     setBusy('create');
     setError(null);
     try {
-      await createPrForSession(sessionId, { title, body, base, draft });
+      await createPrForSession({
+        sessionId,
+        ...(mountId === null ? {} : { mountId }),
+        title,
+        body,
+        base,
+        draft,
+      });
       onCreated();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

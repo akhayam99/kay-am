@@ -27,23 +27,42 @@ pub async fn local_image_read(
 }
 
 fn resolve_root(conn: &Connection, session_id: &str) -> Result<String, String> {
-    conn.query_row(
-        "SELECT COALESCE(
-            (SELECT sw.worktree_path FROM session_worktrees sw
-             WHERE sw.session_id = s.id AND sw.project_id = s.active_project_id
-             ORDER BY sw.parallel_index, sw.created_at, sw.id LIMIT 1),
-            (SELECT sw.worktree_path FROM session_worktrees sw
-             WHERE sw.session_id = s.id
-             ORDER BY sw.parallel_index, sw.created_at, sw.id LIMIT 1),
-            (SELECT p.root_path FROM projects p
-             WHERE p.id = s.active_project_id AND p.workspace_id = s.workspace_id)
-         ) FROM sessions s WHERE s.id = ?1",
-        [session_id],
-        |row| row.get::<_, Option<String>>(0),
-    )
-    .map_err(|_| "image root is unavailable".to_string())?
-    .filter(|root| !root.is_empty())
-    .ok_or_else(|| "image root is unavailable".to_string())
+    let (active_mount_id, active_path, fallback_path) = conn
+        .query_row(
+            "SELECT
+                s.active_mount_id,
+                (SELECT sw.worktree_path FROM session_worktrees sw
+                 WHERE sw.session_id = s.id AND sw.id = s.active_mount_id
+                   AND sw.worktree_path IS NOT NULL AND sw.is_attached = 1
+                 LIMIT 1),
+                COALESCE(
+                    (SELECT sw.worktree_path FROM session_worktrees sw
+                     WHERE sw.session_id = s.id AND sw.project_id = s.active_project_id
+                       AND sw.worktree_path IS NOT NULL AND sw.is_attached = 1
+                     ORDER BY sw.parallel_index, sw.created_at, sw.id LIMIT 1),
+                    (SELECT sw.worktree_path FROM session_worktrees sw
+                     WHERE sw.session_id = s.id
+                       AND sw.worktree_path IS NOT NULL AND sw.is_attached = 1
+                     ORDER BY sw.parallel_index, sw.created_at, sw.id LIMIT 1),
+                    (SELECT p.root_path FROM projects p
+                     WHERE p.id = s.active_project_id AND p.workspace_id = s.workspace_id)
+                )
+             FROM sessions s WHERE s.id = ?1",
+            [session_id],
+            |row| {
+                Ok((
+                    row.get::<_, Option<String>>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                ))
+            },
+        )
+        .map_err(|_| "image root is unavailable".to_string())?;
+    let usable = |value: Option<String>| value.filter(|root| !root.is_empty());
+    if active_mount_id.is_some() {
+        return usable(active_path).ok_or_else(|| "the active mount is unavailable".to_string());
+    }
+    usable(fallback_path).ok_or_else(|| "image root is unavailable".to_string())
 }
 
 fn read_image(root: &Path, path: &Path) -> Result<String, String> {
@@ -276,13 +295,13 @@ mod tests {
     fn session_db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(
-            "CREATE TABLE sessions (id TEXT, workspace_id TEXT, active_project_id TEXT);
+            "CREATE TABLE sessions (id TEXT, workspace_id TEXT, active_project_id TEXT, active_mount_id TEXT);
              CREATE TABLE projects (id TEXT, workspace_id TEXT, root_path TEXT);
              CREATE TABLE session_worktrees (
                 id TEXT, session_id TEXT, project_id TEXT, worktree_path TEXT,
-                parallel_index INTEGER, created_at TEXT
+                parallel_index INTEGER, created_at TEXT, is_attached INTEGER
              );
-             INSERT INTO sessions VALUES ('session', 'workspace', 'active');
+             INSERT INTO sessions VALUES ('session', 'workspace', 'active', NULL);
              INSERT INTO projects VALUES ('active', 'workspace', '/project');",
         )
         .unwrap();
@@ -299,8 +318,8 @@ mod tests {
         let conn = session_db();
         conn.execute_batch(
             "INSERT INTO session_worktrees VALUES
-             ('first', 'session', 'other', '/other-mount', 0, '1'),
-             ('active', 'session', 'active', '/active-mount', 1, '2');",
+             ('first', 'session', 'other', '/other-mount', 0, '1', 1),
+             ('active', 'session', 'active', '/active-mount', 1, '2', 1);",
         )
         .unwrap();
         assert_eq!(resolve_root(&conn, "session").unwrap(), "/active-mount");
@@ -311,17 +330,47 @@ mod tests {
         let conn = session_db();
         conn.execute_batch(
             "INSERT INTO session_worktrees VALUES
-             ('later', 'session', 'other', '/later-mount', 1, '1'),
-             ('first', 'session', 'other', '/first-mount', 0, '2');",
+             ('later', 'session', 'other', '/later-mount', 1, '1', 1),
+             ('first', 'session', 'other', '/first-mount', 0, '2', 1);",
         )
         .unwrap();
         assert_eq!(resolve_root(&conn, "session").unwrap(), "/first-mount");
     }
 
     #[test]
+    fn prefers_the_active_mount_and_excludes_removed_mounts() {
+        let conn = session_db();
+        conn.execute_batch(
+            "INSERT INTO session_worktrees VALUES
+             ('first', 'session', 'active', '/first-mount', 0, '1', 1),
+             ('active', 'session', 'active', '/active-mount', 1, '2', 1),
+             ('removed', 'session', 'active', NULL, 2, '3', 0);
+             UPDATE sessions SET active_mount_id = 'active' WHERE id = 'session';",
+        )
+        .unwrap();
+        assert_eq!(resolve_root(&conn, "session").unwrap(), "/active-mount");
+    }
+
+    #[test]
+    fn refuses_to_read_a_sibling_mount_when_the_active_one_is_gone() {
+        let conn = session_db();
+        conn.execute_batch(
+            "INSERT INTO session_worktrees VALUES
+             ('first', 'session', 'active', '/first-mount', 0, '1', 1),
+             ('active', 'session', 'active', NULL, 1, '2', 0);
+             UPDATE sessions SET active_mount_id = 'active' WHERE id = 'session';",
+        )
+        .unwrap();
+        assert_eq!(
+            resolve_root(&conn, "session").unwrap_err(),
+            "the active mount is unavailable"
+        );
+    }
+
+    #[test]
     fn refuses_unknown_sessions_and_sessions_without_a_root() {
         let conn = session_db();
-        conn.execute_batch("INSERT INTO sessions VALUES ('empty', 'workspace', NULL);")
+        conn.execute_batch("INSERT INTO sessions VALUES ('empty', 'workspace', NULL, NULL);")
             .unwrap();
         assert!(resolve_root(&conn, "unknown").is_err());
         assert!(resolve_root(&conn, "empty").is_err());

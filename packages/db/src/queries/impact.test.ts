@@ -281,12 +281,47 @@ describe('pull request outcomes', () => {
       seed: { id: 't-s1', runId: 'r-s1', sessionId: 's1', at: RECENT, cost: 2.5 },
     });
 
+    const result = await getPullRequestOutcomes(params({ db, sinceMs: SINCE }));
+
+    expect(result).toMatchObject({ open: 0, merged: 1, closed: 0 });
+    expect(result.entries[0]).toMatchObject({ number: 8, sessionId: 's1', spendUsd: 2.5 });
+  });
+
+  it('keeps the pull request of a deleted session, whose mount rows survive the purge', async () => {
+    const db = await seedDb();
+    await addSession({ db, seed: { id: 's1', createdAt: RECENT } });
+    await db.execute(
+      `INSERT INTO session_worktrees
+         (id, session_id, worktree_path, branch, parallel_index, repo_slug, created_at)
+       VALUES ('wt1', 's1', '/tmp/a', 'feature/a', 0, 'repo', ?)`,
+      [RECENT],
+    );
+    await db.execute(
+      `INSERT INTO github_pr_cache (branch, repo_slug, pr_json, fetched_at)
+       VALUES (?, 'repo', ?, ?)`,
+      [
+        'feature/a',
+        JSON.stringify({
+          number: 8,
+          title: 'ship impact',
+          state: 'merged',
+          updatedAt: iso(RECENT),
+        }),
+        RECENT,
+      ],
+    );
+
+    await addTelemetry({
+      db,
+      seed: { id: 't-gone', runId: 'r-gone', sessionId: 's1', at: RECENT, cost: 4 },
+    });
+
     await purgeSessionForDelete({ db, id: 's1' as SessionId });
 
     const result = await getPullRequestOutcomes(params({ db, sinceMs: SINCE }));
 
     expect(result).toMatchObject({ open: 0, merged: 1, closed: 0 });
-    expect(result.entries[0]).toMatchObject({ number: 8, sessionId: 's1', spendUsd: 2.5 });
+    expect(result.entries[0]).toMatchObject({ number: 8, sessionId: 's1', spendUsd: 4 });
   });
 
   it('does not double-count spend when a multi-project session has two worktree rows on one branch', async () => {

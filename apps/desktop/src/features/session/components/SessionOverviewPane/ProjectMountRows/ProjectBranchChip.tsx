@@ -1,20 +1,22 @@
 import { useEffect } from 'react';
 import { Check, GitBranch, Pencil } from 'lucide-react';
 import { AnchoredPopover, Tooltip, cn, useCopyLink, useDropdown } from '@goodboy/ui';
-import type { ProjectId, SessionId } from '@goodboy/types';
+import type { MountId, ProjectId, SessionId } from '@goodboy/types';
 import { useToast } from '../../../../../app/components/Toast';
 import { useAppStore } from '../../../../../store';
 import { BranchSwitchPanel } from '../../../../worktree/BranchSwitchPanel';
 import { VITAL_CHIP_FOCUS, VITAL_CHIP_FRAME, VITAL_CHIP_HOVER } from '../vitalChip';
+import { splitBranchLabel } from './branchLabel';
 
 type Props = {
   readonly sessionId: SessionId;
   readonly projectId: ProjectId;
+  readonly mountId?: MountId;
   readonly branch: string;
   readonly canSwitch: boolean;
 };
 
-export const ProjectBranchChip = ({ sessionId, projectId, branch, canSwitch }: Props) => {
+export const ProjectBranchChip = ({ sessionId, projectId, mountId, branch, canSwitch }: Props) => {
   const { showToast } = useToast();
   const { copied, failed, copy } = useCopyLink();
   const setSessionActiveProject = useAppStore((state) => state.setSessionActiveProject);
@@ -36,8 +38,14 @@ export const ProjectBranchChip = ({ sessionId, projectId, branch, canSwitch }: P
     return null;
   }
 
+  const { head, tail } = splitBranchLabel({ branch });
+
   const openSwitch = async () => {
-    await setSessionActiveProject({ sessionId, projectId });
+    await setSessionActiveProject({
+      sessionId,
+      projectId,
+      ...(mountId === undefined ? {} : { mountId }),
+    });
     dropdown.toggle();
   };
 
@@ -45,6 +53,7 @@ export const ProjectBranchChip = ({ sessionId, projectId, branch, canSwitch }: P
     <span
       className={cn(
         VITAL_CHIP_FRAME,
+        'min-w-0 shrink',
         copied ? 'border-success/30 bg-success/10 text-success' : VITAL_CHIP_HOVER,
       )}
     >
@@ -59,7 +68,10 @@ export const ProjectBranchChip = ({ sessionId, projectId, branch, canSwitch }: P
           )}
         >
           {copied ? <Check size={11} aria-hidden /> : <GitBranch size={11} aria-hidden />}
-          <span className="max-w-40 truncate font-mono">{branch}</span>
+          <span title={branch} className="flex min-w-0 max-w-52 items-center font-mono">
+            <span className="truncate">{head}</span>
+            {tail === '' ? null : <span className="shrink-0">{tail}</span>}
+          </span>
         </button>
       </Tooltip>
       {canSwitch ? (

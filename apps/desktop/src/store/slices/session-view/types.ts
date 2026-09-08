@@ -1,6 +1,7 @@
 import type {
   AgentId,
   IsoDateTime,
+  MountId,
   PlanId,
   ProjectId,
   Session,
@@ -80,7 +81,9 @@ export type ReviewLensIntent = {
 };
 
 export type SessionStudio =
-  { readonly kind: 'workflow' } | { readonly kind: 'mr' } | { readonly kind: 'bitbucket' };
+  | { readonly kind: 'workflow' }
+  | { readonly kind: 'mr'; readonly mountId?: MountId }
+  | { readonly kind: 'bitbucket'; readonly mountId?: MountId };
 
 export const DEFAULT_PREFS: SessionViewPrefs = { sort: 'updatedAt', group: 'stage' };
 

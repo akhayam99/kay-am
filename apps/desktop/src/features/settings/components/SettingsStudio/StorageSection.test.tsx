@@ -13,13 +13,28 @@ const { state, toastMock } = vi.hoisted(() => ({
       archivedWorktrees: [
         {
           sessionId: 'session-archived',
+          mountId: 'mount-archived',
           repoPath: '/repo',
           worktreePath: '/repo/.goodboy/worktrees/archived',
+          branch: 'ak/archived',
+          revision: 0,
+          sizeBytes: 4096,
+        },
+      ],
+      retainedWorktrees: [
+        {
+          id: 'retained-1',
+          repoRoot: '/repo',
+          worktreePath: '/repo/.goodboy/worktrees/kept',
+          branch: 'ak/kept',
+          reason: 'session_delete',
+          sizeBytes: 2048,
         },
       ],
     },
     storageStatsLoading: false,
     loadStorageStats: vi.fn(async () => undefined),
+    reconcileOrphanWorktrees: vi.fn(async () => undefined),
     pruneArchivedTranscripts: vi.fn(async () => 12_481),
     removeArchivedWorktrees: vi.fn(async () => ({ removed: 1, failed: 0 })),
   },
@@ -40,6 +55,7 @@ beforeEach(() => {
   state.storageStats.archivedSessionCount = 3;
   state.storageStats.archivedTranscriptRows = 12_481;
   state.loadStorageStats.mockClear();
+  state.reconcileOrphanWorktrees.mockClear();
   state.pruneArchivedTranscripts.mockClear();
   state.removeArchivedWorktrees.mockClear();
   toastMock.mockReset();
@@ -107,7 +123,7 @@ describe('StorageSection', () => {
     render(<StorageSection />);
 
     expect(screen.getByText('1 row')).toBeDefined();
-    expect(screen.getByText('1 folder')).toBeDefined();
+    expect(screen.getAllByText('1 folder')).toHaveLength(2);
     expect(screen.getByText(/Streamed events of 1 archived session\./)).toBeDefined();
   });
 });

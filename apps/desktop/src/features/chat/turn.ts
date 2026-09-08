@@ -94,6 +94,7 @@ type SpawnArgs = {
   readonly effort?: string;
   readonly workspaceId?: string;
   readonly sessionId?: string;
+  readonly mountId?: string;
   readonly apiKeyEnv?: string;
   readonly credentialId?: string;
   readonly cursorMaxMode?: boolean;

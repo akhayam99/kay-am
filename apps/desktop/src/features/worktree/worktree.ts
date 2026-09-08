@@ -3,7 +3,10 @@ import type {
   BranchCommit,
   SessionId,
   WorkspaceId,
+  WorktreeDirectorySize,
   WorktreeDiffScope,
+  WorktreeInspection,
+  WorktreeRemovalResult,
   WorktreeStatus,
 } from '@goodboy/types';
 
@@ -192,8 +195,41 @@ export const scratchDirRemove = async ({ sessionId }: ScratchDirParams): Promise
   await invoke('scratch_dir_remove', { sessionId });
 };
 
-export const removeWorktree = async (repoPath: string, worktreePath: string): Promise<void> => {
-  await invoke('worktree_remove', { repoPath, worktreePath });
+type WorktreePathParams = {
+  readonly repoPath: string;
+  readonly worktreePath: string;
+};
+
+export const inspectWorktree = async ({
+  repoPath,
+  worktreePath,
+}: WorktreePathParams): Promise<WorktreeInspection> => {
+  return invoke<WorktreeInspection>('worktree_inspect', { repoPath, worktreePath });
+};
+
+export const removeWorktreeChecked = async ({
+  repoPath,
+  worktreePath,
+}: WorktreePathParams): Promise<WorktreeRemovalResult> => {
+  return invoke<WorktreeRemovalResult>('worktree_remove_checked', { repoPath, worktreePath });
+};
+
+export const gitCommonDirectory = async ({
+  repoPath,
+}: {
+  readonly repoPath: string;
+}): Promise<string | null> => {
+  return invoke<string | null>('worktree_git_common_dir', { repoPath });
+};
+
+type WorktreeDirectorySizeParams = {
+  readonly path: string;
+};
+
+export const worktreeDirectorySize = async ({
+  path,
+}: WorktreeDirectorySizeParams): Promise<WorktreeDirectorySize> => {
+  return invoke<WorktreeDirectorySize>('worktree_directory_size', { path });
 };
 
 type TidyRepoGoodboyDirParams = {
@@ -208,6 +244,7 @@ export type OrphanWorktree = {
   readonly path: string;
   readonly name: string;
   readonly sizeBytes: number;
+  readonly isRegistered: boolean;
 };
 
 type ScanOrphanWorktreesParams = {

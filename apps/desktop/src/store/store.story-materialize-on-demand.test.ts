@@ -14,6 +14,11 @@ import {
   resetStorySpies,
   storySpies,
 } from './storyHarness';
+import {
+  clearMountContinuations,
+  pendingMountContinuations,
+  queueMountContinuation,
+} from './slices/turn/mountContinuations';
 
 vi.mock('@tauri-apps/api/core', async () => (await import('./storyHarness')).tauriCoreModuleMock());
 vi.mock('@tauri-apps/api/event', async () =>
@@ -51,6 +56,7 @@ const AGENT_ID = 'agent-story' as AgentId;
 const APP_PROJECT_ID = 'project-app' as ProjectId;
 const WEB_PROJECT_ID = 'project-web' as ProjectId;
 const APP_MOUNT_PATH = '/tmp/app/.goodboy/worktrees/goal-12345678';
+const SECOND_MOUNT_PATH = '/tmp/app/.goodboy/worktrees/goal-12345678-second';
 const APP_BRANCH = 'goodboy/goal-12345678';
 const WEB_MOUNT_PATH = '/tmp/web/.goodboy/worktrees/goal-12345678';
 const WEB_BRANCH = 'goodboy/goal-12345678-web';
@@ -126,6 +132,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   resetStorySpies();
+  clearMountContinuations();
   storySpies.runTurn.mockImplementation(() => emptyTurnStream());
 });
 
@@ -161,6 +168,122 @@ describe('story: an agent works from its own project and reads the others', () =
     await useAppStore.getState().sendTurn({ sessionId: SESSION_ID, content: 'go' });
 
     expect(spawnedArgs()['writableRoots']).toEqual(['/tmp/app/.git']);
+  });
+
+  it('adds the sibling worktrees of one project without their parent directory', async () => {
+    seedSession([appProject]);
+    useAppStore.setState({
+      sessionProjectMounts: {
+        [SESSION_ID]: [
+          { ...appMount, mountId: 'mount-a' },
+          {
+            ...appMount,
+            mountId: 'mount-b',
+            mountName: 'app 2',
+            worktreePath: SECOND_MOUNT_PATH,
+            branch: 'goodboy/second',
+          },
+        ],
+      },
+    } as never);
+
+    await useAppStore.getState().sendTurn({ sessionId: SESSION_ID, content: 'go' });
+
+    expect(spawnedArgs()['workingDir']).toBe(APP_MOUNT_PATH);
+    expect(spawnedArgs()['writableRoots']).toEqual([SECOND_MOUNT_PATH, '/tmp/app/.git']);
+    expect(spawnedArgs()['writableRoots']).not.toContain('/tmp/app');
+  });
+
+  it('resolves the git directory through git instead of assuming a .git folder', async () => {
+    seedSession([appProject]);
+    storySpies.gitCommonDirectory.mockImplementation(async () => '/tmp/bare/app.git');
+
+    await useAppStore.getState().sendTurn({ sessionId: SESSION_ID, content: 'go' });
+
+    expect(storySpies.gitCommonDirectory).toHaveBeenCalledWith({ repoPath: '/tmp/app' });
+    expect(spawnedArgs()['writableRoots']).toEqual(['/tmp/bare/app.git']);
+  });
+
+  it('binds the spawn and its scope block to the mount the turn captured', async () => {
+    seedSession([appProject]);
+    useAppStore.setState({
+      sessionProjectMounts: { [SESSION_ID]: [{ ...appMount, mountId: 'mount-a' }] },
+      sessionActiveMount: { [SESSION_ID]: 'mount-a' },
+    } as never);
+
+    await useAppStore.getState().sendTurn({ sessionId: SESSION_ID, content: 'go' });
+
+    expect(spawnedArgs()['mountId']).toBe('mount-a');
+    expect(String(spawnedArgs()['systemPrompt'])).toContain('This turn is bound to mount mount-a.');
+  });
+
+  it('keeps a running turn on its mount when the active selection moves under it', async () => {
+    seedSession([appProject]);
+    useAppStore.setState({
+      sessionProjectMounts: {
+        [SESSION_ID]: [
+          { ...appMount, mountId: 'mount-a' },
+          {
+            ...appMount,
+            mountId: 'mount-b',
+            mountName: 'app 2',
+            worktreePath: SECOND_MOUNT_PATH,
+            branch: 'goodboy/second',
+          },
+        ],
+      },
+      sessionActiveMount: { [SESSION_ID]: 'mount-a' },
+    } as never);
+    storySpies.runTurn.mockImplementation(() => {
+      useAppStore.setState({ sessionActiveMount: { [SESSION_ID]: 'mount-b' } } as never);
+      return emptyTurnStream();
+    });
+
+    await useAppStore.getState().sendTurn({ sessionId: SESSION_ID, content: 'go' });
+
+    expect(storySpies.runTurn).toHaveBeenCalledTimes(1);
+    expect(spawnedArgs()['workingDir']).toBe(APP_MOUNT_PATH);
+    expect(spawnedArgs()['mountId']).toBe('mount-a');
+  });
+
+  it('continues the turn once in the mount a fork asked for, after the first one exits', async () => {
+    seedSession([appProject]);
+    useAppStore.setState({
+      sessionProjectMounts: {
+        [SESSION_ID]: [
+          { ...appMount, mountId: 'mount-a' },
+          {
+            ...appMount,
+            mountId: 'mount-b',
+            mountName: 'app 2',
+            worktreePath: SECOND_MOUNT_PATH,
+            branch: 'goodboy/second',
+          },
+        ],
+      },
+      sessionActiveMount: { [SESSION_ID]: 'mount-a' },
+    } as never);
+    storySpies.runTurn.mockImplementation(() => {
+      queueMountContinuation({
+        operationId: 'req-fork',
+        sessionId: SESSION_ID,
+        mountId: 'mount-b' as never,
+        mountName: 'app 2',
+        branch: 'goodboy/second',
+        worktreePath: SECOND_MOUNT_PATH,
+        origin: 'fork',
+      });
+      return emptyTurnStream();
+    });
+
+    await useAppStore.getState().sendTurn({ sessionId: SESSION_ID, content: 'go' });
+    await vi.waitFor(() => expect(storySpies.runTurn).toHaveBeenCalledTimes(2));
+
+    const continued = (storySpies.runTurn.mock.calls[1]?.[0] ?? {}) as Record<string, unknown>;
+    expect(continued['workingDir']).toBe(SECOND_MOUNT_PATH);
+    expect(continued['mountId']).toBe('mount-b');
+    expect(String(continued['prompt'])).toContain('mount mount-b');
+    expect(pendingMountContinuations({ sessionId: SESSION_ID })).toHaveLength(0);
   });
 
   it('teaches the materialize marker for the projects that are not mounted yet', async () => {
@@ -279,7 +402,7 @@ describe('story: an agent asks for write access with the materialize marker', ()
       expect.objectContaining({
         repoPath: '/tmp/web',
         parentDir: '/tmp/web/.goodboy/worktrees',
-        dirName: expect.stringContaining('ship-the-thing'),
+        dirName: expect.stringContaining('ship-the-th'),
       }),
     );
     const mounts = useAppStore.getState().sessionProjectMounts[SESSION_ID] ?? [];
@@ -365,7 +488,10 @@ describe('story: the user detaches a project from the mounted strip', () => {
       .getState()
       .detachProject({ sessionId: SESSION_ID, projectId: WEB_PROJECT_ID });
 
-    expect(storySpies.removeWorktree).toHaveBeenCalledWith('/tmp/web', WEB_MOUNT_PATH);
+    expect(storySpies.removeWorktreeChecked).toHaveBeenCalledWith({
+      repoPath: '/tmp/web',
+      worktreePath: WEB_MOUNT_PATH,
+    });
     expect(storySpies.deleteSessionWorktreeForProject).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: SESSION_ID, projectId: WEB_PROJECT_ID }),
     );
@@ -379,19 +505,20 @@ describe('story: the user detaches a project from the mounted strip', () => {
 
   it('keeps a dirty worktree on disk and says why in the event', async () => {
     seedMountedWeb();
-    storySpies.worktreeStatus.mockResolvedValueOnce({
-      workingTree: { kind: 'known', staged: 0, unstaged: 2, untracked: 0, unmerged: 0 },
+    storySpies.removeWorktreeChecked.mockResolvedValueOnce({
+      kind: 'kept',
+      path: WEB_MOUNT_PATH,
+      reasons: ['unstaged-changes'],
     } as never);
 
     await useAppStore
       .getState()
       .detachProject({ sessionId: SESSION_ID, projectId: WEB_PROJECT_ID });
 
-    expect(storySpies.removeWorktree).not.toHaveBeenCalled();
     expect(useAppStore.getState().sessionProjectMounts[SESSION_ID]).toEqual([appMount]);
     expect(recordedEvent('project_detached')?.payload).toMatchObject({
       kept: true,
-      reason: 'uncommitted changes in the worktree',
+      reason: 'unstaged-changes',
     });
   });
 });

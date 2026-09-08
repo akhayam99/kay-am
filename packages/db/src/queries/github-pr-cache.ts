@@ -71,26 +71,3 @@ export const deleteGithubPrCache = async (
     branch,
   ]);
 };
-
-type DeleteForWorktreePathParams = {
-  readonly db: Database;
-  readonly worktreePath: string;
-};
-
-export const deleteGithubPrCacheForWorktreePath = async ({
-  db,
-  worktreePath,
-}: DeleteForWorktreePathParams): Promise<number> => {
-  const result = await db.execute(
-    `DELETE FROM github_pr_cache
-     WHERE EXISTS (
-       SELECT 1
-       FROM session_worktrees sw
-       WHERE sw.worktree_path = ?
-         AND sw.branch = github_pr_cache.branch
-         AND sw.repo_slug IS github_pr_cache.repo_slug
-     )`,
-    [worktreePath],
-  );
-  return result.rowsAffected;
-};

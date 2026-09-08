@@ -57,6 +57,8 @@ describe('resolveActiveMountPath', () => {
     const path = resolveActiveMountPath({
       state: {
         sessions: [SESSION],
+        sessionMounts: {},
+        sessionActiveMount: {},
         sessionProjectMounts: { [SESSION_ID]: MOUNTS },
         sessionActiveProject: { [SESSION_ID]: API_ID },
       },
@@ -70,6 +72,8 @@ describe('resolveActiveMountPath', () => {
     const path = resolveActiveMountPath({
       state: {
         sessions: [SESSION],
+        sessionMounts: {},
+        sessionActiveMount: {},
         sessionProjectMounts: { [SESSION_ID]: MOUNTS },
         sessionActiveProject: {},
       },
@@ -83,6 +87,8 @@ describe('resolveActiveMountPath', () => {
     const path = resolveActiveMountPath({
       state: {
         sessions: [{ ...SESSION, activeProjectId: undefined }],
+        sessionMounts: {},
+        sessionActiveMount: {},
         sessionProjectMounts: { [SESSION_ID]: MOUNTS },
         sessionActiveProject: {},
       },
@@ -96,6 +102,8 @@ describe('resolveActiveMountPath', () => {
     const path = resolveActiveMountPath({
       state: {
         sessions: [SESSION],
+        sessionMounts: {},
+        sessionActiveMount: {},
         sessionProjectMounts: { [SESSION_ID]: [MOUNTS[0] as SessionProjectMount] },
         sessionActiveProject: { [SESSION_ID]: API_ID },
       },
@@ -107,7 +115,13 @@ describe('resolveActiveMountPath', () => {
 
   it('has no path for a session without mounts', () => {
     const path = resolveActiveMountPath({
-      state: { sessions: [SESSION], sessionProjectMounts: {}, sessionActiveProject: {} },
+      state: {
+        sessions: [SESSION],
+        sessionMounts: {},
+        sessionActiveMount: {},
+        sessionProjectMounts: {},
+        sessionActiveProject: {},
+      },
       sessionId: SESSION_ID,
     });
 

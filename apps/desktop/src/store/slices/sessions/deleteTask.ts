@@ -1,19 +1,36 @@
-import type { ProviderRunId, SessionId } from '@goodboy/types';
+import type {
+  IsoDateTime,
+  MountDiskState,
+  Project,
+  ProviderRunId,
+  RetainedWorktreePath,
+  SessionId,
+  SessionMount,
+  WorkspaceId,
+} from '@goodboy/types';
 import { formatError } from '@goodboy/ui';
-import { listWorktreesForSession, purgeSessionForDelete } from '@goodboy/db';
+import {
+  detachSessionMounts,
+  listSessionMounts,
+  purgeSessionForDelete,
+  type MountDetachment,
+} from '@goodboy/db';
 import { tauriDatabase } from '../../../shared/lib/db';
-import { cancelTurn } from '../../../features/chat/turn';
+import { cancelTurn, listLiveRunIds } from '../../../features/chat/turn';
 import {
   removeSessionDirectory,
-  removeWorktree,
   scratchDirRemove,
   tidyRepoGoodboyDir,
 } from '../../../features/worktree/worktree';
 import { isBranchlessSession } from '../../../shared/utils/isBranchlessSession';
 import { purgeSessionFileVersions } from '../file-versions/persistFinalizedFileVersions';
 import { dropPendingTurnEvents } from '../transcripts/buffer';
+import { cleanupMountDirectory } from '../mount-cleanup';
 import { forgetMaterializationSeed } from './materializationSeeds';
 import type { GetFn, SetFn } from './types';
+
+const RUN_STOP_ATTEMPTS = 20;
+const RUN_STOP_INTERVAL_MS = 100;
 
 const removePersistedDirectory = async (path: string): Promise<void> => {
   const parent = path.slice(0, path.lastIndexOf('/'));
@@ -21,6 +38,62 @@ const removePersistedDirectory = async (path: string): Promise<void> => {
     throw new Error(`session path has no parent: ${path}`);
   }
   await removeSessionDirectory({ basePath: parent, path });
+};
+
+const awaitRunStopped = async (runId: ProviderRunId): Promise<boolean> => {
+  for (let attempt = 0; attempt < RUN_STOP_ATTEMPTS; attempt += 1) {
+    const live = await listLiveRunIds();
+    if (!live.has(runId)) {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, RUN_STOP_INTERVAL_MS));
+  }
+  const live = await listLiveRunIds();
+  return !live.has(runId);
+};
+
+type RetainParams = {
+  readonly mount: SessionMount;
+  readonly worktreePath: string;
+  readonly repoRoot: string;
+  readonly workspaceId: WorkspaceId;
+  readonly now: IsoDateTime;
+};
+
+const toRetained = ({
+  mount,
+  worktreePath,
+  repoRoot,
+  workspaceId,
+  now,
+}: RetainParams): RetainedWorktreePath => ({
+  id: crypto.randomUUID(),
+  workspaceId,
+  projectId: mount.projectId,
+  sourceSessionId: mount.sessionId,
+  sourceMountId: mount.id,
+  repoRoot,
+  worktreePath,
+  branch: mount.branch,
+  reason: 'session_delete',
+  lastCheckedAt: now,
+  createdAt: now,
+  updatedAt: now,
+});
+
+type ResolveParams = {
+  readonly projects: ReadonlyArray<Project>;
+  readonly mount: SessionMount;
+};
+
+const resolveProject = ({ projects, mount }: ResolveParams): Project | undefined => {
+  const byId = projects.find((candidate) => candidate.id === mount.projectId);
+  if (byId !== undefined) {
+    return byId;
+  }
+  return mount.projectId === null
+    ? projects.find((candidate) => candidate.name === mount.mountName)
+    : undefined;
 };
 
 export const deleteTask = (set: SetFn, get: GetFn) => {
@@ -36,40 +109,75 @@ export const deleteTask = (set: SetFn, get: GetFn) => {
     await get()
       .closeSessionTerminals(sessionId)
       .catch(() => undefined);
+    let runStopped = true;
     if (session.state.kind === 'running') {
-      await cancelTurn((session.state as { kind: 'running'; runId: ProviderRunId }).runId).catch(
-        () => undefined,
-      );
+      const runId = (session.state as { kind: 'running'; runId: ProviderRunId }).runId;
+      await cancelTurn(runId).catch(() => undefined);
+      runStopped = await awaitRunStopped(runId).catch(() => false);
     }
-    const rows = await listWorktreesForSession(tauriDatabase, sessionId);
+    const mounts = await listSessionMounts({ db: tauriDatabase, sessionId });
     const isBranchless = isBranchlessSession({
       branch: get().sessionBranches[sessionId],
     });
     const cleanupFailures: unknown[] = [];
+    const retained: Array<RetainedWorktreePath> = [];
+    const detached: Array<MountDetachment> = [];
+    const nowIso = new Date().toISOString() as IsoDateTime;
     const projects = get().projects.filter(
       (project) => project.workspaceId === session.workspaceId,
     );
-    for (const row of rows) {
-      const project =
-        projects.find((candidate) => candidate.id === row.projectId) ??
-        (row.projectId === undefined
-          ? projects.find((candidate) => candidate.name === row.mountName)
-          : undefined);
-      if (project?.kind === 'repo') {
+    for (const mount of mounts) {
+      const worktreePath = mount.worktreePath;
+      if (worktreePath === null) {
+        continue;
+      }
+      const project = resolveProject({ projects, mount });
+      const repoRoot = project?.rootPath ?? '';
+      const keep = (error: unknown, diskState: MountDiskState) => {
+        cleanupFailures.push(error);
+        detached.push({ mountId: mount.id, diskState });
+        retained.push(
+          toRetained({
+            mount,
+            worktreePath,
+            repoRoot,
+            workspaceId: session.workspaceId,
+            now: nowIso,
+          }),
+        );
+      };
+      if (project?.kind !== 'repo') {
         try {
-          await removeWorktree(project.rootPath, row.worktreePath);
-          await tidyRepoGoodboyDir({ repoPath: project.rootPath }).catch(() => undefined);
+          await removePersistedDirectory(worktreePath);
+          detached.push({ mountId: mount.id, diskState: 'removed' });
         } catch (error) {
-          cleanupFailures.push(error);
-          continue;
+          keep(error, 'present');
         }
         continue;
       }
-      try {
-        await removePersistedDirectory(row.worktreePath);
-      } catch (error) {
-        cleanupFailures.push(error);
+      if (!runStopped) {
+        keep(new Error(`${worktreePath}: the agent did not stop`), 'present');
+        continue;
       }
+      const result = await cleanupMountDirectory({
+        get,
+        target: {
+          sessionId,
+          mountId: mount.id,
+          projectId: mount.projectId,
+          repoRoot,
+          worktreePath,
+          branch: mount.branch,
+          diskState: mount.diskState,
+          isRepoProject: true,
+        },
+      });
+      if (result.decision.kind === 'kept') {
+        keep(new Error(`${worktreePath}: ${result.decision.reason}`), result.diskState);
+        continue;
+      }
+      detached.push({ mountId: mount.id, diskState: result.diskState });
+      await tidyRepoGoodboyDir({ repoPath: repoRoot }).catch(() => undefined);
     }
     try {
       await scratchDirRemove({ sessionId });
@@ -77,6 +185,7 @@ export const deleteTask = (set: SetFn, get: GetFn) => {
       console.error(`scratch directory not removed: ${sessionId}`);
     }
     forgetMaterializationSeed({ sessionId });
+    await detachSessionMounts({ db: tauriDatabase, sessionId, detached, retained });
     if (cleanupFailures.length > 0) {
       void get().emitNotification(
         'error',
@@ -109,5 +218,8 @@ export const deleteTask = (set: SetFn, get: GetFn) => {
         currentSessionId: state.currentSessionId === sessionId ? null : state.currentSessionId,
       };
     });
+    void get()
+      .reconcileOrphanWorktrees()
+      .catch(() => undefined);
   };
 };

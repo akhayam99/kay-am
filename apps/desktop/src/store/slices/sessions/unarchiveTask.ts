@@ -7,6 +7,8 @@ import {
 import { tauriDatabase } from '../../../shared/lib/db';
 import { invokeAgentList, invokeWorkflowsForSession } from '../../../features/workflows/workflows';
 import { buildSessionProjectMounts } from '../worktrees/buildSessionProjectMounts';
+import { pickActiveMount } from '../project-mounts/activeMount';
+import { verifyAvailableWorktrees } from '../project-mounts/verifyAvailableWorktrees';
 import type { GetFn, SetFn } from './types';
 
 export const unarchiveTask = (set: SetFn, get: GetFn) => {
@@ -52,12 +54,17 @@ export const unarchiveTask = (set: SetFn, get: GetFn) => {
       return;
     }
     try {
-      const [worktreeRows, runs, attachedWorkflows] = await Promise.all([
+      const [storedRows, runs, attachedWorkflows] = await Promise.all([
         listWorktreesForSession(tauriDatabase, sessionId),
         invokeAgentList(sessionId),
         invokeWorkflowsForSession(sessionId).catch(() => []),
       ]);
       const projects = get().projects.filter((project) => project.workspaceId === workspaceId);
+      const worktreeRows = await verifyAvailableWorktrees({
+        sessionId,
+        candidates: storedRows,
+        projects,
+      });
       const mounts = buildSessionProjectMounts({ projects, rows: worktreeRows });
       const storedActiveProjectId = restoredSession.activeProjectId;
       const hasStoredActiveProjectId =
@@ -71,21 +78,29 @@ export const unarchiveTask = (set: SetFn, get: GetFn) => {
         const { activeProjectId: _drop, ...validSession } = restoredSession;
         restoredWithValidActiveMount = validSession;
       }
+      const activeMount = pickActiveMount({
+        mounts,
+        selectedMountId: null,
+        storedMountId: restoredSession.activeMountId,
+        activeProjectId: hasStoredActiveProjectId ? storedActiveProjectId : null,
+      });
+      const activeMountId = activeMount?.mountId ?? null;
       set((state) => {
         const nextWorktrees = { ...state.sessionWorktrees };
         const nextBranches = { ...state.sessionBranches };
-        const nextActiveMount = { ...state.sessionActiveProject };
+        const nextActiveProject = { ...state.sessionActiveProject };
         if (hasStoredActiveProjectId) {
-          nextActiveMount[sessionId] = storedActiveProjectId;
+          nextActiveProject[sessionId] = storedActiveProjectId;
         } else {
-          delete nextActiveMount[sessionId];
+          delete nextActiveProject[sessionId];
         }
         if (worktreeRows.length > 0) {
           nextWorktrees[sessionId] = worktreeRows.map((r) => r.worktreePath);
-          const primary = worktreeRows[0];
-          if (primary) {
-            nextBranches[sessionId] = primary.branch;
-          }
+        }
+        if (activeMount === null) {
+          delete nextBranches[sessionId];
+        } else {
+          nextBranches[sessionId] = activeMount.branch;
         }
         return {
           sessions: state.sessions.map((candidate) =>
@@ -94,12 +109,16 @@ export const unarchiveTask = (set: SetFn, get: GetFn) => {
           sessionWorktrees: nextWorktrees,
           sessionWorktreeRecords: { ...state.sessionWorktreeRecords, [sessionId]: worktreeRows },
           sessionProjectMounts: { ...state.sessionProjectMounts, [sessionId]: mounts },
-          sessionActiveProject: nextActiveMount,
+          sessionActiveProject: nextActiveProject,
+          sessionActiveMount: { ...state.sessionActiveMount, [sessionId]: activeMountId },
           sessionBranches: nextBranches,
           sessionPhaseRuns: { ...state.sessionPhaseRuns, [sessionId]: runs },
           sessionWorkflows: { ...state.sessionWorkflows, [sessionId]: attachedWorkflows },
         };
       });
     } catch {}
+    void get()
+      .reconcileOrphanWorktrees()
+      .catch(() => undefined);
   };
 };

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ArrowDown, ArrowUp, GitBranch, RefreshCw, Upload } from 'lucide-react';
 import { AnchoredPopover, cn, formatError, useDropdown } from '@goodboy/ui';
-import type { ProjectId, SessionId, WorktreeStatus } from '@goodboy/types';
+import type { MountId, ProjectId, SessionId, WorktreeStatus } from '@goodboy/types';
 import { useAppStore } from '../../../../../store';
 import { distanceAhead } from '../../../../../shared/lib/gitStatus';
 import { BaseBranchSelect } from '../../../../worktree/BaseBranchSelect';
@@ -12,6 +12,7 @@ import { ICON_SIZE } from '../../../../../shared/components/conceptIcons';
 type Props = {
   readonly sessionId: SessionId;
   readonly projectId: ProjectId;
+  readonly mountId?: MountId;
   readonly status: WorktreeStatus | null;
 };
 
@@ -19,7 +20,7 @@ type CommitBaseBranchParams = {
   readonly candidate: string | null;
 };
 
-export const ProjectSyncControl = ({ sessionId, projectId, status }: Props) => {
+export const ProjectSyncControl = ({ sessionId, projectId, mountId, status }: Props) => {
   const dropdown = useDropdown({ width: 'w-64', expectedHeight: 160 });
   const setSessionActiveProject = useAppStore((state) => state.setSessionActiveProject);
   const emitNotification = useAppStore((state) => state.emitNotification);
@@ -50,7 +51,11 @@ export const ProjectSyncControl = ({ sessionId, projectId, status }: Props) => {
     status == null ? null : distanceAhead({ distance: status.upstreamDistance });
   const canPush = upstreamAhead != null && upstreamAhead > 0;
   const targetProject = async ({ action }: { readonly action: () => Promise<void> }) => {
-    await setSessionActiveProject({ sessionId, projectId });
+    await setSessionActiveProject({
+      sessionId,
+      projectId,
+      ...(mountId === undefined ? {} : { mountId }),
+    });
     await action();
   };
   const commitBaseBranch = async ({ candidate }: CommitBaseBranchParams) => {
@@ -118,7 +123,12 @@ export const ProjectSyncControl = ({ sessionId, projectId, status }: Props) => {
         <button
           type="button"
           disabled={!rebase.canRebase || rebase.isRunning}
-          onClick={() => void targetProject({ action: () => rebase.run({ projectId }) })}
+          onClick={() =>
+            void targetProject({
+              action: () =>
+                rebase.run({ projectId, ...(mountId === undefined ? {} : { mountId }) }),
+            })
+          }
           className={cn(
             'flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-muted/40',
             (!rebase.canRebase || rebase.isRunning) && 'opacity-40',

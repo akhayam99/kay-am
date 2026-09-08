@@ -7,6 +7,7 @@ export const SESSION_EVENT_KINDS = [
   'issue_linked',
   'issue_unlinked',
   'pr_created',
+  'pr_discovered',
   'pr_ready',
   'pr_approved',
   'pr_merged',
@@ -42,6 +43,9 @@ export type SessionEventPayload = Readonly<{
   added?: number;
   removed?: number;
   projectId?: string;
+  mountId?: string;
+  host?: string;
+  repository?: string;
   projectName?: string;
   reason?: string;
   kept?: boolean;

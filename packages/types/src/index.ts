@@ -5,7 +5,10 @@ export type {
   IntegrationCredentialId,
   IsoDateTime,
   MessageId,
+  MountId,
   OpenQuestionId,
+  PrSeriesId,
+  PrSeriesMemberId,
   ProjectId,
   ProjectScriptId,
   PermissionRequestId,
@@ -22,6 +25,35 @@ export type {
   WorkspaceId,
   IntegrationBindingId,
 } from './ids';
+export type {
+  MountBranchObservation,
+  MountBranchObservationState,
+  MountBranchResolution,
+  MountCleanupDecision,
+  MountCleanupDisposition,
+  MountCleanupProposal,
+  MountDiskState,
+  MountOperation,
+  MountOperationKind,
+  MountOperationStatus,
+  MountPullRequestIdentity,
+  MountPullRequestLink,
+  MountPullRequestProvider,
+  MountPullRequestState,
+  MountRecoveryCode,
+  RetainedWorktreePath,
+  RetainedWorktreeReason,
+  SessionMount,
+  SessionMountView,
+} from './mount';
+export type {
+  PrSeries,
+  PrSeriesMember,
+  PrSeriesMemberStatus,
+  PrSeriesMemberView,
+  PrSeriesMembership,
+  PrSeriesView,
+} from './pr-series';
 export type { FileVersion, FileVersionChangeKind, FileVersionSnapshotSource } from './file-version';
 export type { IntegrationCredential, IntegrationCredentialUsage } from './integration-credential';
 export type { OpenQuestion, OpenQuestionSelectMode, OpenQuestionStatus } from './open-question';
@@ -204,6 +236,10 @@ export type {
   GitUnknownReason,
   GitWorkingTree,
   WorktreeDiffScope,
+  WorktreeDirectorySize,
+  WorktreeInspection,
+  WorktreeRemovalReason,
+  WorktreeRemovalResult,
   WorktreeStatus,
 } from './worktree';
 export type {

@@ -1,48 +1,37 @@
-import type { Session, SessionId } from '@goodboy/types';
-import { isBranchlessSession } from '../../../shared/utils/isBranchlessSession';
-import { resolveSessionRepo, type SessionRepo } from '../worktrees/resolveSessionRepo';
+import type { MountId, SessionId } from '@goodboy/types';
+import {
+  listMountFetches,
+  resolveMountFetch,
+  type MountFetch,
+} from '../project-mounts/mountRequests';
 import type { AppState } from '../../types';
 
 type State = Pick<
   AppState,
   | 'sessions'
-  | 'workspaces'
-  | 'projects'
   | 'sessionProjectMounts'
+  | 'sessionMounts'
+  | 'sessionActiveMount'
   | 'sessionActiveProject'
-  | 'sessionWorktrees'
-  | 'sessionBranches'
 >;
 
-export type SessionPrFetch = Readonly<{
-  session: Session;
-  repo: SessionRepo;
-}>;
+export type MountPrFetch = MountFetch;
 
 type Params = {
   readonly state: State;
   readonly sessionId: SessionId;
+  readonly mountId?: MountId;
 };
 
-export const resolveSessionPrFetch = ({ state, sessionId }: Params): SessionPrFetch | null => {
-  const branch = state.sessionBranches[sessionId];
-  if (!branch) {
-    return null;
-  }
-  const session = state.sessions.find((candidate) => candidate.id === sessionId);
-  if (session == null) {
-    return null;
-  }
-  const workspace = state.workspaces.find((candidate) => candidate.id === session.workspaceId);
-  if (workspace == null || isBranchlessSession({ branch })) {
-    return null;
-  }
-  const repo = resolveSessionRepo({ state, sessionId });
-  if (repo == null) {
-    return null;
-  }
-  return { session, repo };
+type SessionParams = {
+  readonly state: State;
+  readonly sessionId: SessionId;
 };
 
-export const isSessionPrFetchable = (params: Params): boolean =>
-  resolveSessionPrFetch(params) !== null;
+export const resolveSessionPrFetch = (params: Params): MountPrFetch | null =>
+  resolveMountFetch(params);
+
+export const listSessionPrFetches = (params: SessionParams): ReadonlyArray<MountPrFetch> =>
+  listMountFetches(params);
+
+export const isSessionPrFetchable = (params: Params): boolean => resolveMountFetch(params) !== null;

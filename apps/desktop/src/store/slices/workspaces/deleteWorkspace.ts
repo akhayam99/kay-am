@@ -71,6 +71,7 @@ export const deleteWorkspace = (set: SetFn, get: GetFn) => {
               sessionWorktrees: {},
               sessionProjectMounts: {},
               sessionActiveProject: {},
+              sessionActiveMount: {},
               sessionPhaseRuns: {},
               selectedAgentId: {},
               agentRunHistory: {},

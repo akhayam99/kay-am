@@ -23,6 +23,7 @@ const { scrollIntoViewMock, state, toastMock } = vi.hoisted(() => ({
     disconnectGithub: vi.fn(),
     storageStats: null,
     storageStatsLoading: false,
+    reconcileOrphanWorktrees: vi.fn(async () => undefined),
     loadStorageStats: vi.fn(async () => undefined),
     pruneArchivedTranscripts: vi.fn(async () => 0),
     removeArchivedWorktrees: vi.fn(async () => ({ removed: 0, failed: 0 })),

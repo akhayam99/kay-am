@@ -42,8 +42,24 @@ export const storySpies = {
   scratchDirPrepare: vi.fn(async (_args: unknown) => '/tmp/goodboy-root/scratch/session-story'),
   scratchDirRemove: vi.fn(async (_args: unknown) => undefined),
   removeWorktree: vi.fn(async (_repoPath: string, _worktreePath: string) => undefined),
+  removeWorktreeChecked: vi.fn(async (_args: { worktreePath: string }) => ({
+    kind: 'removed',
+    path: _args.worktreePath,
+  })),
+  worktreeWriterStatus: vi.fn(async (_args: { path: string }) => ({
+    path: _args.path,
+    holder: null,
+    token: null,
+    runId: null,
+    isGranted: false,
+    hasExited: false,
+    waiting: [],
+  })),
   removeSessionDirectory: vi.fn(async (_args: unknown) => undefined),
   worktreeStatus: vi.fn(async (_path: string) => cleanWorkingTree),
+  gitCommonDirectory: vi.fn(
+    async (_args: { readonly repoPath: string }): Promise<string | null> => null,
+  ),
   worktreeChangedFiles: vi.fn(async (_path: string) => ({ files: [], numstat: '' })),
   insertSession: vi.fn(async () => undefined),
   insertSessionEvent: vi.fn(
@@ -53,6 +69,7 @@ export const storySpies = {
   deleteSessionWorktreeForProject: vi.fn(async () => undefined),
   updateSessionWorktreeBranch: vi.fn(async () => undefined),
   updateSessionActiveProject: vi.fn(async () => undefined),
+  updateSessionActiveMount: vi.fn(async () => true),
   listWorktreesForSession: vi.fn(async () => [] as ReadonlyArray<never>),
   getWorkspaceById: vi.fn(async () => null),
   listProjectsForWorkspace: vi.fn(async () => [] as ReadonlyArray<never>),
@@ -61,10 +78,32 @@ export const storySpies = {
   deleteSession: vi.fn(async () => undefined),
 };
 
+const freeWriterLease = ({ path }: { readonly path: string }) => ({
+  path,
+  holder: null,
+  token: null,
+  runId: null,
+  isGranted: false,
+  hasExited: false,
+  waiting: [],
+});
+
 export const resetStorySpies = () => {
   for (const spy of Object.values(storySpies)) {
     spy.mockReset();
   }
+  storySpies.removeWorktreeChecked.mockImplementation(
+    async ({ worktreePath }: { worktreePath: string }) => ({
+      kind: 'removed',
+      path: worktreePath,
+    }),
+  );
+  storySpies.worktreeWriterStatus.mockImplementation(async ({ path }: { path: string }) =>
+    freeWriterLease({ path }),
+  );
+  storySpies.gitCommonDirectory.mockImplementation(
+    async ({ repoPath }: { readonly repoPath: string }) => `${repoPath}/.git`,
+  );
 };
 
 export const dbModuleMock = () => ({
@@ -88,6 +127,9 @@ export const dbModuleMock = () => ({
   insertSessionWorktree: storySpies.insertSessionWorktree,
   insertSessionEvent: storySpies.insertSessionEvent,
   deleteSessionWorktreeForProject: storySpies.deleteSessionWorktreeForProject,
+  updateSessionMountLifecycle: vi.fn(async () => true),
+  detachSessionMounts: vi.fn(async () => undefined),
+  listSessionMounts: vi.fn(async () => []),
   insertTelemetry: vi.fn(),
   insertWorkspace: vi.fn(),
   listContextSlotsForSession: vi.fn(async () => []),
@@ -105,6 +147,7 @@ export const dbModuleMock = () => ({
   updateSessionWorktreeBranch: storySpies.updateSessionWorktreeBranch,
   updateSessionWorktreeRepoSlug: vi.fn(async () => undefined),
   updateSessionActiveProject: storySpies.updateSessionActiveProject,
+  updateSessionActiveMount: storySpies.updateSessionActiveMount,
   upsertSessionExternalTask: storySpies.upsertSessionExternalTask,
   deleteSessionExternalTask: vi.fn(),
   listExternalTasksForWorkspace: vi.fn(async () => []),
@@ -236,12 +279,22 @@ export const worktreeModuleMock = () => ({
   createSessionDir: (args: unknown) => storySpies.createSessionDir(args),
   removeWorktree: (repoPath: string, worktreePath: string) =>
     storySpies.removeWorktree(repoPath, worktreePath),
+  removeWorktreeChecked: (args: { repoPath: string; worktreePath: string }) =>
+    storySpies.removeWorktreeChecked(args),
+  worktreeWriterStatus: (args: { path: string }) => storySpies.worktreeWriterStatus(args),
+  worktreeDirectorySize: vi.fn(async ({ path }: { path: string }) => ({
+    path,
+    sizeBytes: 1024,
+    isPartial: false,
+    exists: true,
+  })),
   removeSessionDirectory: (args: unknown) => storySpies.removeSessionDirectory(args),
   sessionDirExists: (args: unknown) => storySpies.sessionDirExists(args),
   scratchDirPrepare: (args: unknown) => storySpies.scratchDirPrepare(args),
   scratchDirRemove: (args: unknown) => storySpies.scratchDirRemove(args),
   worktreeChangedFiles: (path: string) => storySpies.worktreeChangedFiles(path),
   worktreeStatus: (path: string) => storySpies.worktreeStatus(path),
+  gitCommonDirectory: (args: { readonly repoPath: string }) => storySpies.gitCommonDirectory(args),
   changeWorktreeBranch: vi.fn(async () => undefined),
   invalidateLocalBranchesCache: vi.fn(),
 });

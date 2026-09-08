@@ -15,11 +15,11 @@ export const ArchiveSessionConfirm = ({ session, onClose, className }: Props) =>
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const onConfirm = async () => {
+  const archive = async (cleanWorktrees: boolean) => {
     setBusy(true);
     setError(null);
     try {
-      await archiveTask(session.id as SessionId);
+      await archiveTask(session.id as SessionId, { cleanWorktrees });
       onClose();
     } catch (err) {
       setError(formatError(err));
@@ -33,9 +33,14 @@ export const ArchiveSessionConfirm = ({ session, onClose, className }: Props) =>
       role="alert"
       icon={<CONCEPT_ICONS.archive size={ICON_SIZE.row} aria-hidden />}
       title="Archive session?"
-      description="Moves it to the Archived tab and frees memory. The worktree, branch, and history stay on disk. Reversible anytime with Unarchive."
-      confirmLabel="Archive"
-      onConfirm={onConfirm}
+      description="Moves it to the Archived tab and frees memory. Branches and history stay on disk either way. Cleaning removes only worktree folders that are clean and idle."
+      confirmLabel="Archive, keep worktrees"
+      altAction={{
+        label: 'Archive and clean worktrees',
+        onClick: () => void archive(true),
+        disabled: busy,
+      }}
+      onConfirm={() => archive(false)}
       onCancel={onClose}
       isBusy={busy}
       className={className}

@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { cn, Divider, Popover, ScrollFade, SectionHeader, Tooltip } from '@goodboy/ui';
-import type { SessionId, WorkspaceId, ProjectScript, ProjectScriptId } from '@goodboy/types';
+import type {
+  MountId,
+  SessionId,
+  WorkspaceId,
+  ProjectScript,
+  ProjectScriptId,
+} from '@goodboy/types';
 import { ChevronDown, ChevronRight, Play, Plus, Square, X } from 'lucide-react';
 import { EMPTY_ARRAY, useAppStore } from '../../../../store';
 import { CONCEPT_ICONS, ICON_SIZE } from '../../../../shared/components/conceptIcons';
 import type { ScriptRunRecord, ScriptRunResult, ScriptRunStatus } from '../../scripts';
+import { MountPicker } from './MountPicker';
 
 type ScriptsSectionProps = {
   readonly sessionId: SessionId;
@@ -19,6 +26,11 @@ type LogTarget = {
   readonly anchor: DOMRect;
 };
 
+type PickerTarget = {
+  readonly script: ProjectScript;
+  readonly anchor: DOMRect;
+};
+
 export const ScriptsSection = ({
   sessionId,
   workspaceId,
@@ -29,9 +41,15 @@ export const ScriptsSection = ({
   const expanded = forceExpanded || storedExpanded;
   const setPanelSectionExpanded = useAppStore((s) => s.setPanelSectionExpanded);
   const [log, setLog] = useState<LogTarget | null>(null);
+  const [picker, setPicker] = useState<PickerTarget | null>(null);
   const scripts = useAppStore((s) => s.projectScripts[workspaceId]);
   const allProjects = useAppStore((s) => s.projects);
   const mounts = useAppStore((s) => s.sessionProjectMounts[sessionId] ?? EMPTY_ARRAY);
+  const mountsForProject = useCallback(
+    (projectId: ProjectScript['projectId']) =>
+      mounts.filter((candidate) => candidate.projectId === projectId),
+    [mounts],
+  );
   const runs = useAppStore((s) => s.scriptRuns[sessionId]);
   const loadScripts = useAppStore((s) => s.loadScripts);
   const runScript = useAppStore((s) => s.runScript);
@@ -44,10 +62,15 @@ export const ScriptsSection = ({
   }, [workspaceId, loadScripts]);
 
   const onRun = useCallback(
-    (script: ProjectScript) => {
+    (script: ProjectScript, anchor: DOMRect) => {
+      const candidates = mountsForProject(script.projectId);
+      if (candidates.length > 1) {
+        setPicker({ script, anchor });
+        return;
+      }
       void runScript({ sessionId, scriptId: script.id });
     },
-    [runScript, sessionId],
+    [mountsForProject, runScript, sessionId],
   );
 
   const onCancel = useCallback(
@@ -118,7 +141,7 @@ export const ScriptsSection = ({
                       run={runs?.[script.id] ?? null}
                       disabledReason={disabledReason}
                       logOpen={log?.scriptId === script.id}
-                      onRun={() => onRun(script)}
+                      onRun={(anchor) => onRun(script, anchor)}
                       onCancel={() => onCancel(script.id)}
                       onToggleLog={(anchor) => onToggleLog(script.id, anchor)}
                     />
@@ -143,6 +166,19 @@ export const ScriptsSection = ({
             : `${list.length} script${list.length === 1 ? '' : 's'}`}
         </p>
       )}
+      {picker ? (
+        <MountPicker
+          scriptName={picker.script.name}
+          mounts={mountsForProject(picker.script.projectId)}
+          anchor={picker.anchor}
+          onPick={(mountId: MountId) => {
+            const scriptId = picker.script.id;
+            setPicker(null);
+            void runScript({ sessionId, scriptId, mountId });
+          }}
+          onClose={() => setPicker(null)}
+        />
+      ) : null}
       {logScript && logResult ? (
         <LogFlyout
           script={logScript}
@@ -162,7 +198,7 @@ type ScriptRowProps = {
   readonly run: ScriptRunRecord | null;
   readonly disabledReason: string | null;
   readonly logOpen: boolean;
-  readonly onRun: () => void;
+  readonly onRun: (anchor: DOMRect) => void;
   readonly onCancel: () => void;
   readonly onToggleLog: (anchor: DOMRect) => void;
 };
@@ -183,6 +219,7 @@ function ScriptRow({
   const isPending = status === 'pending';
   const hasOutput = result !== null;
   const logRef = useRef<HTMLButtonElement>(null);
+  const runRef = useRef<HTMLButtonElement>(null);
 
   return (
     <div
@@ -235,8 +272,14 @@ function ScriptRow({
       ) : (
         <Tooltip content={disabledReason ?? 'Run script'} anchorClassName="shrink-0">
           <button
+            ref={runRef}
             type="button"
-            onClick={onRun}
+            onClick={() => {
+              const rect = runRef.current?.getBoundingClientRect();
+              if (rect) {
+                onRun(rect);
+              }
+            }}
             disabled={disabledReason != null}
             aria-label="Run script"
             className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground/50 transition-colors hover:bg-foreground/10 hover:text-primary group-hover:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-40"

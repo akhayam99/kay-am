@@ -55,7 +55,13 @@ const MOUNTS: ReadonlyArray<SessionProjectMount> = [
 describe('resolveProjectMountPath', () => {
   it('returns the requested project mount instead of the active mount', () => {
     const path = resolveProjectMountPath({
-      state: { sessions: [SESSION], sessionProjectMounts: { [SESSION_ID]: MOUNTS } },
+      state: {
+        sessions: [SESSION],
+        sessionMounts: {},
+        sessionActiveMount: {},
+        sessionActiveProject: {},
+        sessionProjectMounts: { [SESSION_ID]: MOUNTS },
+      },
       sessionId: SESSION_ID,
       projectId: WEB_ID,
     });
@@ -65,7 +71,13 @@ describe('resolveProjectMountPath', () => {
 
   it('returns null when the requested project is not mounted', () => {
     const path = resolveProjectMountPath({
-      state: { sessions: [SESSION], sessionProjectMounts: { [SESSION_ID]: [MOUNTS[0]!] } },
+      state: {
+        sessions: [SESSION],
+        sessionMounts: {},
+        sessionActiveMount: {},
+        sessionActiveProject: {},
+        sessionProjectMounts: { [SESSION_ID]: [MOUNTS[0]!] },
+      },
       sessionId: SESSION_ID,
       projectId: API_ID,
     });
@@ -75,7 +87,13 @@ describe('resolveProjectMountPath', () => {
 
   it('returns null when the session does not exist', () => {
     const path = resolveProjectMountPath({
-      state: { sessions: [], sessionProjectMounts: { [SESSION_ID]: MOUNTS } },
+      state: {
+        sessions: [],
+        sessionMounts: {},
+        sessionActiveMount: {},
+        sessionActiveProject: {},
+        sessionProjectMounts: { [SESSION_ID]: MOUNTS },
+      },
       sessionId: SESSION_ID,
       projectId: WEB_ID,
     });

@@ -11,7 +11,7 @@ import type {
 import { QUERY_BRIDGE_VERBS, buildIntegrationsGuard } from './integrationsGuard';
 import { buildScopeGuard } from './scopeGuard';
 
-const SESSION_SCOPED_PROVIDERS: ReadonlyArray<string> = ['project'];
+const SESSION_SCOPED_PROVIDERS: ReadonlyArray<string> = ['project', 'mount', 'series'];
 
 const catalogSource = (): string =>
   readFileSync(resolve(process.cwd(), 'src-tauri/src/query_bridge/protocol.rs'), 'utf8');
@@ -91,7 +91,22 @@ describe('buildIntegrationsGuard', () => {
       isBridgeServing: true,
     });
 
-    expect(guard.split('\n')).toHaveLength(13);
+    expect(guard.split('\n')).toHaveLength(14);
+  });
+
+  it('names the mount scope only for the providers that write to a checkout', () => {
+    const withRequests = buildIntegrationsGuard({
+      providers: ['linear', 'github'],
+      isBridgeServing: true,
+    });
+    const withoutRequests = buildIntegrationsGuard({
+      providers: ['linear', 'slack'],
+      isBridgeServing: true,
+    });
+
+    expect(withRequests).toContain('act on ONE mount');
+    expect(withRequests).toContain('pass `--mount <id>` to reach another one');
+    expect(withoutRequests).not.toContain('act on ONE mount');
   });
 
   it('ignores a provider the bridge cannot serve', () => {
@@ -157,6 +172,18 @@ describe('the advertised verbs', () => {
     const rust = catalogVerbs();
 
     expect(rust['project']).toEqual(['materialize']);
+    expect(rust['mount']).toEqual([
+      'list',
+      'inspect',
+      'fork',
+      'switch',
+      'attach',
+      'unmount',
+      'activate',
+      'resolve',
+      'operation',
+    ]);
+    expect(rust['series']).toEqual(['create', 'set-member', 'list']);
     const now = '2026-08-22T00:00:00.000Z' as IsoDateTime;
     const project: Project = {
       id: 'project-guard' as ProjectId,

@@ -84,3 +84,23 @@ export const deriveBranchName = ({
   }
   return withSuffix({ base: slugifyDir(trimmedGoal), suffix: id8 });
 };
+
+type NextSlugParams = {
+  readonly base: string;
+  readonly prefix: string;
+  readonly taken: ReadonlyArray<string>;
+};
+
+export const nextAvailableSlug = ({ base, prefix, taken }: NextSlugParams): string => {
+  const used = new Set(taken);
+  if (!used.has(`${prefix}/${base}`)) {
+    return base;
+  }
+  for (let ordinal = 2; ordinal <= 99; ordinal += 1) {
+    const candidate = withSuffix({ base, suffix: String(ordinal) });
+    if (!used.has(`${prefix}/${candidate}`)) {
+      return candidate;
+    }
+  }
+  return withSuffix({ base, suffix: crypto.randomUUID().slice(0, 8) });
+};

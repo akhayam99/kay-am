@@ -156,7 +156,7 @@ export const MrDetailPanel = ({
     setBusy('merge');
     try {
       if (sessionId != null) {
-        await mergeMrForSession(sessionId);
+        await mergeMrForSession({ sessionId });
       } else if (mr != null && workspaceId != null && host != null && projectPath != null) {
         await gitlabMergeMr(workspaceId, host, projectPath, mr.iid);
         onRefresh?.();

@@ -83,7 +83,8 @@ export const CreateMrForm = ({ sessionId, branch, error, onClose }: Props) => {
     }
     setBusy('create');
     try {
-      await createMrForSession(sessionId, {
+      await createMrForSession({
+        sessionId,
         title: title.trim(),
         description,
         targetBranch: targetBranch.trim() || 'main',

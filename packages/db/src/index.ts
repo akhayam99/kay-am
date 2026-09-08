@@ -69,6 +69,7 @@ export {
   updateSessionAutoRun,
   updateSessionTitleUserEdited,
   updateSessionActiveProject,
+  updateSessionActiveMount,
   getSessionById,
   listSessionsForWorkspace,
   listArchivedSessionsForWorkspace,
@@ -183,16 +184,54 @@ export {
 } from './queries/agent';
 export {
   insertSessionWorktree,
+  insertSessionMount,
+  getSessionMount,
+  listSessionMounts,
   listWorktreesForSession,
   listWorktreesForSessions,
   deleteWorktreesForSession,
+  deleteSessionMount,
   deleteSessionWorktreeForProject,
   updateSessionWorktreeBranch,
+  updateSessionMountBranch,
+  updateSessionMountLifecycle,
   updateSessionWorktreePath,
   updateSessionWorktreeRepoSlug,
   listAllSessionWorktrees,
+  detachSessionMounts,
+  listArchivedSessionMounts,
+  listMountPathOwnership,
+  type MountDetachment,
+  type MountPathOwnership,
   type SessionWorktree,
 } from './queries/session-worktree';
+export {
+  getMountOperation,
+  listMountOperations,
+  listUnsettledMountOperations,
+  upsertMountOperation,
+} from './queries/mount-operation';
+export {
+  hydrateGithubMountPullRequestLink,
+  listMountPullRequestLinks,
+  upsertMountPullRequestLink,
+} from './queries/mount-pr-link';
+export {
+  findPrSeriesMembership,
+  getPrSeries,
+  insertPrSeries,
+  listPrSeries,
+  listPrSeriesMembers,
+  upsertPrSeriesMember,
+} from './queries/pr-series';
+export {
+  deleteRetainedWorktreePath,
+  insertRetainedWorktreePath,
+  listAllRetainedWorktreePaths,
+  listRetainedWorktreePaths,
+  markRetainedWorktreePathChecked,
+  transferMountPathToRetained,
+} from './queries/retained-worktree-path';
 export {
   insertSessionEvent,
   listSessionEvents,
@@ -214,7 +253,6 @@ export {
   getGithubPrCache,
   upsertGithubPrCache,
   deleteGithubPrCache,
-  deleteGithubPrCacheForWorktreePath,
 } from './queries/github-pr-cache';
 export {
   insertDiffComment,

@@ -1,17 +1,38 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { Session } from '@goodboy/types';
 
 const { store, useWorktreeStatuses, useWorktreeStatusPending } = vi.hoisted(() => ({
   store: {
-    projects: [] as ReadonlyArray<{ id: string; workspaceId: string; name: string }>,
-    sessionProjectMounts: {} as Record<
-      string,
-      ReadonlyArray<{ projectId: string; mountName: string; branch: string; worktreePath: string }>
-    >,
-    sessionProjectPrs: {},
+    projects: [] as ReadonlyArray<Record<string, unknown>>,
+    sessionMounts: {} as Record<string, ReadonlyArray<Record<string, unknown>>>,
+    sessionProjectMounts: {} as Record<string, ReadonlyArray<Record<string, unknown>>>,
+    mountGithub: {} as Record<string, Record<string, unknown>>,
+    mountGitlabMr: {},
+    mountBitbucketPr: {},
+    mountBranchObservations: {},
+    prSeries: {} as Record<string, ReadonlyArray<Record<string, unknown>>>,
+    loadSessionMounts: vi.fn(async () => []),
+    loadPrSeries: vi.fn(async () => []),
+    openMountRequest: vi.fn(async () => undefined),
+    attachMount: vi.fn(async () => undefined),
+    unmountMount: vi.fn(async () => ({ kept: false, reason: null })),
+    setSessionActiveMount: vi.fn(async () => undefined),
+    setScriptsLensScope: vi.fn(),
+    openMountDiff: vi.fn(),
+    emitNotification: vi.fn(),
+    detectedEditors: [] as ReadonlyArray<{ binary: string; label: string }>,
+    loadDetectedEditors: vi.fn(async () => undefined),
+    sessionWorktrees: {},
+    terminalTabs: {},
+    scriptRuns: {},
+    sessionPhaseRuns: {},
+    projectScripts: {},
+    mountCleanupProposals: {},
+    loadMountCleanupProposals: vi.fn(async () => []),
+    resolveMountCleanup: vi.fn(async () => undefined),
   },
   useWorktreeStatuses: vi.fn(() => new Map()),
   useWorktreeStatusPending: vi.fn(() => new Set()),
@@ -20,12 +41,13 @@ const { store, useWorktreeStatuses, useWorktreeStatusPending } = vi.hoisted(() =
 vi.mock('../../../../../store', () => ({
   EMPTY_ARRAY: Object.freeze([]),
   useAppStore: <T,>(selector: (state: typeof store) => T) => selector(store),
-  useMountDiffStats: () => new Map(),
+  useMountDiffStats: () => new Map([['/api-one', { additions: 3, deletions: 1 }]]),
 }));
-vi.mock('./ProjectMountRow', () => ({
-  ProjectMountRow: ({ mount }: { readonly mount: { readonly mountName: string } }) => (
-    <div data-testid="project-mount-row">{mount.mountName}</div>
-  ),
+vi.mock('../../../../worktree/useMountRemoteHostKind', () => ({
+  useMountRemoteHostKind: () => 'github',
+}));
+vi.mock('../../../../../app/components/Toast', () => ({
+  useToast: () => ({ showToast: vi.fn() }),
 }));
 vi.mock('../../../hooks/useWorktreeStatuses', () => ({
   useWorktreeStatuses,
@@ -34,50 +56,316 @@ vi.mock('../../../hooks/useWorktreeStatuses', () => ({
 vi.mock('./MountProjectAction', () => ({
   MountProjectAction: () => <button>Mount project</button>,
 }));
+vi.mock('./ProjectBranchChip', () => ({
+  ProjectBranchChip: ({ branch }: { readonly branch: string }) => <span>{branch}</span>,
+}));
+vi.mock('./ProjectSyncControl', () => ({ ProjectSyncControl: () => null }));
+vi.mock('./ProjectDetachMenu', () => ({ ProjectDetachMenu: () => null }));
+vi.mock('./NewBranchMountAction', () => ({
+  NewBranchMountAction: () => <button>New branch mount</button>,
+}));
+vi.mock('../EditorMenu', () => ({ EditorMenu: () => null }));
+vi.mock('../MountCleanupProposals', () => ({
+  MountCleanupProposals: () => null,
+}));
 
 import { ProjectMountRows } from '.';
 
 const session = { id: 'session-1', workspaceId: 'workspace-1' } as Session;
 
+type MountParams = {
+  readonly id: string;
+  readonly branch: string;
+  readonly path: string | null;
+  readonly isAttached?: boolean;
+};
+
+const mountView = ({ id, branch, path, isAttached = true }: MountParams) => ({
+  id,
+  sessionId: 'session-1',
+  projectId: 'api',
+  mountName: 'API',
+  worktreePath: path,
+  lastWorktreePath: path,
+  repoRoot: '/repo/api',
+  branch,
+  baseBranch: 'main',
+  parallelIndex: 0,
+  repoSlug: 'acme/api',
+  isAttached,
+  diskState: 'present',
+  revision: 0,
+  createdAt: '2026-09-08T10:00:00.000Z',
+  updatedAt: '2026-09-08T10:00:00.000Z',
+});
+
+const githubState = ({ number, state }: { readonly number: number; readonly state: string }) => ({
+  pr: {
+    number,
+    title: `Part ${number}`,
+    url: `https://github.com/acme/api/pull/${number}`,
+    state,
+    isDraft: false,
+  },
+  repository: 'acme/api',
+  host: 'github.com',
+});
+
+const seriesOfTwo = () => ({
+  id: 'series-1',
+  sessionId: 'session-1',
+  projectId: 'api',
+  name: 'restyle',
+  plannedCount: 6,
+  workItemIdentifier: null,
+  workItemUrl: null,
+  parentRequest: null,
+  createdAt: '2026-09-08T10:00:00.000Z',
+  updatedAt: '2026-09-08T10:00:00.000Z',
+  members: [
+    {
+      id: 'member-1',
+      seriesId: 'series-1',
+      mountId: 'mount-1',
+      branch: 'feat/one',
+      ordinal: 1,
+      label: '1/6',
+      status: 'active',
+      request: { state: 'merged' },
+      createdAt: '2026-09-08T10:00:00.000Z',
+      updatedAt: '2026-09-08T10:00:00.000Z',
+    },
+    {
+      id: 'member-2',
+      seriesId: 'series-1',
+      mountId: 'mount-2',
+      branch: 'feat/two',
+      ordinal: 2,
+      label: '2/6',
+      status: 'active',
+      request: { state: 'open' },
+      createdAt: '2026-09-08T10:00:00.000Z',
+      updatedAt: '2026-09-08T10:00:00.000Z',
+    },
+  ],
+});
+
 describe('ProjectMountRows', () => {
   beforeEach(() => {
-    store.projects = [];
+    vi.clearAllMocks();
+    store.projects = [
+      {
+        id: 'api',
+        workspaceId: 'workspace-1',
+        name: 'API',
+        kind: 'repo',
+        rootPath: '/repo/api',
+      },
+    ];
+    store.sessionMounts = {};
     store.sessionProjectMounts = {};
-    useWorktreeStatuses.mockClear();
+    store.mountGithub = {};
+    store.prSeries = {};
   });
   afterEach(cleanup);
 
-  it('polls all mounted worktrees through one shared hook call', () => {
-    store.sessionProjectMounts = {
+  it('gives a project owning a single mount the same header as a project owning several', () => {
+    store.projects = [
+      ...store.projects,
+      { id: 'web', workspaceId: 'workspace-1', name: 'WEB', kind: 'repo', rootPath: '/repo/web' },
+    ];
+    store.sessionMounts = {
       'session-1': [
-        { projectId: 'api', mountName: 'API', branch: 'feat/api', worktreePath: '/api' },
-        { projectId: 'web', mountName: 'Web', branch: 'feat/web', worktreePath: '/web' },
+        mountView({ id: 'mount-1', branch: 'feat/one', path: '/api-one' }),
+        mountView({ id: 'mount-2', branch: 'feat/two', path: '/api-two' }),
+        {
+          ...mountView({ id: 'mount-3', branch: 'feat/three', path: '/web-one' }),
+          projectId: 'web',
+        },
       ],
     };
     render(<ProjectMountRows session={session} onSelectLens={vi.fn()} />);
 
-    expect(useWorktreeStatuses).toHaveBeenCalledTimes(1);
-    expect(useWorktreeStatuses).toHaveBeenCalledWith({
-      targets: [
-        { worktreePath: '/api', baseBranch: undefined },
-        { worktreePath: '/web', baseBranch: undefined },
-      ],
-    });
+    expect(screen.getByRole('list', { name: 'API branch mounts' })).toBeDefined();
+    expect(screen.getByRole('list', { name: 'WEB branch mounts' })).toBeDefined();
+    expect(screen.getAllByRole('button', { name: 'New branch mount' })).toHaveLength(2);
+    expect(screen.getByRole('listitem', { name: 'WEB on feat/three' })).toBeDefined();
   });
 
-  it('renders one row per mount in mount order', () => {
-    store.sessionProjectMounts = {
+  it('gives each project its own block instead of one shared surface', () => {
+    store.projects = [
+      ...store.projects,
+      { id: 'web', workspaceId: 'workspace-1', name: 'WEB', kind: 'repo', rootPath: '/repo/web' },
+    ];
+    store.sessionMounts = {
       'session-1': [
-        { projectId: 'api', mountName: 'API', branch: 'feat/api', worktreePath: '/api' },
-        { projectId: 'web', mountName: 'Web', branch: 'feat/web', worktreePath: '/web' },
+        mountView({ id: 'mount-1', branch: 'feat/one', path: '/api-one' }),
+        { ...mountView({ id: 'mount-2', branch: 'feat/two', path: '/web-one' }), projectId: 'web' },
       ],
     };
     render(<ProjectMountRows session={session} onSelectLens={vi.fn()} />);
 
-    expect(screen.getAllByTestId('project-mount-row').map((row) => row.textContent)).toEqual([
-      'API',
-      'Web',
+    const blocks = Array.from(screen.getByRole('region', { name: 'Mounted projects' }).children);
+
+    expect(blocks).toHaveLength(2);
+    for (const block of blocks) {
+      expect(block.className).toContain('border');
+      expect(within(block as HTMLElement).getAllByTestId('project-mount-row')).toHaveLength(1);
+    }
+  });
+
+  it('renders one row per branch mount of the same project', () => {
+    store.sessionMounts = {
+      'session-1': [
+        mountView({ id: 'mount-1', branch: 'feat/one', path: '/api-one' }),
+        mountView({ id: 'mount-2', branch: 'feat/two', path: '/api-two' }),
+      ],
+    };
+    render(<ProjectMountRows session={session} onSelectLens={vi.fn()} />);
+
+    const rows = screen.getAllByTestId('project-mount-row');
+    expect(rows.map((row) => row.getAttribute('aria-label'))).toEqual([
+      'API on feat/one',
+      'API on feat/two',
     ]);
+  });
+
+  it('gives each row the pull request of its own mount', () => {
+    store.sessionMounts = {
+      'session-1': [
+        mountView({ id: 'mount-1', branch: 'feat/one', path: '/api-one' }),
+        mountView({ id: 'mount-2', branch: 'feat/two', path: '/api-two' }),
+      ],
+    };
+    store.mountGithub = {
+      'mount-1': githubState({ number: 11, state: 'open' }),
+      'mount-2': githubState({ number: 12, state: 'open' }),
+    };
+    render(<ProjectMountRows session={session} onSelectLens={vi.fn()} />);
+
+    const [first, second] = screen.getAllByTestId('project-mount-row');
+    expect(within(first as HTMLElement).getByText('#11')).toBeDefined();
+    expect(within(second as HTMLElement).getByText('#12')).toBeDefined();
+  });
+
+  it('creates a request for a row that is not the active mount', async () => {
+    store.sessionMounts = {
+      'session-1': [
+        mountView({ id: 'mount-1', branch: 'feat/one', path: '/api-one' }),
+        mountView({ id: 'mount-2', branch: 'feat/two', path: '/api-two' }),
+      ],
+    };
+    render(<ProjectMountRows session={session} onSelectLens={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create a PR for API on feat/one' }));
+
+    await waitFor(() =>
+      expect(store.openMountRequest).toHaveBeenCalledWith({
+        sessionId: 'session-1',
+        mountId: 'mount-1',
+        provider: 'github',
+      }),
+    );
+  });
+
+  it('mounts an unmounted sibling from its own row', async () => {
+    store.sessionMounts = {
+      'session-1': [
+        mountView({ id: 'mount-1', branch: 'feat/one', path: '/api-one' }),
+        mountView({ id: 'mount-2', branch: 'feat/two', path: null, isAttached: false }),
+      ],
+    };
+    render(<ProjectMountRows session={session} onSelectLens={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mount API on feat/two' }));
+
+    await waitFor(() =>
+      expect(store.attachMount).toHaveBeenCalledWith({
+        sessionId: 'session-1',
+        mountId: 'mount-2',
+      }),
+    );
+  });
+
+  it('keeps completed mounts behind a count toggle, in their declared position', () => {
+    store.sessionMounts = {
+      'session-1': [
+        mountView({ id: 'mount-1', branch: 'feat/one', path: '/api-one' }),
+        mountView({ id: 'mount-2', branch: 'feat/two', path: '/api-two' }),
+      ],
+    };
+    store.mountGithub = { 'mount-1': githubState({ number: 11, state: 'merged' }) };
+    store.prSeries = { 'session-1': [seriesOfTwo()] };
+    render(<ProjectMountRows session={session} onSelectLens={vi.fn()} />);
+
+    expect(screen.getAllByTestId('project-mount-row')).toHaveLength(1);
+    const toggle = screen.getByRole('button', { name: /Completed \(1\)/ });
+    fireEvent.click(toggle);
+
+    const rows = screen.getAllByTestId('project-mount-row');
+    expect(rows.map((row) => row.getAttribute('aria-label'))).toEqual([
+      'API on feat/one',
+      'API on feat/two',
+    ]);
+  });
+
+  it('orders the mounts of a series by the position it declares', () => {
+    store.sessionMounts = {
+      'session-1': [
+        mountView({ id: 'mount-2', branch: 'feat/two', path: '/api-two' }),
+        mountView({ id: 'mount-1', branch: 'feat/one', path: '/api-one' }),
+      ],
+    };
+    store.prSeries = { 'session-1': [seriesOfTwo()] };
+    render(<ProjectMountRows session={session} onSelectLens={vi.fn()} />);
+
+    const rows = screen.getAllByTestId('project-mount-row');
+    expect(rows.map((row) => row.getAttribute('aria-label'))).toEqual([
+      'API on feat/one',
+      'API on feat/two',
+    ]);
+  });
+
+  it('reads out the progress of a six part series', () => {
+    store.sessionMounts = {
+      'session-1': [
+        mountView({ id: 'mount-1', branch: 'feat/one', path: '/api-one' }),
+        mountView({ id: 'mount-2', branch: 'feat/two', path: '/api-two' }),
+      ],
+    };
+    store.prSeries = { 'session-1': [seriesOfTwo()] };
+    render(<ProjectMountRows session={session} onSelectLens={vi.fn()} />);
+
+    expect(screen.getByText('1 merged · 2 of 6 created')).toBeDefined();
+    expect(screen.getByText('2/6')).toBeDefined();
+  });
+
+  it('keeps the secondary commands of every row reachable by keyboard', () => {
+    store.sessionMounts = {
+      'session-1': [
+        mountView({ id: 'mount-1', branch: 'feat/one', path: '/api-one' }),
+        mountView({ id: 'mount-2', branch: 'feat/two', path: '/api-two' }),
+      ],
+    };
+    render(<ProjectMountRows session={session} onSelectLens={vi.fn()} />);
+
+    const terminal = screen.getByRole('button', { name: 'Open terminal for API on feat/two' });
+    terminal.focus();
+
+    expect(document.activeElement).toBe(terminal);
+  });
+
+  it('keeps an unmounted branch with open work out of the completed disclosure', () => {
+    store.sessionMounts = {
+      'session-1': [
+        mountView({ id: 'mount-1', branch: 'feat/one', path: '/api-one' }),
+        mountView({ id: 'mount-2', branch: 'feat/two', path: null, isAttached: false }),
+      ],
+    };
+    render(<ProjectMountRows session={session} onSelectLens={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: /Completed/ })).toBeNull();
+    expect(screen.getAllByTestId('project-mount-row')).toHaveLength(2);
   });
 
   it('renders a quiet mount action when no project is mounted', () => {

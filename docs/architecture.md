@@ -41,10 +41,38 @@ When a file database has pending migrations at boot, the runner first writes a s
 Everything the app writes for itself lives under `~/.goodboy`:
 
 - `data.db` is the SQLite database; its pre-migration snapshots (`data.db.pre-m*.bak`) sit next to it.
-- `sessions/<workspace-slug>/<session-slug>-<id>/` is a session's container directory, for workspaces that did not configure their own sessions root. Repo projects materialized into the session mount as git worktrees inside the container, one directory per project.
+- `sessions/<workspace-slug>/<session-slug>-<id>/` is a session's container directory, for workspaces that did not configure their own sessions root. Repository project mounts use dedicated git worktrees under the repository's `.goodboy/worktrees/` directory. Several mounts of one project may belong to the same session.
 - `workspaces/<slug>/PROFILE.md` is the one-way projection of a workspace's profile; the database row is the source of truth and the file is never read back.
 - `file-versions/` holds the captured file version blobs.
 - `query-<pid>.sock` is the query bridge socket of a running instance ([query-bridge.md](query-bridge.md)).
 - `boot-breadcrumbs.log` records boot phase timings.
 
 Two things live with the user's code instead: a folder project's session directories under `<project-root>/sessions/`, and skills under `<project-root>/.kay/skills/` or `<project-root>/.claude/skills/`.
+
+## Mount persistence and recovery
+
+`session_worktrees` is the logical mount table. Its row id is the mount
+identity. A project id identifies the repository that owns the mount and does
+not identify one checkout. Each mount owns its current branch, nullable current
+path, last path, attachment state, disk observation and revision. The active
+mount is stored on the session.
+
+Pull request ownership lives in `mount_pr_links`, independently of the
+branch-keyed provider caches. A switch can therefore clear the current provider
+projection without deleting request history. `pr_series` and
+`pr_series_members` store explicit grouping and order. They do not infer a
+stack from commits.
+
+Filesystem and provider mutations use `mount_operations` with a caller-owned
+request id. The operation is recorded before the external action. Startup can
+then finish a database transition when the worktree already exists or has
+already disappeared. Provider creation refreshes the remote before retrying.
+These checks make retry idempotent across the observable interruption points,
+but they cannot infer an unrecorded historical request.
+
+Hydration and archive restoration inspect every stored repository worktree
+before projecting it as writable. A missing path is detached, kept as the last
+path, and marked missing. Cleanup transfers dirty or otherwise unsafe paths to
+`retained_worktree_paths` when the owning lifecycle needs to continue. All
+cleanup entry points share the checked Rust removal boundary, and local
+branches are preserved.

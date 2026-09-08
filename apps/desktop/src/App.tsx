@@ -23,6 +23,7 @@ import { ReleaseToast } from './features/changelog/components/ReleaseToast';
 import { OnboardingCard } from './features/onboarding/OnboardingCard';
 import { listenBridgeCommands } from './features/companion/commandExecutor';
 import { listenProjectMaterializeRequests } from './features/session/projectMaterializeBridge';
+import { listenMountCommands } from './features/session/mountQueryBridge';
 import { startWorktreeWriterBridge } from './features/session/resolve/worktreeWriterBridge';
 import { useProviderRefreshOnFocus } from './shared/hooks/useProviderRefreshOnFocus';
 import { useZoomShortcuts } from './shared/hooks/useZoomShortcuts';
@@ -38,10 +39,16 @@ import { useGithubPolling } from './features/github/hooks/useGithubPolling';
 import { useUpdaterPolling } from './features/updater/hooks/useUpdaterPolling';
 import { useGithubConnection } from './features/integrations/github/useGithubConnection';
 import { useSessionSidebarVisibility } from './features/workspace/hooks/useSessionSidebarVisibility';
+import { MOCK_ENABLED } from './store/mock-data';
+import { MockScene } from './app/components/MockScene';
 
 const KEEP_ALIVE_CAP = 5;
 
 export const App = () => {
+  if (MOCK_ENABLED) {
+    return <MockScene />;
+  }
+
   const hydrate = useAppStore((s) => s.hydrate);
   const retryHydrate = useAppStore((s) => s.retryHydrate);
   const checkForUpdates = useAppStore((s) => s.checkForUpdates);
@@ -169,6 +176,22 @@ export const App = () => {
     let off: (() => void) | undefined;
     let cancelled = false;
     void listenProjectMaterializeRequests().then((fn) => {
+      if (cancelled) {
+        fn();
+        return;
+      }
+      off = fn;
+    });
+    return () => {
+      cancelled = true;
+      off?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    let off: (() => void) | undefined;
+    let cancelled = false;
+    void listenMountCommands().then((fn) => {
       if (cancelled) {
         fn();
         return;

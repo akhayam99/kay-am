@@ -68,6 +68,7 @@ const CATEGORY_BY_EVENT_KIND: Record<SessionEventKind, ActivityCategory> = {
   issue_linked: 'issues',
   issue_unlinked: 'issues',
   pr_created: 'pullRequests',
+  pr_discovered: 'pullRequests',
   pr_ready: 'pullRequests',
   pr_approved: 'pullRequests',
   pr_merged: 'pullRequests',

@@ -28,6 +28,7 @@ export const StorageSection = () => {
   const stats = useAppStore((s) => s.storageStats);
   const isLoading = useAppStore((s) => s.storageStatsLoading);
   const loadStorageStats = useAppStore((s) => s.loadStorageStats);
+  const reconcileOrphanWorktrees = useAppStore((s) => s.reconcileOrphanWorktrees);
   const pruneArchivedTranscripts = useAppStore((s) => s.pruneArchivedTranscripts);
   const removeArchivedWorktrees = useAppStore((s) => s.removeArchivedWorktrees);
   const { showToast } = useToast();
@@ -38,7 +39,10 @@ export const StorageSection = () => {
   const archivedTranscriptRows = stats?.archivedTranscriptRows ?? 0;
 
   useEffect(() => {
-    void loadStorageStats().catch((err: unknown) => showToast('error', formatError(err)));
+    void reconcileOrphanWorktrees()
+      .catch(() => undefined)
+      .then(() => loadStorageStats())
+      .catch((err: unknown) => showToast('error', formatError(err)));
   }, []);
 
   const onPrune = async () => {
@@ -82,6 +86,9 @@ export const StorageSection = () => {
 
   const showSkeleton = stats == null && isLoading;
   const worktrees = stats?.archivedWorktrees ?? [];
+  const retained = stats?.retainedWorktrees ?? [];
+  const worktreeBytes = worktrees.reduce((sum, entry) => sum + (entry.sizeBytes ?? 0), 0);
+  const retainedBytes = retained.reduce((sum, entry) => sum + (entry.sizeBytes ?? 0), 0);
 
   return (
     <div className="flex flex-col gap-4">
@@ -160,8 +167,11 @@ export const StorageSection = () => {
             />
           ) : (
             <span className="flex items-center gap-3">
-              <span className="text-xs tabular-nums text-foreground">
+              <span className="text-xs tabular-nums text-muted-foreground">
                 {formatInteger(worktrees.length)} folder{worktrees.length === 1 ? '' : 's'}
+              </span>
+              <span className="text-xs tabular-nums text-foreground">
+                {formatBytes({ bytes: worktreeBytes })}
               </span>
               <Button
                 variant="ghost"
@@ -186,6 +196,36 @@ export const StorageSection = () => {
                 className="truncate font-mono text-2xs text-muted-foreground"
               >
                 {worktree.worktreePath}
+              </li>
+            ))}
+          </ul>
+        </ScrollFade>
+      )}
+
+      <FieldRow
+        label="Retained worktrees"
+        help="Folders Goodboy kept instead of deleting: dirty checkouts, folder projects, deleted sessions."
+      >
+        {showSkeleton ? (
+          <Skeleton className="h-4 w-40" />
+        ) : (
+          <span className="flex items-center gap-3">
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {formatInteger(retained.length)} folder{retained.length === 1 ? '' : 's'}
+            </span>
+            <span className="text-xs tabular-nums text-foreground">
+              {formatBytes({ bytes: retainedBytes })}
+            </span>
+          </span>
+        )}
+      </FieldRow>
+
+      {retained.length > 0 && (
+        <ScrollFade className="max-h-28 rounded-md border border-border" viewportClassName="p-2">
+          <ul aria-label="Retained worktree paths" className="flex flex-col gap-1">
+            {retained.map((path) => (
+              <li key={path.id} className="truncate font-mono text-2xs text-muted-foreground">
+                {path.worktreePath} ({path.reason.replace('_', ' ')})
               </li>
             ))}
           </ul>

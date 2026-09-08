@@ -106,6 +106,19 @@ session materializes; the repository slug stamped on each mount is what tells
 them apart. Until a project is materialized, agents may read its root but
 every write must land inside the container or a mounted project.
 
+A repository project can have several mounts in one session. Each mount has
+its own identity, worktree, current branch and pull request history. Switching
+changes the branch of one mount. Forking creates another mount from an explicit
+base and leaves the source intact. A raw git checkout records a mismatch and
+waits for an explicit switch or fork decision because the checkout itself does
+not reveal the user's intent.
+
+Unmounting detaches one mount without erasing its history. Safe cleanup removes
+the worktree but preserves its local branch. Dirty work, locks and active users
+of the directory refuse removal and remain tracked for later cleanup. The
+Overview groups sibling mounts by project and gives every row its own terminal,
+diff and request navigation.
+
 ### Activity as story
 
 A session records what happened to it as an ordered stream of events: the

@@ -29,6 +29,7 @@ const orphan = (name: string): OrphanWorktree => ({
   path: `/repo/.goodboy/worktrees/${name}`,
   name,
   sizeBytes: 1024,
+  isRegistered: false,
 });
 
 beforeEach(() => {

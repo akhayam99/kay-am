@@ -48,6 +48,7 @@ import type {
   TurnProviderOverride,
   SessionExternalTaskProvider,
   SessionExternalTask,
+  SessionMountView,
   SessionProjectMount,
   SessionEventKind,
   SessionEventPayload,
@@ -58,6 +59,11 @@ import type {
   WorkspaceProfile,
   IntegrationBinding,
   WorkspaceIntegrationProvider,
+  MountCleanupProposal,
+  MountId,
+  PrSeries,
+  PrSeriesMember,
+  PrSeriesView,
   ProjectScriptId,
   GhTokenStatus,
   PrMergeMethod,
@@ -89,7 +95,10 @@ import { createFileVersionsSlice } from './slices/file-versions';
 import { createSessionEventsSlice } from './slices/session-events';
 import { createAttachmentsSlice } from './slices/attachments';
 import { createGithubSlice } from './slices/github';
-import { createGitlabMrSlice } from './slices/gitlab-mr';
+import type { CreatePrInput } from './slices/github/createPrForSession';
+import type { RefreshPrOptions } from './slices/github/refreshMountPr';
+import { createGitlabMrSlice, initialGitlabMrState } from './slices/gitlab-mr';
+import type { CreateMrInput, MergeMrInput, RefreshMrOptions } from './slices/gitlab-mr';
 import {
   createBitbucketPrSlice,
   initialBitbucketPrState,
@@ -171,6 +180,34 @@ import type { AddProjectResult, ProjectAttachConflict } from './slices/projects/
 import type { AddProjectsResult } from './slices/projects/addProjects';
 import type { AdoptProjectResult } from './slices/projects/adoptProject';
 import { createProjectMountsSlice } from './slices/project-mounts';
+import { projectMountsInitialState } from './slices/project-mounts/state';
+import { createMountCleanupSlice, mountCleanupInitialState } from './slices/mount-cleanup';
+import { createPrSeriesSlice, prSeriesInitialState } from './slices/pr-series';
+import type {
+  CreatePrSeriesInput,
+  LoadPrSeriesInput,
+  SetPrSeriesMemberInput,
+} from './slices/pr-series';
+import type { ArchiveTaskOptions } from './slices/sessions/types';
+import type {
+  CleanupSessionMountsInput,
+  ProposeMountCleanupInput,
+  ResolveMountCleanupInput,
+  SessionCleanupKeyInput,
+  SessionCleanupOutcome,
+} from './slices/mount-cleanup';
+import type {
+  AttachMountInput,
+  ForkMountInput,
+  InspectMountResult,
+  MountKeyInput,
+  ResolveMountBranchInput,
+  SessionKeyInput,
+  SwitchMountInput,
+  UnmountMountInput,
+  UnmountMountResult,
+} from './slices/project-mounts/types';
+import type { OpenMountRequestInput } from './slices/project-mounts/openMountRequest';
 import { createPresenceSlice } from './slices/presence';
 import { createTurnSlice } from './slices/turn';
 import type { SendTurnResult } from './slices/turn/types';
@@ -218,6 +255,7 @@ type SaveScriptParams = {
 type RunScriptParams = {
   readonly sessionId: SessionId;
   readonly scriptId: ProjectScriptId;
+  readonly mountId?: MountId;
   readonly cols?: number;
   readonly rows?: number;
 };
@@ -395,6 +433,27 @@ type AppActions = {
     taskIdentifiers?: ReadonlyArray<string>;
   }): Promise<SessionProjectMount>;
   detachProject(input: { sessionId: SessionId; projectId: ProjectId }): Promise<void>;
+  loadSessionMounts(input: SessionKeyInput): Promise<ReadonlyArray<SessionMountView>>;
+  forkMount(input: ForkMountInput): Promise<SessionMountView>;
+  switchMount(input: SwitchMountInput): Promise<SessionMountView>;
+  attachMount(input: AttachMountInput): Promise<SessionMountView>;
+  unmountMount(input: UnmountMountInput): Promise<UnmountMountResult>;
+  inspectMount(input: MountKeyInput): Promise<InspectMountResult>;
+  recoverMountOperations(input: SessionKeyInput): Promise<number>;
+  resolveMountBranchMismatch(input: ResolveMountBranchInput): Promise<SessionMountView>;
+  setSessionActiveMount(input: MountKeyInput): Promise<void>;
+  openMountRequest(input: OpenMountRequestInput): Promise<void>;
+  cleanupSessionMounts(
+    input: CleanupSessionMountsInput,
+  ): Promise<ReadonlyArray<SessionCleanupOutcome>>;
+  proposeMountCleanup(input: ProposeMountCleanupInput): Promise<MountCleanupProposal | null>;
+  loadMountCleanupProposals(
+    input: SessionCleanupKeyInput,
+  ): Promise<ReadonlyArray<MountCleanupProposal>>;
+  resolveMountCleanup(input: ResolveMountCleanupInput): Promise<void>;
+  createPrSeries(input: CreatePrSeriesInput): Promise<PrSeries>;
+  setPrSeriesMember(input: SetPrSeriesMemberInput): Promise<PrSeriesMember>;
+  loadPrSeries(input: LoadPrSeriesInput): Promise<ReadonlyArray<PrSeriesView>>;
   linkSessionExternalTask(
     sessionId: SessionId,
     task: Omit<SessionExternalTask, 'sessionId'>,
@@ -409,7 +468,11 @@ type AppActions = {
     sessionId: SessionId,
     args: { branch: string; createNew: boolean },
   ): Promise<void>;
-  setSessionActiveProject(input: { sessionId: SessionId; projectId: ProjectId }): Promise<void>;
+  setSessionActiveProject(input: {
+    sessionId: SessionId;
+    projectId: ProjectId;
+    mountId?: MountId;
+  }): Promise<void>;
   reconcileSessionBranch(sessionId: SessionId, observedBranch: string): Promise<void>;
   amendSessionCommit(
     sessionId: SessionId,
@@ -640,7 +703,7 @@ type AppActions = {
   autoTitleSession(sessionId: SessionId, title: string): Promise<void>;
   deleteTask(sessionId: SessionId): Promise<void>;
   bulkDeleteTask(ids: ReadonlyArray<SessionId>): Promise<void>;
-  archiveTask(sessionId: SessionId): Promise<void>;
+  archiveTask(sessionId: SessionId, options?: ArchiveTaskOptions): Promise<void>;
   bulkArchiveTask(ids: ReadonlyArray<SessionId>): Promise<void>;
   unarchiveTask(sessionId: SessionId): Promise<void>;
   bulkUnarchiveTask(ids: ReadonlyArray<SessionId>): Promise<void>;
@@ -653,30 +716,21 @@ type AppActions = {
   refreshGithubStatus(): Promise<void>;
   setGithubPat(token: string): Promise<GhTokenStatus>;
   clearGithubToken(): Promise<void>;
-  refreshSessionPr(
-    sessionId: SessionId,
-    opts?: { force?: boolean; silent?: boolean; retries?: number },
-  ): Promise<void>;
+  refreshSessionPr(sessionId: SessionId, opts?: RefreshPrOptions): Promise<void>;
   refreshSessionPrDetail(
     sessionId: SessionId,
-    opts?: { force?: boolean; silent?: boolean; retries?: number },
+    opts?: { mountId?: MountId; force?: boolean; silent?: boolean; retries?: number },
   ): Promise<void>;
-  selectSessionPr(sessionId: SessionId, prNumber: number): Promise<void>;
+  selectSessionPr(sessionId: SessionId, prNumber: number, mountId?: MountId): Promise<void>;
   sweepGithub(opts?: { skipUnknownPr?: boolean }): void;
   pushSessionBranch(
     sessionId: SessionId,
   ): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: string }>;
-  createPrForSession(
-    sessionId: SessionId,
-    opts?: { title?: string; body?: string; base?: string; draft?: boolean },
-  ): Promise<void>;
+  createPrForSession(input: CreatePrInput): Promise<void>;
   markPrReady(sessionId: SessionId, prNumber?: number): Promise<void>;
   convertPrToDraft(sessionId: SessionId, prNumber?: number): Promise<void>;
   mergePr(sessionId: SessionId, prNumber?: number, method?: PrMergeMethod): Promise<void>;
-  refreshSessionMr(
-    sessionId: SessionId,
-    opts?: { force?: boolean; silent?: boolean },
-  ): Promise<void>;
+  refreshSessionMr(sessionId: SessionId, opts?: RefreshMrOptions): Promise<void>;
   refreshReviewPrs(workspaceId: WorkspaceId): Promise<void>;
   startPrReviewSession(workspaceId: WorkspaceId, pr: ReviewablePr): Promise<SessionId>;
   loadReviewDrafts(sessionId: SessionId): Promise<void>;
@@ -689,16 +743,17 @@ type AppActions = {
     markers: ReadonlyArray<ExtractedReviewComment>,
   ): Promise<void>;
   publishPrReview(sessionId: SessionId, opts: PublishPrReviewOpts): Promise<PublishPrReviewResult>;
-  createMrForSession(
-    sessionId: SessionId,
-    opts?: { title?: string; description?: string; targetBranch?: string; draft?: boolean },
-  ): Promise<void>;
-  mergeMrForSession(sessionId: SessionId): Promise<void>;
+  createMrForSession(input: CreateMrInput): Promise<void>;
+  mergeMrForSession(input: MergeMrInput): Promise<void>;
   refreshSessionBitbucketPr(
     sessionId: SessionId,
     opts?: RefreshSessionBitbucketPrOptions,
   ): Promise<void>;
-  selectSessionBitbucketPr(sessionId: SessionId, pullRequestId: number | null): Promise<void>;
+  selectSessionBitbucketPr(
+    sessionId: SessionId,
+    pullRequestId: number | null,
+    mountId?: MountId,
+  ): Promise<void>;
   approveBitbucketPr(params: BitbucketPrWriteParams): Promise<void>;
   unapproveBitbucketPr(params: BitbucketPrWriteParams): Promise<void>;
   requestBitbucketPrChanges(params: BitbucketPrWriteParams): Promise<void>;
@@ -920,6 +975,9 @@ export const initialState: AppState = {
   sessionWorktreeRecords: {},
   orphanWorktrees: {},
   sessionProjectMounts: {},
+  ...projectMountsInitialState,
+  ...mountCleanupInitialState,
+  ...prSeriesInitialState,
   sessionLanguageAnchor: {},
   sessionActiveProject: {},
   sessionBranches: {},
@@ -957,10 +1015,12 @@ export const initialState: AppState = {
   unreadWorkspaceIds: new Set<WorkspaceId>(),
   sessionPanelExpanded: {},
   githubStatus: null,
+  mountGithub: {},
+  mountSelectedPr: {},
   sessionGithub: {},
   sessionProjectPrs: {},
   sessionSelectedPrNumber: {},
-  sessionGitlabMr: {},
+  ...initialGitlabMrState,
   ...initialBitbucketPrState,
   ...initialSlackThreadsState,
   reviewPrs: {},
@@ -1043,6 +1103,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   ...createWorkspacesSlice(set, get),
   ...createProjectsSlice(set, get),
   ...createProjectMountsSlice(set, get),
+  ...createMountCleanupSlice(set, get),
+  ...createPrSeriesSlice(set, get),
   ...createPresenceSlice(set, get),
   ...createTurnSlice(set, get),
   ...createWorktreesSlice(set, get),

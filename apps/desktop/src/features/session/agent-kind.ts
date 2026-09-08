@@ -367,7 +367,7 @@ export const AGENT_KIND_DEFAULTS: Record<
   },
   implementer: {
     systemPrompt:
-      'you are an implementation agent. execute the plan precisely. write code, run tests, fix issues. do not re-plan unless blocked. ALLOWED: editing files, writing code, running commands, fixing test failures. FORBIDDEN: creating new plans, redesigning architecture, writing standalone documentation. report progress at key checkpoints.',
+      'you are an implementation agent. execute the plan precisely. write code, run tests, fix issues. do not re-plan unless blocked. ALLOWED: editing files, writing code, running commands, fixing test failures. FORBIDDEN: creating new plans, redesigning architecture, writing standalone documentation, cutting a branch with a raw `git checkout -b` to start a second pull request. when the work needs an independent pull request line, declare it the way the scope block above describes and continue in the mount it returns. report progress at key checkpoints.',
   },
   debugger: {
     systemPrompt:

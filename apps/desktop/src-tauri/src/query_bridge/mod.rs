@@ -1,8 +1,10 @@
 mod cli;
 mod dispatch;
 mod github;
+pub mod mount;
 pub mod project;
 pub mod protocol;
+mod series;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -10,8 +12,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 
 use protocol::{
-    QueryRequest, QueryResponse, BIN_ENV, SESSION_ENV, SOCKET_ENV, SOCKET_PREFIX, SOCKET_SUFFIX,
-    WORKSPACE_ENV,
+    QueryRequest, QueryResponse, BIN_ENV, MOUNT_ENV, RUN_ENV, SESSION_ENV, SOCKET_ENV,
+    SOCKET_PREFIX, SOCKET_SUFFIX, WORKSPACE_ENV,
 };
 
 pub(crate) use cli::dispatch as run_cli;
@@ -93,11 +95,30 @@ pub fn query_bridge_serving() -> bool {
     is_serving()
 }
 
+pub(crate) struct TurnBinding<'a> {
+    pub(crate) workspace_id: Option<&'a str>,
+    pub(crate) session_id: Option<&'a str>,
+    pub(crate) mount_id: Option<&'a str>,
+    pub(crate) run_id: Option<&'a str>,
+}
+
 pub(crate) fn apply_env(
     command: &mut Command,
     workspace_id: Option<&str>,
     session_id: Option<&str>,
 ) {
+    apply_turn_env(
+        command,
+        TurnBinding {
+            workspace_id,
+            session_id,
+            mount_id: None,
+            run_id: None,
+        },
+    );
+}
+
+pub(crate) fn apply_turn_env(command: &mut Command, binding: TurnBinding<'_>) {
     if !is_serving() {
         return;
     }
@@ -105,11 +126,17 @@ pub(crate) fn apply_env(
         return;
     };
     command.env(SOCKET_ENV, socket);
-    if let Some(workspace_id) = workspace_id {
+    if let Some(workspace_id) = binding.workspace_id {
         command.env(WORKSPACE_ENV, workspace_id);
     }
-    if let Some(session_id) = session_id {
+    if let Some(session_id) = binding.session_id {
         command.env(SESSION_ENV, session_id);
+    }
+    if let Some(mount_id) = binding.mount_id {
+        command.env(MOUNT_ENV, mount_id);
+    }
+    if let Some(run_id) = binding.run_id {
+        command.env(RUN_ENV, run_id);
     }
     if let Some(exe) = exe_path() {
         command.env(BIN_ENV, exe);
@@ -264,7 +291,7 @@ async fn answer(app: &tauri::AppHandle, line: &str) -> QueryResponse {
     };
     match dispatch::dispatch(app, &request).await {
         Ok(data) => QueryResponse::ok(data),
-        Err(error) => QueryResponse::failed(error),
+        Err(error) => QueryResponse::refused(error),
     }
 }
 

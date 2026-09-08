@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 pub const SOCKET_ENV: &str = "GOODBOY_QUERY_SOCKET";
 pub const WORKSPACE_ENV: &str = "GOODBOY_WORKSPACE_ID";
 pub const SESSION_ENV: &str = "GOODBOY_SESSION_ID";
+pub const MOUNT_ENV: &str = "GOODBOY_MOUNT_ID";
+pub const RUN_ENV: &str = "GOODBOY_RUN_ID";
 pub const LEGACY_SOCKET_FILE: &str = "query.sock";
 pub const SOCKET_PREFIX: &str = "query-";
 pub const SOCKET_SUFFIX: &str = ".sock";
@@ -21,6 +23,10 @@ pub struct QueryRequest {
     pub session_id: String,
     #[serde(default)]
     pub project: String,
+    #[serde(default)]
+    pub mount: String,
+    #[serde(default)]
+    pub run_id: String,
     pub provider: String,
     pub verb: String,
     #[serde(default)]
@@ -34,6 +40,66 @@ pub struct QueryResponse {
     pub data: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub candidates: Option<serde_json::Value>,
+}
+
+pub const AMBIGUOUS_MOUNT: &str = "ambiguous_mount";
+pub const MOUNT_UNAVAILABLE: &str = "mount_unavailable";
+pub const BRANCH_MISMATCH: &str = "branch_mismatch";
+pub const BRANCH_IN_USE: &str = "branch_in_use";
+pub const UNSAFE_CLEANUP: &str = "unsafe_cleanup";
+pub const OPERATION_PENDING: &str = "operation_pending";
+pub const REQUEST_CONFLICT: &str = "request_conflict";
+
+pub const ERROR_CODES: &[&str] = &[
+    AMBIGUOUS_MOUNT,
+    MOUNT_UNAVAILABLE,
+    BRANCH_MISMATCH,
+    BRANCH_IN_USE,
+    UNSAFE_CLEANUP,
+    OPERATION_PENDING,
+    REQUEST_CONFLICT,
+];
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BridgeError {
+    pub message: String,
+    pub code: Option<String>,
+    pub candidates: Option<serde_json::Value>,
+}
+
+impl BridgeError {
+    pub fn coded(code: &str, message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            code: Some(code.to_string()),
+            candidates: None,
+        }
+    }
+
+    pub fn with_candidates(mut self, candidates: serde_json::Value) -> Self {
+        self.candidates = Some(candidates);
+        self
+    }
+}
+
+impl From<String> for BridgeError {
+    fn from(message: String) -> Self {
+        Self {
+            message,
+            code: None,
+            candidates: None,
+        }
+    }
+}
+
+impl From<&str> for BridgeError {
+    fn from(message: &str) -> Self {
+        Self::from(message.to_string())
+    }
 }
 
 impl QueryResponse {
@@ -42,6 +108,8 @@ impl QueryResponse {
             ok: true,
             data: Some(data),
             error: None,
+            code: None,
+            candidates: None,
         }
     }
 
@@ -50,6 +118,18 @@ impl QueryResponse {
             ok: false,
             data: None,
             error: Some(error.into()),
+            code: None,
+            candidates: None,
+        }
+    }
+
+    pub fn refused(error: BridgeError) -> Self {
+        Self {
+            ok: false,
+            data: None,
+            error: Some(error.message),
+            code: error.code,
+            candidates: error.candidates,
         }
     }
 }
@@ -130,6 +210,119 @@ pub const CATALOG: &[VerbSpec] = &[
         params: &[req("name"), req("reason")],
         access: Access::Write,
         summary: "mount a workspace project into this session as a worktree and branch",
+    },
+    VerbSpec {
+        provider: "mount",
+        verb: "list",
+        params: &[],
+        access: Access::Read,
+        summary: "every mount of this session with its branch, path and lifecycle state",
+    },
+    VerbSpec {
+        provider: "mount",
+        verb: "inspect",
+        params: &[flag("size")],
+        access: Access::Read,
+        summary: "one mount with its head, its removal safety and, with --size, its disk usage",
+    },
+    VerbSpec {
+        provider: "mount",
+        verb: "fork",
+        params: &[
+            req("branch"),
+            req("reason"),
+            req("request-id"),
+            opt("base"),
+            flag("existing"),
+        ],
+        access: Access::Write,
+        summary:
+            "start a second line of work: a new mount and worktree, the source mount untouched",
+    },
+    VerbSpec {
+        provider: "mount",
+        verb: "switch",
+        params: &[
+            req("branch"),
+            req("reason"),
+            req("request-id"),
+            flag("create"),
+            flag("adopt-observed"),
+        ],
+        access: Access::Write,
+        summary: "move this mount to another branch, keeping earlier pull requests as history",
+    },
+    VerbSpec {
+        provider: "mount",
+        verb: "attach",
+        params: &[req("reason"), req("request-id")],
+        access: Access::Write,
+        summary: "give a detached mount a worktree again",
+    },
+    VerbSpec {
+        provider: "mount",
+        verb: "unmount",
+        params: &[req("reason"), req("request-id"), flag("keep")],
+        access: Access::Write,
+        summary: "detach a mount, removing its directory unless --keep",
+    },
+    VerbSpec {
+        provider: "mount",
+        verb: "activate",
+        params: &[req("request-id")],
+        access: Access::Write,
+        summary: "choose the mount the next turn works in",
+    },
+    VerbSpec {
+        provider: "mount",
+        verb: "resolve",
+        params: &[req("intent"), req("reason"), req("request-id")],
+        access: Access::Write,
+        summary: "settle a branch mismatch by declaring switch or fork",
+    },
+    VerbSpec {
+        provider: "mount",
+        verb: "operation",
+        params: &[req("request-id")],
+        access: Access::Read,
+        summary: "the recorded state of one mount request, for retries and timeouts",
+    },
+    VerbSpec {
+        provider: "series",
+        verb: "create",
+        params: &[
+            req("name"),
+            req("request-id"),
+            opt_num("total"),
+            opt("work-item"),
+            opt("work-item-url"),
+            opt("parent-provider"),
+            opt("parent-host"),
+            opt("parent-repo"),
+            opt_num("parent-number"),
+        ],
+        access: Access::Write,
+        summary: "group the pull requests of one split into an ordered series of this project",
+    },
+    VerbSpec {
+        provider: "series",
+        verb: "set-member",
+        params: &[
+            req("series"),
+            num("position"),
+            req("request-id"),
+            opt("label"),
+            flag("omitted"),
+        ],
+        access: Access::Write,
+        summary: "put a mount, or a planned placeholder, at one position of a series",
+    },
+    VerbSpec {
+        provider: "series",
+        verb: "list",
+        params: &[],
+        access: Access::Read,
+        summary: "every series of this session with its positions and their requests",
     },
     VerbSpec {
         provider: "linear",
@@ -300,6 +493,20 @@ pub const CATALOG: &[VerbSpec] = &[
         summary: "push this session's mount branch to origin",
     },
     VerbSpec {
+        provider: "github",
+        verb: "pr-create",
+        params: &[
+            req("title"),
+            req("body"),
+            req("request-id"),
+            opt("base"),
+            opt("reference-mode"),
+            flag("ready"),
+        ],
+        access: Access::Write,
+        summary: "open a pull request from a mount branch, draft unless --ready",
+    },
+    VerbSpec {
         provider: "gitlab",
         verb: "issues-assigned",
         params: &[],
@@ -422,6 +629,20 @@ pub const CATALOG: &[VerbSpec] = &[
         params: &[req("project"), num("iid")],
         access: Access::Write,
         summary: "merge a merge request",
+    },
+    VerbSpec {
+        provider: "gitlab",
+        verb: "mr-create",
+        params: &[
+            req("title"),
+            req("body"),
+            req("request-id"),
+            opt("base"),
+            opt("reference-mode"),
+            flag("ready"),
+        ],
+        access: Access::Write,
+        summary: "open a merge request from a mount branch, draft unless --ready",
     },
     VerbSpec {
         provider: "jira",
@@ -621,6 +842,8 @@ pub const CATALOG: &[VerbSpec] = &[
     },
 ];
 
+pub const UNIVERSAL_FLAGS: &[&str] = &["workspace", "project", "mount", "json"];
+
 pub fn spec_for(provider: &str, verb: &str) -> Option<&'static VerbSpec> {
     CATALOG
         .iter()
@@ -644,8 +867,21 @@ pub fn providers() -> Vec<&'static str> {
     seen
 }
 
+pub fn requires_explicit_mount(provider: &str, verb: &str) -> bool {
+    if provider == "mount" {
+        return !matches!(verb, "list" | "operation");
+    }
+    matches!(
+        (provider, verb),
+        ("github", "pr-create") | ("gitlab", "mr-create")
+    )
+}
+
 pub fn usage(spec: &VerbSpec) -> String {
     let mut line = format!("{} {} {}", INVOCATION, spec.provider, spec.verb);
+    if requires_explicit_mount(spec.provider, spec.verb) {
+        line.push_str(" --mount <id>");
+    }
     for param in spec.params {
         let body = match param.kind {
             ParamKind::Flag => format!("--{}", param.name),
@@ -764,10 +1000,8 @@ pub fn parse_argv(argv: &[String]) -> Result<ArgvOutcome, String> {
     }
 
     for (name, _) in &flags {
-        let known = spec.params.iter().any(|param| param.name == *name)
-            || *name == "workspace"
-            || *name == "project"
-            || *name == "json";
+        let known =
+            spec.params.iter().any(|param| param.name == *name) || UNIVERSAL_FLAGS.contains(name);
         if !known {
             return Err(format!("unknown option --{}\nusage: {}", name, usage(spec)));
         }
@@ -829,6 +1063,9 @@ pub fn help_text(provider: Option<&str>) -> String {
             ));
             lines.push(
                 "scope a verb to one project of the workspace with --project <name>".to_string(),
+            );
+            lines.push(
+                "name the mount a verb acts on with --mount <id>, from `mount list`".to_string(),
             );
         }
     }
@@ -1101,6 +1338,8 @@ mod tests {
             providers(),
             vec![
                 "project",
+                "mount",
+                "series",
                 "linear",
                 "sentry",
                 "github",
@@ -1110,6 +1349,111 @@ mod tests {
                 "slack"
             ]
         );
+    }
+
+    #[test]
+    fn the_mount_override_is_accepted_on_every_verb_and_never_reaches_the_arguments() {
+        let argv = vec![
+            "github".to_string(),
+            "pr".to_string(),
+            "--mount".to_string(),
+            "mount-9".to_string(),
+        ];
+
+        let ArgvOutcome::Parsed(parsed) = parse_argv(&argv).expect("parsed") else {
+            panic!("expected a parsed command");
+        };
+
+        assert!(parsed.args.get("mount").is_none());
+        assert!(UNIVERSAL_FLAGS.contains(&"mount"));
+    }
+
+    #[test]
+    fn every_mount_verb_is_registered_under_the_access_its_effect_needs() {
+        let read = ["list", "inspect", "operation"];
+        let write = ["fork", "switch", "attach", "unmount", "activate", "resolve"];
+
+        for verb in read {
+            let spec = spec_for("mount", verb).unwrap_or_else(|| panic!("{} missing", verb));
+            assert_eq!(spec.access, Access::Read, "{} must be read access", verb);
+        }
+        for verb in write {
+            let spec = spec_for("mount", verb).unwrap_or_else(|| panic!("{} missing", verb));
+            assert_eq!(spec.access, Access::Write, "{} must be write access", verb);
+        }
+        assert_eq!(specs_for_provider("mount").len(), read.len() + write.len());
+    }
+
+    #[test]
+    fn a_mount_mutation_asks_for_a_reason_and_a_request_id() {
+        for verb in ["fork", "switch", "attach", "unmount", "resolve"] {
+            let spec = spec_for("mount", verb).expect("a spec");
+            for name in ["reason", "request-id"] {
+                assert!(
+                    spec.params
+                        .iter()
+                        .any(|param| param.name == name && param.required),
+                    "mount {} must require --{}",
+                    verb,
+                    name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_verb_that_acts_on_one_named_mount_says_so_in_its_usage_line() {
+        let fork = usage(spec_for("mount", "fork").expect("a spec"));
+        let list = usage(spec_for("mount", "list").expect("a spec"));
+
+        assert!(fork.contains("mount fork --mount <id>"));
+        assert!(!list.contains("--mount"));
+        assert!(requires_explicit_mount("github", "pr-create"));
+        assert!(!requires_explicit_mount("github", "pr"));
+    }
+
+    #[test]
+    fn a_request_creating_a_review_request_takes_the_same_arguments_on_every_host() {
+        let github = spec_for("github", "pr-create").expect("a spec");
+        let gitlab = spec_for("gitlab", "mr-create").expect("a spec");
+
+        let names =
+            |spec: &VerbSpec| -> Vec<&str> { spec.params.iter().map(|param| param.name).collect() };
+        assert_eq!(names(github), names(gitlab));
+        assert_eq!(
+            names(github),
+            vec![
+                "title",
+                "body",
+                "request-id",
+                "base",
+                "reference-mode",
+                "ready"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_mount_verb_never_declares_the_universal_mount_flag_as_its_own_argument() {
+        for spec in CATALOG {
+            assert!(
+                !spec.params.iter().any(|param| param.name == "mount"),
+                "{} {} shadows the universal --mount flag",
+                spec.provider,
+                spec.verb
+            );
+        }
+    }
+
+    #[test]
+    fn every_advertised_error_code_is_spelled_once() {
+        let mut seen: Vec<&str> = Vec::new();
+        for code in ERROR_CODES {
+            assert!(!seen.contains(code), "duplicate error code: {}", code);
+            seen.push(code);
+        }
+        assert!(ERROR_CODES.contains(&AMBIGUOUS_MOUNT));
+        assert!(ERROR_CODES.contains(&REQUEST_CONFLICT));
     }
 
     #[test]
@@ -1133,6 +1477,7 @@ mod tests {
             "pr-merge",
             "issue-comment-create",
             "push",
+            "pr-create",
         ];
 
         for verb in read {

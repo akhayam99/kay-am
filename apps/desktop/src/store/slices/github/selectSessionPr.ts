@@ -1,51 +1,58 @@
-import type { SessionId } from '@goodboy/types';
-import { selectActiveProjectPrs } from './activeProjectPrs';
+import type { MountId, SessionId } from '@goodboy/types';
+import { requestIdentityEquals } from '../project-mounts/mountRequests';
+import { applyMountGithub } from './mountGithub';
+import { githubRequestIdentity } from './mountPrLink';
+import { resolveSessionPrFetch } from './resolveSessionPrFetch';
 import type { GetFn, SetFn } from './types';
 
 export const selectSessionPr = (set: SetFn, get: GetFn) => {
-  return async (sessionId: SessionId, prNumber: number): Promise<void> => {
-    const prs = selectActiveProjectPrs({ state: get(), sessionId });
-    const pr = prs.find((candidate) => candidate.number === prNumber);
-    if (pr == null) {
+  return async (sessionId: SessionId, prNumber: number, mountId?: MountId): Promise<void> => {
+    const target = resolveSessionPrFetch({
+      state: get(),
+      sessionId,
+      ...(mountId === undefined ? {} : { mountId }),
+    });
+    if (target === null) {
       return;
     }
-    const current = get().sessionGithub[sessionId];
-    if (current == null) {
+    const selectedMountId = target.mount.id;
+    const current = get().mountGithub?.[selectedMountId];
+    if (current === undefined || current.repository === null) {
       return;
     }
-    const selectedNumber = get().sessionSelectedPrNumber[sessionId] ?? null;
-    const selectedPr =
-      selectedNumber != null
-        ? (prs.find((candidate) => candidate.number === selectedNumber) ?? null)
-        : null;
-    const currentNumber = selectedPr?.number ?? current.pr?.number ?? null;
-    if (currentNumber === prNumber) {
+    const repository = current.repository;
+    const pr = current.prs.find((candidate) => candidate.number === prNumber);
+    if (pr === undefined) {
       return;
     }
-    const nextSelectedNumber = current.pr?.number === prNumber ? null : prNumber;
+    const identity = githubRequestIdentity({ repository, pr });
+    const previous = get().mountSelectedPr?.[selectedMountId] ?? null;
+    const displayed =
+      previous ??
+      (current.pr === null ? null : githubRequestIdentity({ repository, pr: current.pr }));
+    if (displayed !== null && requestIdentityEquals({ identity, candidate: displayed })) {
+      return;
+    }
     set((state) => {
-      const existing = state.sessionGithub[sessionId];
-      if (existing == null) {
+      const existing = state.mountGithub?.[selectedMountId];
+      if (existing === undefined) {
         return state;
       }
-      return {
-        sessionSelectedPrNumber: {
-          ...state.sessionSelectedPrNumber,
-          [sessionId]: nextSelectedNumber,
+      return applyMountGithub({
+        state,
+        sessionId,
+        mountId: selectedMountId,
+        github: {
+          ...existing,
+          linkedIssues: [],
+          detail: null,
+          detailFetchedAt: null,
+          detailLoading: false,
+          detailError: null,
         },
-        sessionGithub: {
-          ...state.sessionGithub,
-          [sessionId]: {
-            ...existing,
-            linkedIssues: [],
-            detail: null,
-            detailFetchedAt: null,
-            detailLoading: false,
-            detailError: null,
-          },
-        },
-      };
+        selected: identity,
+      });
     });
-    await get().refreshSessionPrDetail(sessionId, { force: true });
+    await get().refreshSessionPrDetail(sessionId, { force: true, mountId: selectedMountId });
   };
 };

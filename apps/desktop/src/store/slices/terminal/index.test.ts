@@ -14,6 +14,7 @@ import type {
   PlanConsumptionId,
   PlanId,
   PlanWithCount,
+  MountId,
   ProjectId,
   ProviderRunId,
   Session,
@@ -598,9 +599,31 @@ describe('store contract', () => {
       expect(store.getState().activeTerminalTab[SESSION_ID]).toBe(`${SESSION_ID}::t1`);
     });
 
-    it('addTerminalTab tags the tab with the active project of the session', async () => {
+    it('addTerminalTab tags the tab with the mount that owns the cwd', async () => {
       const store = await getStore();
-      store.setState({ sessionActiveProject: { [SESSION_ID]: 'api' as ProjectId } });
+      store.setState({
+        sessionActiveProject: { [SESSION_ID]: 'api' as ProjectId },
+        sessionProjectMounts: {
+          [SESSION_ID]: [
+            {
+              mountId: 'mount-web' as MountId,
+              projectId: 'web' as ProjectId,
+              mountName: 'WEB',
+              worktreePath: '/worktrees/web',
+              repoRoot: '/repo/web',
+              branch: 'feat/web',
+            },
+            {
+              mountId: 'mount-api' as MountId,
+              projectId: 'api' as ProjectId,
+              mountName: 'API',
+              worktreePath: '/worktrees/api',
+              repoRoot: '/repo/api',
+              branch: 'feat/api',
+            },
+          ],
+        },
+      });
 
       const id = store.getState().addTerminalTab(SESSION_ID, '/worktrees/api');
 
@@ -608,6 +631,7 @@ describe('store contract', () => {
         (candidate) => candidate.id === id,
       );
       expect(tab?.projectId).toBe('api');
+      expect(tab?.mountId).toBe('mount-api');
     });
 
     it('addTerminalTab leaves the project undefined when the session has no active project', async () => {
@@ -625,6 +649,7 @@ describe('store contract', () => {
         sessionProjectMounts: {
           [SESSION_ID]: [
             {
+              mountId: 'mount-api' as MountId,
               projectId: 'api' as ProjectId,
               mountName: 'API',
               worktreePath: '/worktrees/api',
@@ -643,6 +668,7 @@ describe('store contract', () => {
 
       const tabs = store.getState().terminalTabs[SESSION_ID] ?? [];
       expect(tabs.map((tab) => tab.projectId)).toEqual(['api', undefined]);
+      expect(tabs.map((tab) => tab.mountId)).toEqual(['mount-api', undefined]);
       expect(tabs.map((tab) => tab.cwd)).toEqual(['/worktrees/api', '/somewhere/else']);
     });
 

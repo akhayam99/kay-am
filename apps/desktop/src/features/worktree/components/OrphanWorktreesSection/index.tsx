@@ -43,7 +43,7 @@ export const OrphanWorktreesSection = ({ workspaceId }: Props) => {
       <section className="flex flex-col gap-4">
         <SectionHeader
           label="Session folders left on disk"
-          hint="Git no longer tracks these and no session claims them. Deleting them frees the space."
+          hint="No session and no retained record claims these. Deleting them frees the space. Branches are never touched."
         />
         <div className="flex flex-col gap-1.5">
           {orphans.map((orphan) => (
@@ -53,7 +53,9 @@ export const OrphanWorktreesSection = ({ workspaceId }: Props) => {
             >
               <div className="flex min-w-0 flex-col">
                 <span className="truncate font-mono text-xs text-foreground">{orphan.name}</span>
-                <span className="truncate text-2xs text-muted-foreground">{orphan.path}</span>
+                <span className="truncate text-2xs text-muted-foreground">
+                  {orphan.isRegistered ? `${orphan.path} (still registered with git)` : orphan.path}
+                </span>
               </div>
               <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">
                 {formatDiskSize({ bytes: orphan.sizeBytes })}

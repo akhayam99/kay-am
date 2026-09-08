@@ -1,4 +1,4 @@
-import type { ProjectId, SessionId, SessionProjectMount } from '@goodboy/types';
+import type { MountId, ProjectId, SessionId, SessionProjectMount } from '@goodboy/types';
 import {
   insertSessionWorktree,
   listWorktreesForSession,
@@ -13,6 +13,7 @@ import { tauriGhRunner } from '../../../features/github/github';
 import { createSessionDir, createWorktree } from '../../../features/worktree/worktree';
 import { DEFAULT_BRANCH_PREFIX } from '../../../features/settings/settings';
 import { consumeAdoptionSeed, materializationSeedFor } from './materializationSeeds';
+import { mountDirName } from '../project-mounts/mountDirName';
 import { deriveBranchName } from './deriveBranchName';
 import type { GetFn, SetFn } from './types';
 
@@ -111,11 +112,17 @@ export const materializeProject = (set: SetFn, get: GetFn) => {
     );
     if (persistedRow !== undefined) {
       const persistedMount: SessionProjectMount = {
+        mountId: persistedRow.id as MountId,
+        sessionId,
         projectId,
         mountName: persistedRow.mountName ?? project.name,
         worktreePath: persistedRow.worktreePath,
+        lastWorktreePath: persistedRow.worktreePath,
         repoRoot: project.rootPath,
         branch: persistedRow.branch,
+        baseBranch: project.baseBranch ?? null,
+        parallelIndex: persistedRow.parallelIndex,
+        isAttached: true,
       };
       set((state) => ({
         sessionProjectMounts: {
@@ -173,6 +180,7 @@ export const materializeProject = (set: SetFn, get: GetFn) => {
     const hasRepoMount = rows.some((row) => row.projectId !== undefined && row.branch !== '');
     const adoptedBranch = hasRepoMount ? undefined : seed?.existingBranch;
     const adoptedFallbackRef = adoptedBranch === undefined ? undefined : seed?.fallbackRef;
+    const mountId = crypto.randomUUID() as MountId;
     let created;
     try {
       created =
@@ -182,7 +190,7 @@ export const materializeProject = (set: SetFn, get: GetFn) => {
               branchPrefix: prefix,
               slug: sessionSlug,
               parentDir: `${project.rootPath}/.goodboy/worktrees`,
-              ...(adoptedBranch === undefined ? { dirName: sessionSlug } : {}),
+              dirName: mountDirName({ sessionSlug, mountId }),
               baseBranch: project.baseBranch ?? undefined,
               ...(adoptedBranch !== undefined ? { existingBranch: adoptedBranch } : {}),
               ...(adoptedFallbackRef !== undefined ? { fallbackRef: adoptedFallbackRef } : {}),
@@ -207,7 +215,7 @@ export const materializeProject = (set: SetFn, get: GetFn) => {
     }
     const nextParallelIndex = rows.reduce((max, row) => Math.max(max, row.parallelIndex), 0) + 1;
     const record: SessionWorktree = {
-      id: crypto.randomUUID(),
+      id: mountId,
       sessionId,
       worktreePath: created.worktreePath,
       branch: created.branchName,
@@ -236,11 +244,19 @@ export const materializeProject = (set: SetFn, get: GetFn) => {
       },
     });
     const mount: SessionProjectMount = {
+      mountId,
+      sessionId,
       projectId,
       mountName: project.name,
       worktreePath: created.worktreePath,
+      lastWorktreePath: created.worktreePath,
       repoRoot: project.rootPath,
       branch: created.branchName,
+      baseBranch: project.baseBranch ?? null,
+      parallelIndex: nextParallelIndex,
+      isAttached: true,
+      diskState: 'present',
+      revision: 0,
     };
     set((state) => ({
       sessionProjectMounts: {
@@ -257,7 +273,10 @@ export const materializeProject = (set: SetFn, get: GetFn) => {
         record,
       }),
       ...(isFirstMount
-        ? { sessionBranches: { ...state.sessionBranches, [sessionId]: created.branchName } }
+        ? {
+            sessionBranches: { ...state.sessionBranches, [sessionId]: created.branchName },
+            sessionActiveMount: { ...state.sessionActiveMount, [sessionId]: mountId },
+          }
         : {}),
       ...(isFirstActiveProject
         ? {

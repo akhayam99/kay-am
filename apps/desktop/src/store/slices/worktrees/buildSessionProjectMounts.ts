@@ -1,5 +1,5 @@
 import type { SessionWorktree } from '@goodboy/db';
-import type { Project, SessionProjectMount } from '@goodboy/types';
+import type { MountId, Project, SessionProjectMount } from '@goodboy/types';
 
 type Params = {
   readonly projects: ReadonlyArray<Project>;
@@ -20,11 +20,17 @@ export const buildSessionProjectMounts = ({
     }
     return [
       {
+        mountId: row.id as MountId,
+        sessionId: row.sessionId,
         projectId: row.projectId,
         mountName: row.mountName ?? project.name,
         worktreePath: row.worktreePath,
+        lastWorktreePath: row.worktreePath,
         repoRoot: project.rootPath,
         branch: row.branch,
+        baseBranch: project.baseBranch ?? null,
+        parallelIndex: row.parallelIndex,
+        isAttached: true,
       },
     ];
   });

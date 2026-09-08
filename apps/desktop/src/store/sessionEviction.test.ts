@@ -1,4 +1,11 @@
-import type { AgentId, SessionId, WorkflowRunId, WorkspaceId } from '@goodboy/types';
+import type {
+  AgentId,
+  MountId,
+  SessionId,
+  SessionMountView,
+  WorkflowRunId,
+  WorkspaceId,
+} from '@goodboy/types';
 import { describe, expect, it } from 'vitest';
 import { buildStoryAgent, buildStorySession } from './storyHarness';
 import { initialState } from './store';
@@ -18,18 +25,24 @@ const OTHER_AGENT_ID = 'agent-2' as never as AgentId;
 const RUN_ID = 'run-1' as never as WorkflowRunId;
 const OTHER_RUN_ID = 'run-2' as never as WorkflowRunId;
 const WORKSPACE_ID = 'workspace-1' as never as WorkspaceId;
+const MOUNT_ID = 'mount-1' as never as MountId;
+const OTHER_MOUNT_ID = 'mount-2' as never as MountId;
 
 const targetByScope = {
   session: SESSION_ID,
   agent: AGENT_ID,
   workflowRun: RUN_ID,
+  mount: MOUNT_ID,
 } satisfies Record<EvictionScope, string>;
 
 const otherByScope = {
   session: OTHER_SESSION_ID,
   agent: OTHER_AGENT_ID,
   workflowRun: OTHER_RUN_ID,
+  mount: OTHER_MOUNT_ID,
 } satisfies Record<EvictionScope, string>;
+
+const mountView = (id: MountId): SessionMountView => ({ id }) as SessionMountView;
 
 const entryFor = ({ value, id }: { readonly value: unknown; readonly id: string }): unknown => {
   if (value instanceof Set) {
@@ -75,6 +88,10 @@ const buildPopulatedState = (): AppState => {
     sessionPhaseRuns: {
       [SESSION_ID]: [buildStoryAgent({ id: AGENT_ID, sessionId: SESSION_ID })],
       [OTHER_SESSION_ID]: [buildStoryAgent({ id: OTHER_AGENT_ID, sessionId: OTHER_SESSION_ID })],
+    },
+    sessionMounts: {
+      [SESSION_ID]: [mountView(MOUNT_ID)],
+      [OTHER_SESSION_ID]: [mountView(OTHER_MOUNT_ID)],
     },
   };
 };

@@ -1,6 +1,6 @@
 import type { AppState } from './types';
 
-export type EvictionScope = 'session' | 'agent' | 'workflowRun';
+export type EvictionScope = 'session' | 'agent' | 'workflowRun' | 'mount';
 export type EvictionMode = 'archive' | 'delete';
 
 export type SessionEvictionRule = {
@@ -17,10 +17,17 @@ export const SESSION_EVICTION = [
   { key: 'sessionWorktrees', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionWorktreeRecords', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionProjectMounts', keyedBy: 'session', evictOn: 'archive' },
+  { key: 'sessionMounts', keyedBy: 'session', evictOn: 'archive' },
+  { key: 'mountBranchObservations', keyedBy: 'session', evictOn: 'archive' },
+  { key: 'sessionActiveMount', keyedBy: 'session', evictOn: 'archive' },
+  { key: 'mountCleanupProposals', keyedBy: 'session', evictOn: 'delete' },
+  { key: 'prSeries', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionLanguageAnchor', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionActiveProject', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionBranches', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionPhaseRuns', keyedBy: 'session', evictOn: 'archive' },
+  { key: 'mountGithub', keyedBy: 'mount', evictOn: 'archive' },
+  { key: 'mountSelectedPr', keyedBy: 'mount', evictOn: 'archive' },
   { key: 'sessionGithub', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionProjectPrs', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionSelectedPrNumber', keyedBy: 'session', evictOn: 'archive' },
@@ -34,10 +41,12 @@ export const SESSION_EVICTION = [
   { key: 'slotHistoryCounts', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionSlotsLoad', keyedBy: 'session', evictOn: 'archive' },
   { key: 'summarizerStatus', keyedBy: 'session', evictOn: 'archive' },
+  { key: 'mountGitlabMr', keyedBy: 'mount', evictOn: 'archive' },
   { key: 'sessionGitlabMr', keyedBy: 'session', evictOn: 'archive' },
+  { key: 'mountBitbucketPr', keyedBy: 'mount', evictOn: 'archive' },
+  { key: 'mountSelectedBitbucketPr', keyedBy: 'mount', evictOn: 'archive' },
   { key: 'sessionBitbucketPr', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionBitbucketRepo', keyedBy: 'session', evictOn: 'archive' },
-  { key: 'sessionSelectedBitbucketPrId', keyedBy: 'session', evictOn: 'archive' },
   { key: 'reviewDrafts', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionPlans', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionAnsweredQuestions', keyedBy: 'session', evictOn: 'archive' },
@@ -164,6 +173,7 @@ export const NON_SESSION_STATE_KEYS = [
   'slackUsers',
   'slackThreadHeads',
   'slackThreads',
+  'retainedWorktreePaths',
 ] as const satisfies ReadonlyArray<keyof AppState>;
 
 type RegisteredKey =

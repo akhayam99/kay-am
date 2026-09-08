@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { formatError } from '@goodboy/ui';
-import type { ProjectId, SessionId } from '@goodboy/types';
+import type { MountId, ProjectId, SessionId } from '@goodboy/types';
 import {
   deferredMaterializeMessage,
   materializationGate,
@@ -23,6 +23,7 @@ type MaterializeRequest = {
 type MaterializeOutcome = {
   readonly ok: boolean;
   readonly error?: string;
+  readonly mountId?: MountId;
   readonly mountPath?: string;
   readonly branch?: string;
 };
@@ -59,7 +60,12 @@ export const executeMaterializeRequest = async (
       projectId: request.projectId,
       reason: request.reason,
     });
-    return { ok: true, mountPath: mount.worktreePath, branch: mount.branch };
+    return {
+      ok: true,
+      ...(mount.mountId === undefined ? {} : { mountId: mount.mountId }),
+      mountPath: mount.worktreePath,
+      branch: mount.branch,
+    };
   } catch (error) {
     return { ok: false, error: formatError(error) };
   }
@@ -77,6 +83,7 @@ export const listenProjectMaterializeRequests = async (): Promise<UnlistenFn> =>
           id: request.id,
           ok: result.ok,
           error: result.error ?? null,
+          mountId: result.mountId ?? null,
           mountPath: result.mountPath ?? null,
           branch: result.branch ?? null,
         }),

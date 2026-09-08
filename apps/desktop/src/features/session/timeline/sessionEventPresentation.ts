@@ -14,6 +14,7 @@ type PullRequestEventKind = Extract<SessionEventKind, `pr_${string}`>;
 
 const PR_EVENT_STATE = {
   pr_created: 'open',
+  pr_discovered: 'open',
   pr_ready: 'open',
   pr_approved: 'approved',
   pr_merged: 'merged',
@@ -27,6 +28,7 @@ const EMPHASIS: Record<SessionEventKind, SessionEventEmphasis> = {
   issue_linked: 'plain',
   issue_unlinked: 'muted',
   pr_created: PULL_REQUEST_PRESENTATION[PR_EVENT_STATE.pr_created].tone,
+  pr_discovered: PULL_REQUEST_PRESENTATION[PR_EVENT_STATE.pr_discovered].tone,
   pr_ready: PULL_REQUEST_PRESENTATION[PR_EVENT_STATE.pr_ready].tone,
   pr_approved: PULL_REQUEST_PRESENTATION[PR_EVENT_STATE.pr_approved].tone,
   pr_merged: PULL_REQUEST_PRESENTATION[PR_EVENT_STATE.pr_merged].tone,
@@ -62,6 +64,10 @@ const GLYPH: Record<SessionEventKind, SessionEventGlyph> = {
   issue_linked: { icon: Link2, tone: 'neutral', label: 'Issue' },
   issue_unlinked: { icon: Link2Off, tone: 'neutral', label: 'Issue' },
   pr_created: { ...PULL_REQUEST_PRESENTATION[PR_EVENT_STATE.pr_created], label: 'Pull request' },
+  pr_discovered: {
+    ...PULL_REQUEST_PRESENTATION[PR_EVENT_STATE.pr_discovered],
+    label: 'Pull request',
+  },
   pr_ready: { ...PULL_REQUEST_PRESENTATION[PR_EVENT_STATE.pr_ready], label: 'Pull request' },
   pr_approved: { ...PULL_REQUEST_PRESENTATION[PR_EVENT_STATE.pr_approved], label: 'Pull request' },
   pr_merged: { ...PULL_REQUEST_PRESENTATION[PR_EVENT_STATE.pr_merged], label: 'Pull request' },
@@ -166,6 +172,14 @@ export const sessionEventLabel = ({ event }: TitleParams): ReadonlyArray<Timelin
         ? [{ kind: 'text', text: 'Opened ' }, prSegment({ payload })]
         : [
             { kind: 'text', text: 'Opened ' },
+            prSegment({ payload }),
+            { kind: 'text', text: `: ${payload.title}` },
+          ];
+    case 'pr_discovered':
+      return payload?.title == null
+        ? [{ kind: 'text', text: 'Found ' }, prSegment({ payload })]
+        : [
+            { kind: 'text', text: 'Found ' },
             prSegment({ payload }),
             { kind: 'text', text: `: ${payload.title}` },
           ];

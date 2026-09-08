@@ -51,6 +51,47 @@ export type FastForwardResult = {
 
 export type WorktreeDiffScope = 'unstaged' | 'staged' | 'all';
 
+export type WorktreeInspection =
+  | { readonly kind: 'missing'; readonly path: string }
+  | {
+      readonly kind: 'registered';
+      readonly path: string;
+      readonly isMain: boolean;
+      readonly isLocked: boolean;
+      readonly lockReason: string | null;
+    }
+  | { readonly kind: 'foreign-directory'; readonly path: string }
+  | { readonly kind: 'repository-unavailable'; readonly path: string };
+
+export type WorktreeRemovalReason =
+  | 'repository-unavailable'
+  | 'main-checkout'
+  | 'unexpected-directory'
+  | 'different-repository'
+  | 'locked'
+  | 'status-unavailable'
+  | 'staged-changes'
+  | 'unstaged-changes'
+  | 'untracked-files'
+  | 'unmerged-conflicts'
+  | 'operation-in-progress';
+
+export type WorktreeRemovalResult =
+  | { readonly kind: 'removed'; readonly path: string }
+  | { readonly kind: 'missing'; readonly path: string }
+  | {
+      readonly kind: 'kept';
+      readonly path: string;
+      readonly reasons: ReadonlyArray<WorktreeRemovalReason>;
+    };
+
+export type WorktreeDirectorySize = {
+  readonly path: string;
+  readonly sizeBytes: number | null;
+  readonly isPartial: boolean;
+  readonly exists: boolean;
+};
+
 export type DiffView =
   | { readonly kind: 'working'; readonly scope: WorktreeDiffScope }
   | { readonly kind: 'commit'; readonly sha: string }

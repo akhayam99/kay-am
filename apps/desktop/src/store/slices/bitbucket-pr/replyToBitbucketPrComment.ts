@@ -7,6 +7,7 @@ import type { BitbucketPrReplyParams, GetFn, SetFn } from './types';
 export const replyToBitbucketPrComment = (set: SetFn, get: GetFn) => {
   return async ({
     sessionId,
+    mountId,
     repo,
     pullRequestId,
     parentCommentId,
@@ -21,6 +22,8 @@ export const replyToBitbucketPrComment = (set: SetFn, get: GetFn) => {
       set,
       get,
       sessionId,
+      ...(mountId === undefined ? {} : { mountId }),
+      repo,
       pullRequestId,
       write: async () => {
         await bitbucketReplyToPullRequestComment({

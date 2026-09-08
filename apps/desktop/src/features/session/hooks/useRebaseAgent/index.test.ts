@@ -59,7 +59,7 @@ vi.mock('../../components/AgentSpawnConfig/taskModelAgentSpawnConfig', () => ({
   }),
 }));
 
-import { useRebaseAgent } from './index';
+import { rebasePromptFor, useRebaseAgent } from './index';
 
 const sessionId = 'session-1' as SessionId;
 
@@ -237,6 +237,24 @@ describe('useRebaseAgent', () => {
         agentId: 'agent-web',
       },
     });
+  });
+
+  it('carries the mount into the canned push command and the working instruction', () => {
+    const prompt = rebasePromptFor({
+      baseBranch: 'main',
+      mountId: 'mount-a' as never,
+      worktreePath: '/wt/app',
+    });
+
+    expect(prompt).toContain('This rebase belongs to mount mount-a at /wt/app.');
+    expect(prompt).toContain('query github push --mount mount-a --force-with-lease');
+  });
+
+  it('leaves the push command unscoped when the session has no mount to name', () => {
+    const prompt = rebasePromptFor({ baseBranch: 'main', mountId: null, worktreePath: null });
+
+    expect(prompt).toContain('query github push --force-with-lease');
+    expect(prompt).not.toContain('--mount');
   });
 
   it('records nothing when the spawn fails', async () => {

@@ -2,10 +2,10 @@ import type { IsoDateTime, Session, SessionId } from '@goodboy/types';
 import { archiveSession as archiveSessionInDb } from '@goodboy/db';
 import { tauriDatabase } from '../../../shared/lib/db';
 import { dropPendingTurnEvents } from '../transcripts/buffer';
-import type { GetFn, SetFn } from './types';
+import type { ArchiveTaskOptions, GetFn, SetFn } from './types';
 
 export const archiveTask = (set: SetFn, get: GetFn) => {
-  return async (sessionId: SessionId) => {
+  return async (sessionId: SessionId, options: ArchiveTaskOptions = {}): Promise<void> => {
     const prev = get().sessions.find((s) => s.id === sessionId);
     if (!prev) {
       return;
@@ -38,6 +38,14 @@ export const archiveTask = (set: SetFn, get: GetFn) => {
       });
       throw err;
     }
+
+    await get()
+      .cleanupSessionMounts({
+        sessionId,
+        reason: 'archive',
+        keepDirectories: options.cleanWorktrees !== true,
+      })
+      .catch(() => undefined);
 
     if (isCurrent) {
       return;

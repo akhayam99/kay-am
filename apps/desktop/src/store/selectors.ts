@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { worktreeChangedFiles } from '../features/worktree/worktree';
+import { readMockMountDiffStat } from './mock-data';
 import { selectNonResolverStandaloneAgents, type AgentKind } from '../features/session/agent-kind';
 import type {
   Agent,
@@ -38,6 +39,7 @@ import {
   sortAndGroupSessions,
   type GroupedSessions,
 } from './slices/session-view';
+import { summarizeMountWork } from './slices/project-mounts/mountCompletion';
 import { agentHasUnread } from './slices/agents/agentHasUnread';
 import { sessionPrFetchState } from './slices/github/sessionPrFetchState';
 import { isSessionPrFetchable } from './slices/github/resolveSessionPrFetch';
@@ -170,7 +172,13 @@ type StageInfoState = Pick<
   | 'sessionBranches'
   | 'sessionWorktrees'
   | 'sessionProjectMounts'
+  | 'sessionMounts'
+  | 'sessionActiveMount'
   | 'sessionActiveProject'
+  | 'mountGithub'
+  | 'mountGitlabMr'
+  | 'mountBitbucketPr'
+  | 'prSeries'
   | 'sessionGithub'
   | 'sessionGitlabMr'
   | 'sessionOpenQuestions'
@@ -219,10 +227,13 @@ function stageInfoOf(state: StageInfoState, session: Session): SessionStageInfo 
     pr: state.sessionGithub[sessionId]?.pr ?? null,
     mr: state.sessionGitlabMr[sessionId]?.mr ?? null,
   });
+  const work = summarizeMountWork({ state, sessionId });
   return deriveSessionStage({
     session,
     pr: request.pr,
     requestLabel: request.requestLabel,
+    remainingWork: work.remaining,
+    remainingReason: work.reason,
     prFetchState: sessionPrFetchState({
       githubAvailable: state.githubStatus?.available ?? null,
       fetchedAt: state.sessionGithub[sessionId]?.fetchedAt ?? null,
@@ -295,6 +306,24 @@ export const useSortedGroupedSessions = (
   const sessionActiveProject = useAppStore((s) =>
     needsStage ? s.sessionActiveProject : (EMPTY_GITHUB_STATE as typeof s.sessionActiveProject),
   );
+  const sessionMounts = useAppStore((s) =>
+    needsStage ? s.sessionMounts : (EMPTY_GITHUB_STATE as typeof s.sessionMounts),
+  );
+  const sessionActiveMount = useAppStore((s) =>
+    needsStage ? s.sessionActiveMount : (EMPTY_GITHUB_STATE as typeof s.sessionActiveMount),
+  );
+  const mountGithub = useAppStore((s) =>
+    needsStage ? s.mountGithub : (EMPTY_GITHUB_STATE as typeof s.mountGithub),
+  );
+  const mountGitlabMr = useAppStore((s) =>
+    needsStage ? s.mountGitlabMr : (EMPTY_GITHUB_STATE as typeof s.mountGitlabMr),
+  );
+  const mountBitbucketPr = useAppStore((s) =>
+    needsStage ? s.mountBitbucketPr : (EMPTY_GITHUB_STATE as typeof s.mountBitbucketPr),
+  );
+  const prSeries = useAppStore((s) =>
+    needsStage ? s.prSeries : (EMPTY_GITHUB_STATE as typeof s.prSeries),
+  );
   return useMemo(() => {
     const partial: StageInfoState = {
       sessions: filteredSessions,
@@ -303,7 +332,13 @@ export const useSortedGroupedSessions = (
       sessionBranches,
       sessionWorktrees,
       sessionProjectMounts,
+      sessionMounts,
+      sessionActiveMount,
       sessionActiveProject,
+      mountGithub,
+      mountGitlabMr,
+      mountBitbucketPr,
+      prSeries,
       sessionGithub,
       sessionGitlabMr,
       sessionOpenQuestions,
@@ -329,6 +364,8 @@ export const useSortedGroupedSessions = (
     sessionBranches,
     sessionWorktrees,
     sessionProjectMounts,
+    sessionMounts,
+    sessionActiveMount,
     sessionActiveProject,
     sessionGithub,
     sessionGitlabMr,
@@ -389,6 +426,12 @@ export const useStageGroupedSessions = (
   const sessionWorktrees = useAppStore((s) => s.sessionWorktrees);
   const sessionProjectMounts = useAppStore((s) => s.sessionProjectMounts);
   const sessionActiveProject = useAppStore((s) => s.sessionActiveProject);
+  const sessionMounts = useAppStore((s) => s.sessionMounts);
+  const sessionActiveMount = useAppStore((s) => s.sessionActiveMount);
+  const mountGithub = useAppStore((s) => s.mountGithub);
+  const mountGitlabMr = useAppStore((s) => s.mountGitlabMr);
+  const mountBitbucketPr = useAppStore((s) => s.mountBitbucketPr);
+  const prSeries = useAppStore((s) => s.prSeries);
   const previousRef = useRef<ReadonlyArray<GroupedSessions> | null>(null);
   const grouped = useMemo(() => {
     const partial: StageInfoState = {
@@ -398,7 +441,13 @@ export const useStageGroupedSessions = (
       sessionBranches,
       sessionWorktrees,
       sessionProjectMounts,
+      sessionMounts,
+      sessionActiveMount,
       sessionActiveProject,
+      mountGithub,
+      mountGitlabMr,
+      mountBitbucketPr,
+      prSeries,
       sessionGithub,
       sessionGitlabMr,
       sessionOpenQuestions,
@@ -426,6 +475,8 @@ export const useStageGroupedSessions = (
     sessionBranches,
     sessionWorktrees,
     sessionProjectMounts,
+    sessionMounts,
+    sessionActiveMount,
     sessionActiveProject,
     sessionGithub,
     sessionGitlabMr,
@@ -724,6 +775,10 @@ const loadMountDiffStat = ({
   worktreePath,
   revision,
 }: LoadMountDiffStatParams): Promise<MountDiffStat> => {
+  const mocked = readMockMountDiffStat(worktreePath);
+  if (mocked !== null) {
+    return Promise.resolve(mocked);
+  }
   const key = `${revision}@${worktreePath}`;
   const pending = inFlightMountDiffStats.get(key);
   if (pending !== undefined) {
