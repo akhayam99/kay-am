@@ -5,6 +5,7 @@ import { LensEmptyState } from '@goodboy/ui';
 import { useAppStore } from '../../../../../store';
 import { DiffViewerPane } from '../../../../permissions/components/DiffViewerDialog';
 import { DIFF_VIEWER_PANE_COPY } from '../../../../permissions/components/DiffViewerDialog/diffViewerPaneCopy';
+import { ResolveReturnPill } from '../../../../resolve/components/ResolveReturnPill';
 import { DiffMountSwitcher } from './DiffMountSwitcher';
 import { FileVersionsPane } from './FileVersionsPane';
 import { PaneShell } from '../../../../../shared/components/PaneShell';
@@ -107,6 +108,7 @@ export const FilesPane = ({
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
+      <ResolveReturnPill sessionId={sessionId} />
       {mounts.length > 1 ? (
         <DiffMountSwitcher
           sessionId={sessionId}

@@ -9,11 +9,13 @@ import {
 import { quarantineWorktreeCandidate } from '../../../features/worktree/worktree';
 import { tauriDatabase } from '../../../shared/lib/db';
 import { withCandidateLock } from './candidateLock';
+import { loadResolveCandidatesInto } from './loadResolveCandidatesInto';
 import type { CandidateCaptureParams, SliceParams } from './types';
 
 type Params = SliceParams & CandidateCaptureParams;
 
 export const captureResolveCandidate = async ({
+  set,
   sessionId,
   attemptId,
   threadIds,
@@ -41,6 +43,7 @@ export const captureResolveCandidate = async ({
   });
   if (quarantined.sha === null || covered.length === 0) {
     await setResolveCandidateState({ db, candidateId: candidate.id, state: 'discarded' });
+    await loadResolveCandidatesInto({ set, sessionId });
     return null;
   }
   for (const { item } of covered) {
@@ -59,5 +62,6 @@ export const captureResolveCandidate = async ({
     candidateId: candidate.id,
     candidateSha: quarantined.sha,
   });
+  await loadResolveCandidatesInto({ set, sessionId });
   return ready ? quarantined.sha : null;
 };

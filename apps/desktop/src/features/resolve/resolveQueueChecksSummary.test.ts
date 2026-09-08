@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { FileDiff, PrCheckRun } from '@goodboy/types';
-import { buildResolveQueueChecksByThreadId, resolveQueueChecksSummary } from './resolveQueueChecksSummary';
+import {
+  buildResolveQueueChecksByThreadId,
+  resolveQueueChecksSummary,
+} from './resolveQueueChecksSummary';
 
 const checks: ReadonlyArray<PrCheckRun> = [
   { name: 'build', conclusion: 'success', detailsUrl: null, durationMs: null },

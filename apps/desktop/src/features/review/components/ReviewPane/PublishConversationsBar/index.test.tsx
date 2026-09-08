@@ -46,7 +46,7 @@ const renderBar = (overrides: Partial<Parameters<typeof PublishConversationsBar>
       selectedCount={0}
       selectedReadyCount={0}
       draftCount={0}
-      mode="conversations"
+      mode="queue"
       preview={null}
       titleByThreadId={
         new Map([
@@ -86,7 +86,7 @@ describe('PublishConversationsBar', () => {
         selectedCount={2}
         selectedReadyCount={2}
         draftCount={0}
-        mode="conversations"
+        mode="queue"
         preview={null}
         titleByThreadId={new Map()}
         staleNote={null}
@@ -201,7 +201,7 @@ describe('PublishConversationsBar', () => {
     const checks = screen.getByRole('button', { name: 'Checks' });
     expect(checks.getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(checks);
-    expect(onSelectMode).toHaveBeenCalledWith('conversations');
+    expect(onSelectMode).toHaveBeenCalledWith('queue');
   });
 
   it('never renders a dialog', () => {

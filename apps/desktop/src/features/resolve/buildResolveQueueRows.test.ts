@@ -114,7 +114,9 @@ describe('buildResolveQueueRows', () => {
       entries,
       attempts: [],
       deliveryReceipts: [],
-      comments: [comment({ threadId: 't1', createdAt: '2026-01-01T00:00:00.000Z', body: 'Fix this' })],
+      comments: [
+        comment({ threadId: 't1', createdAt: '2026-01-01T00:00:00.000Z', body: 'Fix this' }),
+      ],
     });
     expect(rows).toHaveLength(1);
     expect(rows[0]?.status).toBe('for_you');
@@ -128,8 +130,14 @@ describe('buildResolveQueueRows', () => {
 
   it('marks threads that share an active attempt as covered by each other', () => {
     const entries: ReadonlyArray<ResolveQueueItemWithThread> = [
-      { item: item({ threadId: 't1' }), thread: thread({ threadId: 't1', activeAttemptId: attempt.id }) },
-      { item: item({ threadId: 't2' }), thread: thread({ threadId: 't2', activeAttemptId: attempt.id }) },
+      {
+        item: item({ threadId: 't1' }),
+        thread: thread({ threadId: 't1', activeAttemptId: attempt.id }),
+      },
+      {
+        item: item({ threadId: 't2' }),
+        thread: thread({ threadId: 't2', activeAttemptId: attempt.id }),
+      },
     ];
     const rows = buildResolveQueueRows({
       entries,
@@ -146,7 +154,12 @@ describe('buildResolveQueueRows', () => {
     const entries: ReadonlyArray<ResolveQueueItemWithThread> = [
       { item: item({ threadId: 't1' }), thread: thread({ threadId: 't1' }) },
     ];
-    const rows = buildResolveQueueRows({ entries, attempts: [], deliveryReceipts: [], comments: [] });
+    const rows = buildResolveQueueRows({
+      entries,
+      attempts: [],
+      deliveryReceipts: [],
+      comments: [],
+    });
     expect(rows[0]?.reviewerNote).toBeNull();
   });
 });

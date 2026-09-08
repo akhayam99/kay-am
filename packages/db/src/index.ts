@@ -380,6 +380,11 @@ export {
   finalizeResolveCandidateIntegration,
 } from './queries/resolve-candidate';
 export {
+  insertResolveCheckRun,
+  listResolveCheckRuns,
+  listResolveCheckRunsForCandidate,
+} from './queries/resolve-check-run';
+export {
   insertResolvePublication,
   setResolvePublicationPhase,
   listActiveResolvePublications,

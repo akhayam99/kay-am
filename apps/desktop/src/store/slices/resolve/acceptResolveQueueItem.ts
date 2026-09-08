@@ -9,6 +9,7 @@ import type { ResolveQueueItemWithThread } from '@goodboy/types';
 import { integrateWorktreeCandidate } from '../../../features/worktree/worktree';
 import { tauriDatabase } from '../../../shared/lib/db';
 import { withCandidateLock } from './candidateLock';
+import { loadResolveCandidatesInto } from './loadResolveCandidatesInto';
 import { loadResolveQueueItemsInto } from './loadResolveQueueItemsInto';
 import {
   UNCAPTURED_WORK_ON_BRANCH,
@@ -114,4 +115,5 @@ export const acceptResolveQueueItem = async ({
     approvals,
   });
   await loadResolveQueueItemsInto({ set, sessionId });
+  await loadResolveCandidatesInto({ set, sessionId });
 };

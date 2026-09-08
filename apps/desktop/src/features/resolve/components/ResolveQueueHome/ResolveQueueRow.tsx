@@ -1,5 +1,9 @@
 import { Button, Chip, SelectableRow, tintClasses } from '@goodboy/ui';
-import { RESOLVE_QUEUE_STATUS_LABEL, acceptFixLabel, coversSeveralSentence } from '../../resolveQueueCopy';
+import {
+  RESOLVE_QUEUE_STATUS_LABEL,
+  acceptFixLabel,
+  coversSeveralSentence,
+} from '../../resolveQueueCopy';
 import type { ResolveQueueRow as QueueRow } from '../../buildResolveQueueRows';
 import { BADGE_TONE_BY_STATUS } from './statusTone';
 
@@ -35,7 +39,12 @@ export const ResolveQueueRow = ({
           <span className="min-w-0 flex-1 truncate text-sm text-foreground">
             {reviewerNote?.body ?? 'No reviewer comment on this thread'}
           </span>
-          <Chip size="3xs" bordered={false} tone={tone} label={RESOLVE_QUEUE_STATUS_LABEL[status]} />
+          <Chip
+            size="3xs"
+            bordered={false}
+            tone={tone}
+            label={RESOLVE_QUEUE_STATUS_LABEL[status]}
+          />
         </div>
         <div className="flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
           {reviewerNote?.author != null && <span className="truncate">{reviewerNote.author}</span>}
@@ -68,7 +77,9 @@ export const ResolveQueueRow = ({
             {acceptFixLabel({ coveredCount })}
           </Button>
           {acceptSummary != null && (
-            <span className={`truncate text-2xs ${tintClasses('success').text}`}>{acceptSummary}</span>
+            <span className={`truncate text-2xs ${tintClasses('success').text}`}>
+              {acceptSummary}
+            </span>
           )}
         </div>
       )}

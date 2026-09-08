@@ -19,6 +19,7 @@ export type ResolveQueueReviewerNote = {
   readonly createdAtMs: number;
   readonly location: string | null;
   readonly path: string | null;
+  readonly line: number | null;
 };
 
 export type ResolveQueueRow = {
@@ -56,6 +57,7 @@ const reviewerNoteByThreadId = ({
       createdAtMs: Date.parse(thread.head.createdAt),
       location: prCommentLocation({ comment: thread.head }),
       path: thread.head.path ?? null,
+      line: thread.head.line ?? null,
     });
   }
   return map;

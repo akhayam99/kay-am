@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Divider, Eyebrow, PANE_RHYTHM, ScrollFade, cn } from '@goodboy/ui';
-import { BackToConversationsButton } from './BackToConversationsButton';
+import { BackToQueueButton } from './BackToQueueButton';
 
 type Props = {
   readonly label: string;
@@ -16,7 +16,7 @@ export const ModeShell = ({ label, onBack, actions, measure = 'reading', childre
       className={cn('flex shrink-0 items-center justify-between gap-2', PANE_RHYTHM.rail.header)}
     >
       <div className="flex min-w-0 items-center gap-2">
-        {onBack !== null && <BackToConversationsButton onClick={onBack} />}
+        {onBack !== null && <BackToQueueButton onClick={onBack} />}
         <Eyebrow label={label} muted />
       </div>
       {actions}

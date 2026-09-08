@@ -91,6 +91,8 @@ import type {
   FocusedExternalTask,
   LensHistory,
   LensKind,
+  ResolveDiffReturn,
+  ResolveQueueView,
   ReviewLensIntent,
   SessionCreation,
   SessionStudio,
@@ -370,6 +372,8 @@ export type AppState = AppSliceState & {
   readonly focusedWorkflowRunId: Readonly<Record<SessionId, string | null>>;
   readonly diffFocus: Readonly<Record<SessionId, DiffFocus | null>>;
   readonly diffMountPath: Readonly<Record<SessionId, string | null>>;
+  readonly resolveQueueView: Readonly<Record<SessionId, ResolveQueueView>>;
+  readonly resolveDiffReturn: Readonly<Record<SessionId, ResolveDiffReturn | null>>;
   readonly sessionCreations: Readonly<Record<SessionId, ReadonlyArray<SessionCreation>>>;
   readonly sessionStudio: Readonly<Record<SessionId, SessionStudio | null>>;
   readonly focusedPlanId: Readonly<Record<SessionId, PlanId | null>>;

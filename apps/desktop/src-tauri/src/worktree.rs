@@ -1987,6 +1987,102 @@ fn worktree_diff_commit_blocking(
 }
 
 #[tauri::command]
+pub async fn worktree_diff_range(
+    worktree_path: String,
+    base: String,
+    head: String,
+) -> Result<String, WorktreeError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        worktree_diff_range_blocking(worktree_path, base, head)
+    })
+    .await
+    .map_err(|e| WorktreeError::Io(std::io::Error::other(e.to_string())))?
+}
+
+fn worktree_diff_range_blocking(
+    worktree_path: String,
+    base: String,
+    head: String,
+) -> Result<String, WorktreeError> {
+    let p = Path::new(&worktree_path);
+    if !p.exists() {
+        return Err(WorktreeError::RepoNotFound(worktree_path));
+    }
+    let from = resolve_commit(p, base.trim())?;
+    let to = resolve_commit(p, head.trim())?;
+    git(p, &["diff", &from, &to])
+}
+
+#[tauri::command]
+pub async fn worktree_scratch_add(
+    worktree_path: String,
+    sha: String,
+    slug: String,
+) -> Result<String, WorktreeError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        worktree_scratch_add_blocking(worktree_path, sha, slug)
+    })
+    .await
+    .map_err(|e| WorktreeError::Io(std::io::Error::other(e.to_string())))?
+}
+
+fn scratch_path_of(slug: &str) -> PathBuf {
+    std::env::temp_dir().join(format!("goodboy-check-{}", sanitize_slug(slug)))
+}
+
+fn discard_scratch(cwd: &Path, path: &str) {
+    let _ = git(cwd, &["worktree", "remove", "--force", path]);
+    if Path::new(path).exists() {
+        let _ = std::fs::remove_dir_all(path);
+    }
+    let _ = git(cwd, &["worktree", "prune"]);
+}
+
+fn worktree_scratch_add_blocking(
+    worktree_path: String,
+    sha: String,
+    slug: String,
+) -> Result<String, WorktreeError> {
+    let p = Path::new(&worktree_path);
+    if !p.exists() {
+        return Err(WorktreeError::RepoNotFound(worktree_path));
+    }
+    let commit = resolve_commit(p, sha.trim())?;
+    let dir = scratch_path_of(&slug);
+    let dir_path = dir.to_string_lossy().to_string();
+    discard_scratch(p, &dir_path);
+    git(
+        p,
+        &["worktree", "add", "--detach", "--quiet", &dir_path, &commit],
+    )?;
+    Ok(dir_path)
+}
+
+#[tauri::command]
+pub async fn worktree_scratch_remove(
+    worktree_path: String,
+    scratch_path: String,
+) -> Result<(), WorktreeError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        worktree_scratch_remove_blocking(worktree_path, scratch_path)
+    })
+    .await
+    .map_err(|e| WorktreeError::Io(std::io::Error::other(e.to_string())))?
+}
+
+fn worktree_scratch_remove_blocking(
+    worktree_path: String,
+    scratch_path: String,
+) -> Result<(), WorktreeError> {
+    let p = Path::new(&worktree_path);
+    if !p.exists() {
+        return Err(WorktreeError::RepoNotFound(worktree_path));
+    }
+    discard_scratch(p, &scratch_path);
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn worktree_diff_working(
     worktree_path: String,
     scope: String,
