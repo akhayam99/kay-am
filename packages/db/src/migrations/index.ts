@@ -5,6 +5,7 @@ import { m143DropPendingResolutions } from './m143-drop-pending-resolutions';
 import { m144SessionMountLifecycle } from './m144-session-mount-lifecycle';
 import { m145SessionEventPrDiscovered } from './m145-session-event-pr-discovered';
 import { m146PrSeries } from './m146-pr-series';
+import { m147ResolveQueueItems } from './m147-resolve-queue-items';
 import { m001Initial } from './m001-initial';
 import { m002TelemetryKind } from './m002-telemetry-kind';
 import { m003SessionProvider } from './m003-session-provider';
@@ -297,4 +298,5 @@ export const migrations: ReadonlyArray<Migration> = [
   { version: 144, sql: m144SessionMountLifecycle },
   { version: 145, sql: m145SessionEventPrDiscovered },
   { version: 146, sql: m146PrSeries },
+  { version: 147, sql: m147ResolveQueueItems },
 ];

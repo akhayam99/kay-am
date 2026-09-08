@@ -47,6 +47,30 @@ export type ResolveAttempt = Readonly<{
   createdAt: number;
 }>;
 
+export type ResolveQueueApprovalState = 'none' | 'accepted' | 'deferred';
+
+export type ResolveQueueItem = Readonly<{
+  id: string;
+  sessionId: SessionId;
+  threadId: string;
+  generation: number;
+  reopenedFromItemId: string | null;
+  candidateRevision: number;
+  approvalState: ResolveQueueApprovalState;
+  approvedRevision: number | null;
+  approvedReplyHash: string | null;
+  deferredAt: number | null;
+  deliveredAt: number | null;
+  supersededAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}>;
+
+export type ResolveQueueItemWithThread = Readonly<{
+  item: ResolveQueueItem;
+  thread: ResolveThread;
+}>;
+
 export type ResolvePublicationPhase =
   | 'previewed'
   | 'confirmed'

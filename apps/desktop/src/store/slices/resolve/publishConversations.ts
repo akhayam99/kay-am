@@ -1,7 +1,9 @@
 import {
   listResolvePublicationThreads,
   listResolvePublicationsForSession,
+  listResolveQueueItems,
   listResolveThreads,
+  markResolveQueueItemDelivered,
   setResolvePublicationPhase,
   upsertResolvePublicationThread,
 } from '@goodboy/db';
@@ -45,6 +47,33 @@ export type PublishConversationsResult =
     };
 
 const UNCERTAIN = /timeout|timed out|etimedout|econnreset|network|socket hang up/i;
+
+type MarkDeliveredParams = {
+  readonly sessionId: PublishParams['sessionId'];
+  readonly thread: ResolvePublicationThread;
+};
+
+const markDelivered = async ({ sessionId, thread }: MarkDeliveredParams): Promise<void> => {
+  const items = await listResolveQueueItems({ db: tauriDatabase, sessionId });
+  const match = items.find(
+    ({ item }) =>
+      item.threadId === thread.threadId &&
+      item.approvalState === 'accepted' &&
+      item.approvedRevision === thread.revision,
+  );
+  if (match === undefined) {
+    throw new Error('Published resolve item no longer has a valid approval');
+  }
+  const delivered = await markResolveQueueItemDelivered({
+    db: tauriDatabase,
+    sessionId,
+    itemId: match.item.id,
+    deliveredAt: Date.now(),
+  });
+  if (!delivered) {
+    throw new Error('Published resolve item could not be marked delivered');
+  }
+};
 
 const isSnapshotChecked = ({
   publication,
@@ -268,6 +297,7 @@ export const publishConversations = async ({
             if (current.resolvePhase === 'skipped') {
               if (reply.posted) {
                 commented += 1;
+                await markDelivered({ sessionId, thread: { ...current, ...reply } });
               }
               continue;
             }
@@ -277,6 +307,7 @@ export const publishConversations = async ({
               threadId: thread.threadId,
               frozen: { ...current, replyPhase: reply.posted ? 'posted' : current.replyPhase },
             });
+            await markDelivered({ sessionId, thread: current });
             resolved += 1;
           } catch (err) {
             failed += 1;

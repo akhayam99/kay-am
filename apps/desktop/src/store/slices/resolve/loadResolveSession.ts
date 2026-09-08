@@ -1,4 +1,9 @@
-import { listResolveAttempts, listResolveThreads, upsertResolveThread } from '@goodboy/db';
+import {
+  listResolveAttempts,
+  listResolveQueueItems,
+  listResolveThreads,
+  upsertResolveThread,
+} from '@goodboy/db';
 import { tauriDatabase } from '../../../shared/lib/db';
 import { drainResolveQueue } from './drainResolveQueue';
 import { reconcileResolveAttempts } from './reconcileResolveAttempts';
@@ -43,6 +48,7 @@ export const loadResolveSession = async ({ set, get, sessionId }: Params): Promi
     });
   }
   const attempts = await listResolveAttempts({ db: tauriDatabase, sessionId });
+  const queueItems = await listResolveQueueItems({ db: tauriDatabase, sessionId });
   projectResolveRows({
     set,
     get,
@@ -50,6 +56,12 @@ export const loadResolveSession = async ({ set, get, sessionId }: Params): Promi
     rows: await listResolveThreads({ db: tauriDatabase, sessionId }),
     attempts,
   });
+  set((state) => ({
+    sessionResolveQueueItems: {
+      ...state.sessionResolveQueueItems,
+      [sessionId]: queueItems,
+    },
+  }));
   await loadPublicationsInto({ set, sessionId });
   await drainResolveQueue({ set, get, sessionId });
 };

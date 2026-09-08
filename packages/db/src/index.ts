@@ -351,6 +351,15 @@ export {
 
 export { listResolveThreads, upsertResolveThread } from './queries/resolve-thread';
 export {
+  insertResolveQueueItem,
+  listResolveQueueItems,
+  setResolveQueueItemApproval,
+  deferResolveQueueItem,
+  undeferResolveQueueItem,
+  markResolveQueueItemDelivered,
+  reopenResolveQueueItem,
+} from './queries/resolve-queue-item';
+export {
   listResolveAttempts,
   listActiveResolveAttempts,
   insertResolveAttempt,

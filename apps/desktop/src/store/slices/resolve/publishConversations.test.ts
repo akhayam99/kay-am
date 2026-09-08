@@ -4,7 +4,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStore } from 'zustand/vanilla';
+import {
+  insertResolveQueueItem,
+  listResolveThreads,
+  setResolveQueueItemApproval,
+} from '@goodboy/db';
 import type { ProjectId, SessionId, WorkspaceId } from '@goodboy/types';
+import { tauriDatabase } from '../../../shared/lib/db';
 import { createResolveSlice } from './index';
 import { resolveInitialState } from './state';
 import type { GetFn, SetFn } from './types';
@@ -296,8 +302,53 @@ type SeedParams = {
   readonly reply: string;
 };
 
-const seedFixRow = async ({ actions, sessionId = SESSION_ID, threadId, shas, reply }: SeedParams) =>
-  actions.updateResolveThread({
+type ApproveParams = { readonly sessionId: SessionId; readonly threadId: string };
+
+const approveThread = async ({ sessionId, threadId }: ApproveParams): Promise<void> => {
+  const row = (await listResolveThreads({ db: tauriDatabase, sessionId })).find(
+    (candidate) => candidate.threadId === threadId,
+  );
+  if (row === undefined) {
+    throw new Error('Resolve thread was not seeded');
+  }
+  const now = Date.now();
+  const itemId = `item-${sessionId}-${threadId}`;
+  await insertResolveQueueItem({
+    db: tauriDatabase,
+    item: {
+      id: itemId,
+      sessionId,
+      threadId,
+      generation: 0,
+      reopenedFromItemId: null,
+      candidateRevision: row.revision,
+      approvalState: 'none',
+      approvedRevision: null,
+      approvedReplyHash: null,
+      deferredAt: null,
+      deliveredAt: null,
+      supersededAt: null,
+      createdAt: now,
+      updatedAt: now,
+    },
+  });
+  await setResolveQueueItemApproval({
+    db: tauriDatabase,
+    sessionId,
+    itemId,
+    revision: row.revision,
+    replyHash: 'test',
+  });
+};
+
+const seedFixRow = async ({
+  actions,
+  sessionId = SESSION_ID,
+  threadId,
+  shas,
+  reply,
+}: SeedParams): Promise<void> => {
+  await actions.updateResolveThread({
     sessionId,
     threadId,
     prNumber: 248,
@@ -308,19 +359,23 @@ const seedFixRow = async ({ actions, sessionId = SESSION_ID, threadId, shas, rep
       replyDraft: reply,
     },
   });
+  await approveThread({ sessionId, threadId });
+};
 
 const seedAnswerRow = async ({
   actions,
   sessionId = SESSION_ID,
   threadId,
   reply,
-}: Omit<SeedParams, 'shas'>) =>
-  actions.updateResolveThread({
+}: Omit<SeedParams, 'shas'>): Promise<void> => {
+  await actions.updateResolveThread({
     sessionId,
     threadId,
     prNumber: 248,
     patch: { state: 'answered', disposition: 'reply', replyDraft: reply },
   });
+  await approveThread({ sessionId, threadId });
+};
 
 beforeEach(async () => {
   const db = (await import('@goodboy/db')) as unknown as {
@@ -529,7 +584,7 @@ describe('publishConversations over a real git repository', () => {
     });
   });
 
-  it('reconciles an uncertain reply against the pull request instead of posting it twice', async () => {
+  it('requires renewed approval after an uncertain publication advances the revision', async () => {
     const { actions, get, store } = makeStore();
     await seedAnswerRow({ actions, threadId: 'PRRT_1', reply: 'Already handled elsewhere' });
     h.run.mockImplementation(async (args) => {
@@ -566,14 +621,8 @@ describe('publishConversations over a real git repository', () => {
     });
 
     const retry = await actions.retryPublication({ sessionId: SESSION_ID });
-    expect(retry.publicationId).not.toBeNull();
-    const result = await actions.publishConversations({
-      sessionId: SESSION_ID,
-      publicationId: retry.publicationId ?? '',
-    });
-
-    expect(result).toMatchObject({ kind: 'done', failed: 0, resolved: 1 });
-    expect(get().sessionResolveThreads[SESSION_ID]?.[0]?.state).toBe('closed');
+    expect(retry.publicationId).toBeNull();
+    expect(retry.excluded).toEqual([{ threadId: 'PRRT_1', reason: 'not_ready' }]);
   });
 
   it('resumes a publication that already pushed without pushing a second time', async () => {

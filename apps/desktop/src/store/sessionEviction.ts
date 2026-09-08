@@ -12,6 +12,7 @@ export type SessionEvictionRule = {
 export const SESSION_EVICTION = [
   { key: 'sessionResolveThreads', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionResolveAttempts', keyedBy: 'session', evictOn: 'archive' },
+  { key: 'sessionResolveQueueItems', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionResolvePublications', keyedBy: 'session', evictOn: 'archive' },
   { key: 'activePublicationPreview', keyedBy: 'session', evictOn: 'archive' },
   { key: 'sessionWorktrees', keyedBy: 'session', evictOn: 'archive' },

@@ -12,6 +12,11 @@ import type { GetFn, SetFn } from '../../slice-types';
 export type { GetFn, SetFn } from '../../slice-types';
 export type SliceParams = { readonly set: SetFn; readonly get: GetFn };
 export type SessionParams = { readonly sessionId: SessionId };
+export type ItemParams = SessionParams & { readonly itemId: string };
+export type ItemRevisionParams = ItemParams & {
+  readonly revision: number;
+  readonly reply: string;
+};
 export type TurnParams = SessionParams & {
   readonly agent: Agent;
   readonly assistantText: string;
@@ -69,6 +74,10 @@ export type PublishParams = SessionParams & {
 };
 
 export type ResolveActions = {
+  readonly acceptResolveQueueItem: (params: ItemRevisionParams) => Promise<void>;
+  readonly deferResolveQueueItem: (params: ItemParams) => Promise<void>;
+  readonly takeUpResolveQueueItem: (params: ItemParams) => Promise<void>;
+  readonly reopenResolveQueueItem: (params: Omit<ItemRevisionParams, 'reply'>) => Promise<void>;
   readonly preparePublication: (
     params: PreparePublicationParams,
   ) => Promise<ResolvePublicationPreview>;

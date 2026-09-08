@@ -12,6 +12,10 @@ import { recordResolvePhase } from './recordResolvePhase';
 import { reconcileResolveDrains } from './reconcileResolveDrains';
 import { updateResolveThreads } from './updateResolveThreads';
 import { updateResolveThread } from './updateResolveThread';
+import { acceptResolveQueueItem } from './acceptResolveQueueItem';
+import { deferResolveQueueItem } from './deferResolveQueueItem';
+import { reopenResolveQueueItem } from './reopenResolveQueueItem';
+import { takeUpResolveQueueItem } from './takeUpResolveQueueItem';
 import type {
   ResolveActions,
   BatchUpdateParams,
@@ -26,6 +30,8 @@ import type {
   TurnParams,
   UpdateParams,
   WorktreeDrainParams,
+  ItemParams,
+  ItemRevisionParams,
 } from './types';
 
 export const createResolveSlice = ({ set, get }: SliceParams): ResolveActions => {
@@ -37,6 +43,14 @@ export const createResolveSlice = ({ set, get }: SliceParams): ResolveActions =>
     return next;
   };
   return {
+    acceptResolveQueueItem: (params: ItemRevisionParams) =>
+      serialize({ run: () => acceptResolveQueueItem({ set, get, ...params }) }),
+    deferResolveQueueItem: (params: ItemParams) =>
+      serialize({ run: () => deferResolveQueueItem({ set, get, ...params }) }),
+    takeUpResolveQueueItem: (params: ItemParams) =>
+      serialize({ run: () => takeUpResolveQueueItem({ set, get, ...params }) }),
+    reopenResolveQueueItem: (params: Omit<ItemRevisionParams, 'reply'>) =>
+      serialize({ run: () => reopenResolveQueueItem({ set, get, ...params }) }),
     updateResolveThreads: (params: BatchUpdateParams) =>
       serialize({ run: () => updateResolveThreads({ set, get, ...params }) }),
     loadResolveSession: (params: SessionParams) =>

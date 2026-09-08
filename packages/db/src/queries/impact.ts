@@ -585,7 +585,32 @@ export const getReviewOutcomes = async ({
       `SELECT COUNT(*) AS count
          FROM resolve_threads r
          JOIN sessions s ON s.id = r.session_id
-        WHERE r.disposition IS NOT NULL
+        WHERE (
+          EXISTS (
+            SELECT 1 FROM resolve_queue_items qi
+             WHERE qi.session_id = r.session_id
+               AND qi.thread_id = r.thread_id
+               AND qi.approval_state = 'accepted'
+               AND qi.delivered_at IS NOT NULL
+               AND qi.superseded_at IS NULL
+               AND EXISTS (
+                 SELECT 1 FROM resolve_publication_threads rpt
+                   JOIN resolve_publications rp ON rp.id = rpt.publication_id
+                  WHERE rp.session_id = qi.session_id
+                    AND rpt.thread_id = qi.thread_id
+                    AND rpt.revision = qi.approved_revision
+                    AND (rpt.reply_posted_at IS NOT NULL OR rpt.resolved_at IS NOT NULL)
+               )
+          )
+          OR (
+            r.disposition IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM resolve_queue_items legacy_qi
+               WHERE legacy_qi.session_id = r.session_id
+                 AND legacy_qi.thread_id = r.thread_id
+            )
+          )
+        )
           AND s.workspace_id = ?
           AND s.deleted_at IS NULL
           AND (? IS NULL OR r.created_at >= ?)`,
