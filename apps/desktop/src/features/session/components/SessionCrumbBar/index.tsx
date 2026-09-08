@@ -13,8 +13,7 @@ import { useSessionCrumbs } from '../../hooks/useSessionCrumbs';
 import { useSelectedWorkflowRun } from '../../hooks/useSelectedWorkflowRun';
 import { agentHomeLens, classifyAgent, resolveRootAgent } from '../../agent-kind';
 import { isAgentFinished } from '../../agent-lifecycle';
-import { useResolverIndex } from '../../hooks/useResolverIndex';
-import type { ResolverStatus } from '../../resolver-linkage';
+import { settledResolverAgentIds } from '../../../review/settledResolverAgentIds';
 import { AgentStatusIcon } from '../AgentCard/AgentStatusIcon';
 import { PlainCrumb } from './PlainCrumb';
 import { AgentSwitcherCrumb } from './AgentSwitcherCrumb';
@@ -47,14 +46,10 @@ const SessionCrumbs = ({ session }: SessionCrumbsProps) => {
   const resolveAttempts = useAppStore(
     (state) => state.sessionResolveAttempts[sessionId] ?? EMPTY_ATTEMPTS,
   );
-  const resolverIndex = useResolverIndex(sessionId);
-  const resolverStatusByAgentId = useMemo(() => {
-    const map = new Map<AgentId, ResolverStatus>();
-    for (const link of resolverIndex.links) {
-      map.set(link.agent.id, link.status);
-    }
-    return map;
-  }, [resolverIndex]);
+  const settledResolvers = useMemo(
+    () => settledResolverAgentIds({ attempts: resolveAttempts }),
+    [resolveAttempts],
+  );
 
   const selectedAgent = useMemo(
     () => phaseRuns.find((agent) => agent.id === selectedAgentId) ?? null,
@@ -88,10 +83,10 @@ const SessionCrumbs = ({ session }: SessionCrumbsProps) => {
         kind: kindOf(agent),
         isFinished: isAgentFinished({
           agent,
-          resolverStatus: resolverStatusByAgentId.get(agent.id) ?? null,
+          isResolverSettled: settledResolvers.has(agent.id),
         }),
       }));
-  }, [agentKindOverride, resolverStatusByAgentId]);
+  }, [agentKindOverride, settledResolvers]);
 
   const siblings: ReadonlyArray<SwitcherEntry> = useMemo(() => {
     if (selectedAgent == null || rootAgent == null) {

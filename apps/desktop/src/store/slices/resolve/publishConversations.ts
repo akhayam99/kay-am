@@ -19,14 +19,14 @@ import {
   worktreeStatus,
 } from '../../../features/worktree/worktree';
 import { tauriDatabase } from '../../../shared/lib/db';
-import { markThreadResolvedNoPush } from '../github/markThreadResolvedNoPush';
 import { postThreadReply } from '../github/postThreadReply';
 import { pushSessionBranch } from '../github/pushSessionBranch';
-import { restoreResolvePublication } from '../github/restoreResolvePublication';
 import { getSessionRepo } from '../worktrees/getSessionRepo';
+import { markThreadResolved } from './markThreadResolved';
 import { preparePublication } from './preparePublication';
 import { loadPublicationsInto } from './publicationState';
 import { withPublicationLock } from './publicationLock';
+import { restoreResolvePublication } from './restoreResolvePublication';
 import type { PublishParams, SliceParams } from './types';
 
 type Params = SliceParams & PublishParams;
@@ -223,6 +223,13 @@ export const publishConversations = async ({
               });
             }
             await loadPublicationsInto({ set, sessionId });
+            void get().emitNotification(
+              'error',
+              'error',
+              'nothing was published',
+              `${error}. The conversations stayed as they were.`,
+              { sessionId, action: { kind: 'retry-publication', sessionId } },
+            );
             return { kind: 'push_failed', error };
           }
           pushed = true;
@@ -264,8 +271,7 @@ export const publishConversations = async ({
               }
               continue;
             }
-            await markThreadResolvedNoPush({
-              set,
+            await markThreadResolved({
               get,
               sessionId,
               threadId: thread.threadId,

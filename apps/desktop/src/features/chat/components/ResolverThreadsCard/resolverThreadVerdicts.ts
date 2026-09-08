@@ -4,11 +4,12 @@ import type {
   ExtractedCommentResolution,
   ExtractedCommentWontfix,
 } from '@goodboy/core';
-import type { ResolverThreadSettlementKind } from '../../../session/resolverThreadSettlements';
+
+export type ResolverThreadVerdictKind = 'resolved' | 'wontfix' | 'analyzed' | 'open';
 
 export type ResolverThreadVerdict = {
   readonly threadId: string;
-  readonly kind: ResolverThreadSettlementKind;
+  readonly kind: ResolverThreadVerdictKind;
   readonly isClosed: boolean;
   readonly outcome: string;
   readonly commitSha: string | null;

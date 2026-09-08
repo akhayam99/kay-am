@@ -164,6 +164,12 @@ type ResolutionOutcomeRow = {
   outcome_count: number;
 };
 
+const RESOLUTION_OUTCOME_EXPRESSION = `CASE r.disposition
+  WHEN 'fix' THEN 'resolved'
+  WHEN 'no_change' THEN 'wontfix'
+  WHEN 'reply' THEN 'analyzed'
+END`;
+
 type ExternalTaskRow = {
   session_id: string;
   goal: string;
@@ -577,24 +583,24 @@ export const getReviewOutcomes = async ({
     ),
     db.select<CountRow>(
       `SELECT COUNT(*) AS count
-         FROM pending_resolutions r
+         FROM resolve_threads r
          JOIN sessions s ON s.id = r.session_id
-        WHERE r.outcome IS NOT NULL
+        WHERE r.disposition IS NOT NULL
           AND s.workspace_id = ?
           AND s.deleted_at IS NULL
           AND (? IS NULL OR r.created_at >= ?)`,
       [workspaceId, sinceMs, sinceMs],
     ),
     db.select<ResolutionOutcomeRow>(
-      `SELECT r.outcome AS outcome, COUNT(*) AS outcome_count
-         FROM pending_resolutions r
+      `SELECT ${RESOLUTION_OUTCOME_EXPRESSION} AS outcome, COUNT(*) AS outcome_count
+         FROM resolve_threads r
          JOIN sessions s ON s.id = r.session_id
-        WHERE r.outcome IS NOT NULL
+        WHERE r.disposition IS NOT NULL
           AND s.workspace_id = ?
           AND s.deleted_at IS NULL
           AND (? IS NULL OR r.created_at >= ?)
-        GROUP BY r.outcome
-        ORDER BY outcome_count DESC, r.outcome ASC`,
+        GROUP BY outcome
+        ORDER BY outcome_count DESC, outcome ASC`,
       [workspaceId, sinceMs, sinceMs],
     ),
   ]);

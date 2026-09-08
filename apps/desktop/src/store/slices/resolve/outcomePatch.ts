@@ -1,5 +1,5 @@
 import type { ResolveThread } from '@goodboy/types';
-import type { ResolverThreadOutcome } from '../../types';
+import type { ResolverThreadOutcome } from '../../../features/session/resolverTurnOutcomes';
 
 type Params = { readonly outcome: ResolverThreadOutcome; readonly verdict?: 'fix' | 'wontfix' };
 

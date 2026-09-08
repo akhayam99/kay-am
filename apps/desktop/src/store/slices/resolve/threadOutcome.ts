@@ -1,6 +1,6 @@
 import { resolveOutcomeReason } from './resolveOutcomeReason';
 import type { ResolveThread } from '@goodboy/types';
-import type { ResolverThreadOutcome } from '../../types';
+import type { ResolverThreadOutcome } from '../../../features/session/resolverTurnOutcomes';
 
 type Params = { readonly row: ResolveThread; readonly shouldIncludeCandidate?: boolean };
 

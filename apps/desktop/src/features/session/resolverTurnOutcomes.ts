@@ -4,7 +4,11 @@ import {
   extractAllCommentResolved,
   extractAllCommentWontfix,
 } from '@goodboy/core';
-import type { ResolverThreadOutcome } from '../../store/types';
+
+export type ResolverThreadOutcome =
+  | { readonly kind: 'resolved'; readonly commitSha: string; readonly reply?: string }
+  | { readonly kind: 'wontfix'; readonly reason: string; readonly reply?: string }
+  | { readonly kind: 'analyzed'; readonly reply?: string; readonly verdict?: 'fix' | 'wontfix' };
 
 type Params = {
   readonly assistantText: string;

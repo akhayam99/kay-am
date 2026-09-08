@@ -1342,8 +1342,6 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
       agentEffortOverride: {},
       agentProviderOverride: {},
       agentModelOverride: {},
-      resolverState: {},
-      resolverThreadOutcomes: {},
       providers: [
         {
           id: 'anthropic',
@@ -1404,7 +1402,9 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
       .getState()
       .sendTurn({ sessionId: SESSION_ID, agentId: AGENT_A, content: 'go' });
 
-    expect(useAppStore.getState().resolverState[AGENT_A]).toBe('committed');
+    expect(
+      (useAppStore.getState().sessionResolveThreads[SESSION_ID] ?? []).map((row) => row.state),
+    ).toContain('fixed');
     await vi.waitFor(() => expect(runTurnSpy).toHaveBeenCalledTimes(2));
     expect(runTurnSpy.mock.calls[1]?.[0]?.prompt).toContain('kick B');
   });
@@ -1433,8 +1433,6 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
       agentEffortOverride: {},
       agentProviderOverride: {},
       agentModelOverride: {},
-      resolverState: {},
-      resolverThreadOutcomes: {},
       providers: [
         {
           id: 'anthropic',
@@ -1488,12 +1486,20 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
       .getState()
       .sendTurn({ sessionId: SESSION_ID, agentId: AGENT_A, content: 'go' });
 
-    expect(useAppStore.getState().resolverState[AGENT_A]).toBe('committed');
-    expect(useAppStore.getState().resolverThreadOutcomes[AGENT_A]).toEqual({
-      PRRT_1: { kind: 'resolved', commitSha: 'abc1234' },
-      PRRT_2: { kind: 'resolved', commitSha: 'abc1234' },
-      PRRT_3: { kind: 'wontfix', reason: 'already handled' },
-    });
+    expect(
+      (useAppStore.getState().sessionResolveThreads[SESSION_ID] ?? []).map((row) => ({
+        threadId: row.threadId,
+        state: row.state,
+        disposition: row.disposition,
+        commitShas: row.commitShas,
+      })),
+    ).toEqual(
+      expect.arrayContaining([
+        { threadId: 'PRRT_1', state: 'fixed', disposition: 'fix', commitShas: ['abc1234'] },
+        { threadId: 'PRRT_2', state: 'fixed', disposition: 'fix', commitShas: ['abc1234'] },
+        { threadId: 'PRRT_3', state: 'answered', disposition: 'no_change', commitShas: null },
+      ]),
+    );
   });
 
   it('a resolver that ends without a marker still lets the queue advance', async () => {
@@ -1529,8 +1535,6 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
       agentEffortOverride: {},
       agentProviderOverride: {},
       agentModelOverride: {},
-      resolverState: {},
-      resolverThreadOutcomes: {},
       providers: [
         {
           id: 'anthropic',
@@ -1590,7 +1594,9 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
       .getState()
       .sendTurn({ sessionId: SESSION_ID, agentId: AGENT_A, content: 'go' });
 
-    expect(useAppStore.getState().resolverState[AGENT_A]).toBe('awaiting');
+    expect(
+      (useAppStore.getState().sessionResolveThreads[SESSION_ID] ?? []).map((row) => row.state),
+    ).toContain('failed');
     await vi.waitFor(() => expect(runTurnSpy).toHaveBeenCalledTimes(2));
     expect(runTurnSpy.mock.calls[1]?.[0]?.prompt).toContain('kick B');
   });
@@ -1628,8 +1634,6 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
       agentEffortOverride: {},
       agentProviderOverride: {},
       agentModelOverride: {},
-      resolverState: {},
-      resolverThreadOutcomes: {},
       providers: [
         {
           id: 'anthropic',
@@ -1690,7 +1694,11 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
       .getState()
       .sendTurn({ sessionId: SESSION_ID, agentId: AGENT_A, content: 'go' });
 
-    expect(useAppStore.getState().resolverState[AGENT_A]).toBe('analyzed');
+    expect(
+      (useAppStore.getState().sessionResolveThreads[SESSION_ID] ?? []).map(
+        (row) => row.disposition,
+      ),
+    ).toContain('reply');
     await vi.waitFor(() => expect(runTurnSpy).toHaveBeenCalledTimes(2));
     expect(runTurnSpy.mock.calls[1]?.[0]?.prompt).toContain('kick B');
   });
@@ -2144,8 +2152,6 @@ describe('sendTurn, resolver config (provider pin + effort)', () => {
       agentEffortOverride: {},
       agentProviderOverride: {},
       agentModelOverride: {},
-      resolverState: {},
-      resolverThreadOutcomes: {},
       providers: [
         {
           id: 'anthropic',

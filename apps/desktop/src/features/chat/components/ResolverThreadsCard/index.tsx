@@ -9,11 +9,11 @@ import {
 import type { AgentId, PrComment, ResolveThread, SessionId } from '@goodboy/types';
 import { CONCEPT_ICONS, ICON_SIZE } from '../../../../shared/components/conceptIcons';
 import { useAppStore } from '../../../../store';
-import { resolverTallySentence } from '../../../session/resolverTallySentence';
-import { resolverThreadTally } from '../../../session/resolverThreadTally';
 import { TranscriptDisclosure } from '../TranscriptDisclosure';
 import { TranscriptRowHeader } from '../TranscriptRowHeader';
 import { ResolverThreadVerdictRow } from './ResolverThreadVerdictRow';
+import { tallySentence } from './tallySentence';
+import { verdictTally } from './verdictTally';
 import { resolverThreadVerdicts, type ResolverThreadVerdict } from './resolverThreadVerdicts';
 
 type Props = {
@@ -27,14 +27,14 @@ const EMPTY_ROWS: ReadonlyArray<ResolveThread> = [];
 
 const Icon = CONCEPT_ICONS.resolve;
 
-const tallySentence = ({
+const previewSentence = ({
   verdicts,
 }: {
   readonly verdicts: ReadonlyArray<ResolverThreadVerdict>;
 }): string | null =>
-  resolverTallySentence({
-    tally: resolverThreadTally({
-      settlements: verdicts.map(({ kind, isClosed }) => ({ kind, isClosed })),
+  tallySentence({
+    tally: verdictTally({
+      verdicts: verdicts.map(({ kind, isClosed }) => ({ kind, isClosed })),
     }),
   });
 
@@ -149,7 +149,7 @@ export const ResolverThreadsCard = ({ assistantText, sessionId, agentId = null }
           tone="neutral"
           icon={<Icon size={ICON_SIZE.row} aria-hidden />}
           eyebrow="resolve findings"
-          preview={tallySentence({ verdicts })}
+          preview={previewSentence({ verdicts })}
           meta={`${verdicts.length}`}
           open={open}
           onToggle={() => setOpen((value) => !value)}

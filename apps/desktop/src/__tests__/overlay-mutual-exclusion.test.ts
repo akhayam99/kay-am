@@ -263,22 +263,4 @@ describe('session studio event dispatch contracts', () => {
     expect(received!.detail.sessionId).toBe('sess-42');
     expect(received!.detail.workingDir).toBe('/tmp/wt');
   });
-
-  it('goodboy:open-github-session event carries sessionId, prNumber and threadId', () => {
-    let received: CustomEvent | null = null;
-    const onEvent = (e: Event) => {
-      received = e as CustomEvent;
-    };
-    window.addEventListener('goodboy:open-github-session', onEvent);
-    window.dispatchEvent(
-      new CustomEvent('goodboy:open-github-session', {
-        detail: { sessionId: 'sess-42', prNumber: 12, threadId: 'PRRT_x' },
-      }),
-    );
-    window.removeEventListener('goodboy:open-github-session', onEvent);
-    expect(received).not.toBeNull();
-    expect(received!.detail.sessionId).toBe('sess-42');
-    expect(received!.detail.prNumber).toBe(12);
-    expect(received!.detail.threadId).toBe('PRRT_x');
-  });
 });

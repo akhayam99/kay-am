@@ -126,7 +126,6 @@ export const persistResolveTurn = async ({
       sessionId,
       rows: await listResolveThreads({ db, sessionId }),
       attempts: await listResolveAttempts({ db, sessionId }),
-      fallbackOwnership: { [agent.id]: owned },
     });
   }
 };

@@ -36,15 +36,6 @@ vi.mock('../../workflows/useWorkflowAdvanceStates', () => ({
   useWorkflowAdvanceStates: () => new Map(),
 }));
 
-vi.mock('../../session/hooks/useResolverIndex', () => ({
-  useResolverIndex: () => ({
-    links: [],
-    byThreadId: new Map(),
-    byCommentUrl: new Map(),
-    byDiffAgentId: new Map(),
-  }),
-}));
-
 vi.mock('../../worktree/worktree', () => ({ worktreeStatus }));
 
 import { resetWorktreeStatusCache } from '../../session/hooks/useWorktreeStatuses/cache';

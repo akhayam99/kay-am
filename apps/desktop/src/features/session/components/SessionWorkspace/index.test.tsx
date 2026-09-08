@@ -29,9 +29,6 @@ type Store = {
   sessionGithub: Record<string, unknown>;
   sessionGitlabMr: Record<string, unknown>;
   sessionBitbucketPr: Record<string, unknown>;
-  sessionPendingResolutions: Record<string, ReadonlyArray<{ threadId: string }>>;
-  sessionResolvedThreads: Record<string, ReadonlyArray<string>>;
-  resolverState: Record<string, 'awaiting' | 'committed' | 'wontfix' | 'analyzed'>;
   agentTurnState: Record<string, unknown>;
   agentKindOverride: Record<string, unknown>;
   sessionLoading: Record<string, { agents: boolean; plans: boolean }>;
@@ -77,9 +74,6 @@ const { store, hooks } = vi.hoisted(() => ({
     sessionGithub: {},
     sessionGitlabMr: {},
     sessionBitbucketPr: {},
-    sessionPendingResolutions: {},
-    sessionResolvedThreads: {},
-    resolverState: {},
     agentTurnState: {},
     agentKindOverride: {},
     sessionLoading: {},
@@ -282,9 +276,6 @@ beforeEach(() => {
   store.sessionGithub = {};
   store.sessionGitlabMr = {};
   store.sessionBitbucketPr = {};
-  store.sessionPendingResolutions = {};
-  store.sessionResolvedThreads = {};
-  store.resolverState = {};
   store.agentTurnState = {};
   store.agentKindOverride = {};
   store.sessionLoading = {};

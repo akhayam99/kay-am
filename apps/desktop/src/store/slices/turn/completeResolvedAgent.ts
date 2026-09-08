@@ -7,8 +7,6 @@ import {
 } from '@goodboy/core';
 import type { AgentId, IsoDateTime, SessionId } from '@goodboy/types';
 import { invokeAgentList, invokeAgentUpdateStatus } from '../../../features/workflows/workflows';
-import { agentThreadIds } from '../../../features/session/agentThreadIds';
-import { resolverTurnOutcomes } from '../../../features/session/resolverTurnOutcomes';
 import {
   inferAgentKindFromName,
   KIND_TO_ROLE,
@@ -93,38 +91,12 @@ export const completeResolvedAgent = async ({
     return null;
   }
 
-  const { turnOutcomes } = resolverTurnOutcomes({
-    assistantText,
-    previousOutcomes: get().resolverThreadOutcomes[resolvedAgentId] ?? {},
-  });
   if (ranAgent !== undefined) {
     await get().persistResolveTurn({
       sessionId,
       agent: ranAgent,
       assistantText,
       attemptId: resolveAttemptId,
-    });
-  }
-  const sourceThreadIds = ranAgent === undefined ? [] : agentThreadIds(ranAgent);
-  const ownedThreadIds = new Set(
-    sourceThreadIds.length > 0 ? sourceThreadIds : Object.keys(turnOutcomes),
-  );
-  for (const [threadId, outcome] of Object.entries(turnOutcomes)) {
-    if (!ownedThreadIds.has(threadId) || outcome.kind !== 'resolved') {
-      continue;
-    }
-    const queued = get().sessionPendingResolutions[sessionId]?.find(
-      (resolution) => resolution.threadId === threadId,
-    );
-    if (queued === undefined || queued.commitSha === outcome.commitSha) {
-      continue;
-    }
-    await get().queueResolution(sessionId, {
-      threadId,
-      commitSha: outcome.commitSha,
-      prNumber: queued.prNumber,
-      reply: outcome.reply ?? queued.reply,
-      outcome: 'resolved',
     });
   }
   return null;

@@ -21,12 +21,11 @@ export const forceCloseResolver = (set: SetFn, get: GetFn) => {
       () => undefined,
     );
     const refreshed = await invokeAgentList(sessionId).catch(() => null);
-    set((state) => ({
-      resolverState: { ...state.resolverState, [agentId]: 'stopped' },
-      ...(refreshed !== null && {
+    if (refreshed !== null) {
+      set((state) => ({
         sessionPhaseRuns: { ...state.sessionPhaseRuns, [sessionId]: refreshed },
-      }),
-    }));
+      }));
+    }
     const idleState: TurnState = { kind: 'idle', lastActivityAt: now };
     const derived = applyAgentTurnState(set, sessionId, agentId, idleState, now);
     await updateSessionState(tauriDatabase, sessionId, derived, now).catch(() => undefined);

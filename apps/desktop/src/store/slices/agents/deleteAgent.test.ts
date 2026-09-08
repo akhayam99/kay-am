@@ -68,8 +68,6 @@ const makeStore = ({ isMounted = true }: { readonly isMounted?: boolean } = {}) 
     agentProviderOverride: {},
     agentEffortOverride: {},
     agentKindOverride: {},
-    resolverState: {},
-    resolverThreadOutcomes: {},
     selectedAgentId: {},
     transcripts: {},
     sessionWorktrees: {},

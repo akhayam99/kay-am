@@ -19,7 +19,6 @@ import {
   type WorkflowAdvanceView,
 } from '../../../../../workflows/workflowAdvanceView';
 import { workflowRunHasOpenQuestions } from '../../../../../context/openQuestionsGate';
-import { useResolverIndex } from '../../../../../session/hooks/useResolverIndex';
 import { eligibleReviewThreadCount } from '../../../../../suggestions/eligibleThreads';
 import { pendingMountProposals } from '../../../../../suggestions/mountProposals';
 import { SUGGESTION_ICONS } from '../../../../../suggestions/suggestionIcons';
@@ -62,7 +61,6 @@ export const useDynamicActions = (
   const resolveRows = useAppStore((s) => s.sessionResolveThreads[id] ?? EMPTY_RESOLVE_ROWS);
   const materializeProject = useAppStore((s) => s.materializeProject);
   const emitNotification = useAppStore((s) => s.emitNotification);
-  const resolverIndex = useResolverIndex(id);
   const hasUnread = useSessionHasUnread(id);
   const [isConfirmingSkip, setIsConfirmingSkip] = useState(false);
 

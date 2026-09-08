@@ -1,10 +1,10 @@
-import type { ResolverThreadTally } from './resolverThreadTally';
+import type { VerdictTally } from './verdictTally';
 
 type Params = {
-  readonly tally: ResolverThreadTally;
+  readonly tally: VerdictTally;
 };
 
-export const resolverTallySentence = ({ tally }: Params): string | null => {
+export const tallySentence = ({ tally }: Params): string | null => {
   if (tally.total < 2) {
     return null;
   }

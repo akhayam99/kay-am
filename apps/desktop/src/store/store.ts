@@ -21,7 +21,6 @@ import type {
   OpenQuestion,
   OpenQuestionId,
   OrchestratorRouting,
-  PendingResolutionOutcome,
   PermissionScope,
   PlanId,
   PlanStatus,
@@ -664,27 +663,6 @@ type AppActions = {
   ): Promise<void>;
   selectSessionPr(sessionId: SessionId, prNumber: number): Promise<void>;
   sweepGithub(opts?: { skipUnknownPr?: boolean }): void;
-  resolveGithubThread(
-    sessionId: SessionId,
-    threadId: string,
-    closure?: { commitSha?: string; reason?: string; reply?: string },
-  ): Promise<boolean>;
-  resolveAgentThreads(sessionId: SessionId, agentId: AgentId): Promise<boolean>;
-  queueResolution(
-    sessionId: SessionId,
-    args: {
-      threadId: string;
-      commitSha: string;
-      prNumber: number;
-      reply?: string | null;
-      outcome?: PendingResolutionOutcome | null;
-    },
-  ): Promise<void>;
-  dequeueResolution(sessionId: SessionId, threadId: string): Promise<void>;
-  loadPendingResolutions(sessionId: SessionId): Promise<void>;
-  pushAllResolutions(
-    sessionId: SessionId,
-  ): Promise<{ pushed: boolean; resolved: number; failed: number }>;
   pushSessionBranch(
     sessionId: SessionId,
   ): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: string }>;
@@ -987,16 +965,12 @@ export const initialState: AppState = {
   ...initialSlackThreadsState,
   reviewPrs: {},
   reviewDrafts: {},
-  sessionPendingResolutions: {},
-  sessionResolvedThreads: {},
   volatilePermissionAllows: new Set<string>(),
   agentModelOverride: {},
   agentProviderOverride: {},
   agentEffortOverride: {},
   agentKindOverride: {},
   ...resolveInitialState,
-  resolverState: {},
-  resolverThreadOutcomes: {},
   agentDraft: {},
   workflowDrafts: {},
   ...initialWorkflowStudioState,

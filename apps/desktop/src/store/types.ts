@@ -22,7 +22,6 @@ import type {
   OpenQuestionId,
   OrchestratorRouting,
   OverrideSettings,
-  PendingResolution,
   PlanConsumption,
   PlanId,
   PlanWithCount,
@@ -56,7 +55,6 @@ import type {
 } from '@goodboy/types';
 import type { SessionWorktree } from '@goodboy/db';
 import type { AgentKind } from '../features/session/agent-kind';
-import type { ResolverState } from '../features/workspace/components/WorkspacesSidebar/lib';
 import type { GitlabMergeRequest } from '../features/integrations/gitlab/client';
 import type { BitbucketRepo } from '../features/integrations/bitbucket/client';
 import type { SessionBitbucketPrEntry } from './slices/bitbucket-pr/state';
@@ -91,11 +89,6 @@ import type { PanelSection } from './slices/sidebar/types';
 import type { UpdaterState } from './slices/updater/state';
 import type { WorkflowBuilderDraft } from './slices/workflowDrafts/types';
 import type { WorkflowGeneration, WorkflowStudioDraft } from './slices/workflowStudio/types';
-
-export type ResolverThreadOutcome =
-  | { readonly kind: 'resolved'; readonly commitSha: string; readonly reply?: string }
-  | { readonly kind: 'wontfix'; readonly reason: string; readonly reply?: string }
-  | { readonly kind: 'analyzed'; readonly reply?: string; readonly verdict?: 'fix' | 'wontfix' };
 
 export type BootPhase =
   | 'pending'
@@ -281,17 +274,11 @@ export type AppState = AppSliceState & {
   readonly sessionSelectedBitbucketPrId: Readonly<Record<SessionId, number | null>>;
   readonly reviewPrs: Readonly<Record<WorkspaceId, ReviewPrsState>>;
   readonly reviewDrafts: Readonly<Record<SessionId, ReadonlyArray<PrReviewDraft>>>;
-  readonly sessionPendingResolutions: Readonly<Record<SessionId, ReadonlyArray<PendingResolution>>>;
-  readonly sessionResolvedThreads: Readonly<Record<SessionId, ReadonlyArray<string>>>;
   readonly volatilePermissionAllows: ReadonlySet<string>;
   readonly agentModelOverride: Readonly<Record<AgentId, string>>;
   readonly agentProviderOverride: Readonly<Record<AgentId, ProviderId>>;
   readonly agentEffortOverride: Readonly<Record<AgentId, string>>;
   readonly agentKindOverride: Readonly<Record<AgentId, AgentKind>>;
-  readonly resolverState: Readonly<Record<AgentId, ResolverState>>;
-  readonly resolverThreadOutcomes: Readonly<
-    Record<AgentId, Readonly<Record<string, ResolverThreadOutcome>>>
-  >;
   readonly agentDraft: Readonly<Record<AgentId, string>>;
   readonly workflowDrafts: Readonly<Record<SessionId, WorkflowBuilderDraft | undefined>>;
   readonly workflowStudioDrafts: Readonly<Record<WorkspaceId, WorkflowStudioDraft | undefined>>;

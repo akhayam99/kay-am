@@ -71,8 +71,6 @@ vi.mock('../../../shared/hooks/useSessionRoleModels', () => ({
 vi.mock('../../session/agent-kind', () => ({
   kindRouting: () => ({ provider: 'anthropic', model: 'claude', effort: 'medium' }),
 }));
-vi.mock('../../session/hooks/useResolverIndex', () => ({ useResolverIndex: () => new Map() }));
-vi.mock('../../session/resolver-linkage', () => ({ resolverForComment: () => null }));
 vi.mock('../../session/hooks/useWorktreeStatuses', () => ({
   useWorktreeStatuses: () => new Map(),
 }));

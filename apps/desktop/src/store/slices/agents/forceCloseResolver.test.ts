@@ -64,7 +64,6 @@ const makeStore = () => {
       [STUCK]: { kind: 'running', runId: RUN, startedAt: '2026-07-25T09:00:00.000Z' },
     },
     agentKindOverride: {},
-    resolverState: {},
     drainResolveQueue: vi.fn(async () => undefined),
     sessionProjectMounts: { [SID]: [{ projectId: 'project-1', worktreePath: '/repo/one' }] },
     sessionActiveProject: { [SID]: 'project-1' },
@@ -108,7 +107,7 @@ describe('forceCloseResolver', () => {
     );
   });
 
-  it('marks the resolver stopped and leaves its turn idle', async () => {
+  it('leaves the stopped resolver turn idle', async () => {
     const { state, get, set } = makeStore();
     hoisted.invokeAgentList.mockResolvedValue([
       resolver({ id: STUCK, status: 'skipped', ordinal: 0 }),
@@ -116,7 +115,6 @@ describe('forceCloseResolver', () => {
 
     await forceCloseResolver(set, get)(SID, STUCK);
 
-    expect((state.resolverState as Record<string, string>)[STUCK]).toBe('stopped');
     expect((state.agentTurnState as Record<string, { kind: string }>)[STUCK]?.kind).toBe('idle');
   });
 

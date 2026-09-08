@@ -33,7 +33,7 @@ import { IntegrationPane } from './parts/IntegrationPane';
 import { GithubTaskDetail } from './parts/IntegrationPane/GithubTaskDetail';
 import { LinkTicketPopover } from './parts/IntegrationPane/LinkTicketPopover';
 import { isStandaloneAgent, resolveRootAgent } from '../../agent-kind';
-import { useResolverIndex } from '../../hooks/useResolverIndex';
+import { selectResolverAgentIds } from '../../../review/selectResolverAgentIds';
 import { SessionOverviewLoading } from './parts/SessionOverviewLoading';
 import { ReviewPane } from '../../../review/components/ReviewPane';
 import { useIsBranchlessSession } from '../../hooks/useIsBranchlessSession';
@@ -85,6 +85,7 @@ export const SessionWorkspace = ({ session, isActive }: SessionWorkspaceProps) =
   const phaseRuns = useAppStore(
     (s) => s.sessionPhaseRuns[sessionId] ?? (EMPTY_ARRAY as ReadonlyArray<Agent>),
   );
+  const agentKindOverride = useAppStore((s) => s.agentKindOverride);
   const areAgentsLoaded = useIsSessionCollectionLoaded({ sessionId, collection: 'agents' });
   const arePlansLoaded = useIsSessionCollectionLoaded({ sessionId, collection: 'plans' });
   const loadPhaseRunsForSession = useAppStore((s) => s.loadPhaseRunsForSession);
@@ -128,10 +129,9 @@ export const SessionWorkspace = ({ session, isActive }: SessionWorkspaceProps) =
   const showStudio = studio != null;
   const showAgentOverlay = selectedAgentId != null && !showStudio;
   const showLens = selectedAgentId == null && !showStudio;
-  const resolverIndex = useResolverIndex(sessionId);
   const resolverAgentIds = useMemo(
-    () => new Set(resolverIndex.links.map(({ agent }) => agent.id)),
-    [resolverIndex],
+    () => selectResolverAgentIds({ agents: phaseRuns, kindOverride: agentKindOverride }),
+    [phaseRuns, agentKindOverride],
   );
   const overlayHome = resolveOverlayHome({ lens, agentHome });
   const githubTask = useMemo(

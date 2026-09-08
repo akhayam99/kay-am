@@ -201,7 +201,12 @@ describe('durable resolve rows', () => {
       githubResolved: null,
       closedAt: null,
     });
-    expect(await db.select('SELECT id FROM pending_resolutions')).toHaveLength(5);
+    expect(rows).toHaveLength(5);
+    expect(
+      await db.select(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'pending_resolutions'",
+      ),
+    ).toEqual([]);
   });
 
   it('rejects a stale state revision without losing the newer draft', async () => {

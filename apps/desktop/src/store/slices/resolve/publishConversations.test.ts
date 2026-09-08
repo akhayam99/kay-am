@@ -47,10 +47,6 @@ vi.mock('@goodboy/db', async () => {
       }
       return mocks.setResolvePublicationPhase(params as never);
     }),
-    listPendingResolutionsForSession: vi.fn(async () => []),
-    queuePendingResolution: vi.fn(async () => undefined),
-    deletePendingResolution: vi.fn(async () => undefined),
-    markPendingResolutionReplyPosted: vi.fn(async () => undefined),
     listWorktreesForSession: vi.fn(async () => []),
   };
 });
@@ -278,11 +274,7 @@ const makeStore = ({ sessionId = SESSION_ID }: { readonly sessionId?: SessionId 
         detail: { comments: [] },
       },
     },
-    sessionResolvedThreads: {},
     sessionPhaseRuns: {},
-    resolverState: {},
-    resolverThreadOutcomes: {},
-    sessionPendingResolutions: {},
     agentTurnState: {},
     agentKindOverride: {},
     agentRunHistory: {},

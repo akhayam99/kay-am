@@ -11,7 +11,6 @@ import {
 } from '@goodboy/db';
 import { makeTestDatabase } from '@goodboy/db/test-helpers';
 import type { Agent, AgentId, IsoDateTime, MessageId, SessionId } from '@goodboy/types';
-import { resolverStatus } from '../../../features/workspace/components/WorkspacesSidebar/lib';
 import type { GetFn, SetFn } from './types';
 import { createResolveSlice } from './index';
 import { resolveInitialState } from './state';
@@ -49,9 +48,6 @@ const createHarness = () => {
     ...resolveInitialState,
     sessionPhaseRuns: { [SESSION_ID]: [agent] },
     agentKindOverride: {},
-    resolverState: {},
-    resolverThreadOutcomes: {},
-    sessionResolvedThreads: {},
     sessionActiveProject: {},
     sessionGithub: {},
   };
@@ -74,13 +70,52 @@ const persistMessage = async ({ content, createdAt = NOW }: MessageParams) =>
   });
 
 type StatusParams = { readonly get: GetFn };
-const statusFor = ({ get }: StatusParams) =>
-  resolverStatus(
-    agent,
-    new Set(get().sessionResolvedThreads[SESSION_ID] ?? []),
-    new Set(),
-    get().resolverState[AGENT_ID],
+const OWNED_THREAD_IDS: ReadonlyArray<string> = ['PRRT_1', 'PRRT_2'];
+const ownedRows = ({ get }: StatusParams) =>
+  (get().sessionResolveThreads[SESSION_ID] ?? []).filter((row) =>
+    OWNED_THREAD_IDS.includes(row.threadId),
   );
+const outcomesFor = ({ get }: StatusParams): Readonly<Record<string, unknown>> =>
+  Object.fromEntries(
+    (get().sessionResolveThreads[SESSION_ID] ?? []).flatMap((row) => {
+      const outcome = threadOutcome({ row });
+      return outcome === null ? [] : [[row.threadId, outcome] as const];
+    }),
+  );
+const closedThreadIdsFor = ({ get }: StatusParams): ReadonlyArray<string> =>
+  (get().sessionResolveThreads[SESSION_ID] ?? [])
+    .filter((row) => row.githubResolved === true && row.state === 'closed')
+    .map((row) => row.threadId);
+const statusFor = ({ get }: StatusParams): string => {
+  const rows = ownedRows({ get });
+  if (
+    rows.some(
+      (row) => row.stateReason === 'stopped' || row.stateReason?.startsWith('stopped:') === true,
+    )
+  ) {
+    return 'stopped';
+  }
+  if (rows.some((row) => row.state === 'failed' || row.question !== null)) {
+    return 'awaiting';
+  }
+  const kinds = rows.flatMap((row) => {
+    const outcome = threadOutcome({ row });
+    return outcome === null ? [] : [outcome.kind];
+  });
+  if (kinds.length === 0) {
+    return 'done';
+  }
+  if (kinds.length < OWNED_THREAD_IDS.length) {
+    return 'awaiting';
+  }
+  if (kinds.includes('resolved')) {
+    return 'committed';
+  }
+  if (kinds.every((kind) => kind === 'wontfix')) {
+    return 'wontfix';
+  }
+  return 'analyzed';
+};
 const missingVerdictsFor = ({ get }: StatusParams) => {
   const rows = get().sessionResolveThreads[SESSION_ID] ?? [];
   const threadIds = ['PRRT_1', 'PRRT_2'].filter((threadId) => {
@@ -112,7 +147,6 @@ describe('durable resolve store', () => {
   it('leaves a completed legacy resolver without evidence at done', async () => {
     const live = createHarness();
     await live.actions.loadResolveSession({ sessionId: SESSION_ID });
-    expect(live.get().resolverState[AGENT_ID]).toBeUndefined();
     expect(statusFor({ get: live.get })).toBe('done');
   });
 
@@ -165,7 +199,7 @@ describe('durable resolve store', () => {
           patch: { state: 'closed', githubResolved: true, closedSource: 'github' },
         })),
     });
-    expect(rebooted.get().sessionResolvedThreads[SESSION_ID]).toEqual(
+    expect(closedThreadIdsFor({ get: rebooted.get })).toEqual(
       expect.arrayContaining(['PRRT_1', 'PRRT_2']),
     );
     expect(
@@ -261,7 +295,7 @@ describe('durable resolve store', () => {
           (row) => row.state === 'failed' && row.stateReason === 'interrupted',
         ),
     ).toBe(true);
-    expect(rebooted.get().resolverThreadOutcomes[AGENT_ID]).toEqual({});
+    expect(outcomesFor({ get: rebooted.get })).toEqual({});
   });
 
   it('keeps candidates working while their provider process is alive', async () => {
@@ -302,7 +336,7 @@ describe('durable resolve store', () => {
       agent,
       assistantText: ASSISTANT_TEXT,
     });
-    const beforeRestart = live.get().resolverThreadOutcomes[AGENT_ID];
+    const beforeRestart = outcomesFor({ get: live.get });
     expect(beforeRestart).toEqual({
       PRRT_1: { kind: 'resolved', commitSha: 'abcdef1234567890' },
       PRRT_2: { kind: 'wontfix', reason: 'intentional' },
@@ -311,7 +345,7 @@ describe('durable resolve store', () => {
     const rebooted = createHarness();
     h.select.mockClear();
     await rebooted.actions.loadResolveSession({ sessionId: SESSION_ID });
-    expect(rebooted.get().resolverThreadOutcomes[AGENT_ID]).toEqual(beforeRestart);
+    expect(outcomesFor({ get: rebooted.get })).toEqual(beforeRestart);
     expect(statusFor({ get: rebooted.get })).toBe(beforeStatus);
     expect(h.select.mock.calls.some(([sql]) => String(sql).includes('FROM messages'))).toBe(false);
   });
@@ -333,7 +367,7 @@ describe('durable resolve store', () => {
     const rebooted = createHarness();
     await rebooted.actions.loadResolveSession({ sessionId: SESSION_ID });
     expect(missingVerdictsFor({ get: rebooted.get })?.threadIds).toEqual(['PRRT_2']);
-    expect(rebooted.get().resolverThreadOutcomes[AGENT_ID]?.unowned).toBeUndefined();
+    expect(outcomesFor({ get: rebooted.get })?.unowned).toBeUndefined();
     expect(await listResolveThreads({ db, sessionId: SESSION_ID })).toHaveLength(2);
   });
 
@@ -355,7 +389,7 @@ describe('durable resolve store', () => {
     h.select.mockClear();
     const rebooted = createHarness();
     await rebooted.actions.loadResolveSession({ sessionId: SESSION_ID });
-    expect(rebooted.get().resolverThreadOutcomes[AGENT_ID]?.PRRT_1).toEqual({
+    expect(outcomesFor({ get: rebooted.get })?.PRRT_1).toEqual({
       kind: 'analyzed',
       reply: 'newer',
     });
@@ -416,13 +450,13 @@ describe('durable resolve store', () => {
         (row) => row.threadId === 'PRRT_1',
       ),
     ).toMatchObject({ state: 'needs_answer', stateReason: 'proposed_fix' });
-    expect(live.get().resolverThreadOutcomes[AGENT_ID]?.PRRT_1).toMatchObject({
+    expect(outcomesFor({ get: live.get })?.PRRT_1).toMatchObject({
       kind: 'analyzed',
       verdict: 'fix',
     });
   });
 
-  it('keeps pending-row edits and posted receipts during legacy import', async () => {
+  it('keeps migrated row edits and posted receipts during legacy import', async () => {
     const row = createResolveThread({ sessionId: SESSION_ID, threadId: 'PRRT_1', prNumber: 12 });
     await upsertResolveThread({
       db,
@@ -436,9 +470,6 @@ describe('durable resolve store', () => {
       },
       expectedRevision: null,
     });
-    await db.execute(
-      "INSERT INTO pending_resolutions (id, session_id, pr_number, thread_id, commit_sha, reply, outcome, reply_posted_at, created_at) VALUES ('pending', 'session-1', 12, 'PRRT_1', 'human-sha', 'Human reply', 'resolved', 42, 1)",
-    );
     await persistMessage({ content: ASSISTANT_TEXT });
     const live = createHarness();
     await live.actions.loadResolveSession({ sessionId: SESSION_ID });
@@ -523,7 +554,7 @@ describe('durable resolve store', () => {
       disposition: 'no_change',
       replyDraft: 'The guard already handles this.',
     });
-    expect(rebooted.get().resolverThreadOutcomes[AGENT_ID]?.PRRT_1).toEqual({
+    expect(outcomesFor({ get: rebooted.get })?.PRRT_1).toEqual({
       kind: 'analyzed',
       reply: 'The guard already handles this.',
       verdict: 'wontfix',
@@ -561,7 +592,7 @@ describe('durable resolve store', () => {
           (row) => row.state === 'working' && row.activeAttemptId === newAttemptId,
         ),
     ).toBe(true);
-    expect(live.get().resolverThreadOutcomes[AGENT_ID]).toEqual({});
+    expect(outcomesFor({ get: live.get })).toEqual({});
   });
 
   it('restores stopped status for a legacy resolver without an attempt row', async () => {
@@ -590,7 +621,7 @@ describe('durable resolve store', () => {
     expect(
       rebooted.get().sessionResolveThreads[SESSION_ID]?.find((row) => row.threadId === 'PRRT_1'),
     ).toMatchObject({ state: 'needs_answer', stateReason: 'proposed_fix' });
-    expect(rebooted.get().resolverThreadOutcomes[AGENT_ID]?.PRRT_1).toMatchObject({
+    expect(outcomesFor({ get: rebooted.get })?.PRRT_1).toMatchObject({
       kind: 'analyzed',
       verdict: 'fix',
     });
@@ -612,7 +643,7 @@ describe('durable resolve store', () => {
     const rebooted = createHarness();
     await rebooted.actions.loadResolveSession({ sessionId: SESSION_ID });
     expect(statusFor({ get: rebooted.get })).toBe('awaiting');
-    expect(rebooted.get().resolverThreadOutcomes[AGENT_ID]?.PRRT_1).toEqual({
+    expect(outcomesFor({ get: rebooted.get })?.PRRT_1).toEqual({
       kind: 'analyzed',
       verdict: 'fix',
       reply: 'Add a guard',
@@ -635,7 +666,7 @@ describe('durable resolve store', () => {
     });
     const rebooted = createHarness();
     await rebooted.actions.loadResolveSession({ sessionId: SESSION_ID });
-    expect(rebooted.get().resolverThreadOutcomes[AGENT_ID]?.PRRT_1).toEqual({
+    expect(outcomesFor({ get: rebooted.get })?.PRRT_1).toEqual({
       kind: 'analyzed',
       verdict: 'wontfix',
       reply: 'Already guarded',
@@ -680,7 +711,7 @@ describe('durable resolve store', () => {
     await rebooted.actions.loadResolveSession({ sessionId: SESSION_ID });
     const rows = rebooted.get().sessionResolveThreads[SESSION_ID] ?? [];
     expect(statusFor({ get: rebooted.get })).toBe('stopped');
-    expect(rebooted.get().resolverThreadOutcomes[AGENT_ID]).toEqual({});
+    expect(outcomesFor({ get: rebooted.get })).toEqual({});
     expect(rows.find((row) => row.threadId === 'PRRT_1')).toMatchObject({
       state: 'failed',
       commitShas: ['abcdef1234567890'],

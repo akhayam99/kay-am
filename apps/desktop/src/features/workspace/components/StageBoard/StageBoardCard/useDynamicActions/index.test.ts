@@ -19,7 +19,6 @@ const { state } = vi.hoisted(() => ({
     emitNotification: vi.fn(async () => undefined),
     hasUnread: false,
     runHasOpenQuestions: false,
-    resolverStatusByThreadId: {} as Record<string, string>,
   },
 }));
 
@@ -30,20 +29,6 @@ vi.mock('../../../../../../store', () => ({
 
 vi.mock('../../../../../context/openQuestionsGate', () => ({
   workflowRunHasOpenQuestions: () => state.runHasOpenQuestions,
-}));
-
-vi.mock('../../../../../session/hooks/useResolverIndex', () => ({
-  useResolverIndex: () => ({
-    links: [],
-    byThreadId: new Map(
-      Object.entries(state.resolverStatusByThreadId).map(([threadId, status]) => [
-        threadId,
-        { agent: {}, status },
-      ]),
-    ),
-    byCommentUrl: new Map(),
-    byDiffAgentId: new Map(),
-  }),
 }));
 
 import { SUGGESTION_ICONS } from '../../../../../suggestions/suggestionIcons';
@@ -119,7 +104,6 @@ beforeEach(() => {
   state.summarizerStatus = {};
   state.hasUnread = false;
   state.runHasOpenQuestions = false;
-  state.resolverStatusByThreadId = {};
   state.skipStuckStepAndAdvance.mockClear();
   state.materializeProject.mockClear();
   state.emitNotification.mockClear();

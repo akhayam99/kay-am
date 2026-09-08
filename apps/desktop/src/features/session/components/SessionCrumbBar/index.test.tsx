@@ -4,7 +4,6 @@ import type { ReactElement, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { Agent, AgentId, Session, SessionId } from '@goodboy/types';
-import type { ResolverStatus } from '../../resolver-linkage';
 
 const h = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
@@ -16,7 +15,6 @@ const h = vi.hoisted(() => ({
   stage: { stage: 'running' as const, reason: 'running' },
   currentSession: null as Session | null,
   selectAgent: vi.fn(),
-  resolverLinks: [] as ReadonlyArray<{ agent: Agent; status: ResolverStatus }>,
 }));
 
 vi.mock('../../../../store', () => ({
@@ -28,10 +26,6 @@ vi.mock('../../../../store', () => ({
 
 vi.mock('../../hooks/useSessionCrumbs', () => ({
   useSessionCrumbs: () => h.crumbs,
-}));
-
-vi.mock('../../hooks/useResolverIndex', () => ({
-  useResolverIndex: () => ({ links: h.resolverLinks }),
 }));
 
 vi.mock('./WorkflowAdvance', () => ({
@@ -130,10 +124,7 @@ const resetState = () => {
     activeLens: { [SESSION_ID]: 'agents' },
     sessionPhaseRuns: { [SESSION_ID]: [scout, implementer, workflowStep] },
     agentKindOverride: {},
-    resolverState: {},
-    sessionPendingResolutions: {},
     sessionResolveAttempts: {},
-    sessionResolvedThreads: {},
     sessionGithub: {},
     phaseTemplates: { 'workspace-1': [{ id: 'workflow-1', name: 'refactor', steps: [] }] },
     sessionWorkflows: { [SESSION_ID]: [] },
@@ -168,7 +159,6 @@ const openStepSurface = () => {
 beforeEach(() => {
   h.currentSession = session;
   h.stage.reason = 'running';
-  h.resolverLinks = [];
   h.crumbs = [
     { id: 'overview', label: 'Overview', onClick: vi.fn() },
     { id: 'lens-agents', label: 'Agents', onClick: vi.fn() },
