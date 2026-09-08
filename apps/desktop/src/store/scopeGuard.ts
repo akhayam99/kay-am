@@ -48,6 +48,23 @@ const materializeLine = ({ isBridgeServing }: MaterializeLineParams): string => 
   return `${marker} For an immediate mount, run \`"$GOODBOY_BIN" query project materialize <name> --reason "<why you need it>"\`; it prints the mount path and branch, or tells you the mount was deferred to the owner.`;
 };
 
+type MountCommandParams = {
+  readonly isBridgeServing: boolean;
+  readonly mounts: ReadonlyArray<SessionProjectMount>;
+};
+
+const mountCommandLines = ({
+  isBridgeServing,
+  mounts,
+}: MountCommandParams): ReadonlyArray<string> => {
+  if (!isBridgeServing || mounts.length === 0) {
+    return [];
+  }
+  return [
+    'Each mount has an id: `"$GOODBOY_BIN" query mount list` shows them, and `mount inspect|fork|switch|attach|unmount|activate --mount <id> --reason "<why>" --request-id <unique>` acts on one. Cutting a branch to start a second line of work with its own pull request is `mount fork`; moving this mount onto another branch is `mount switch`. Declare which one you mean, Goodboy never infers it from git.',
+  ];
+};
+
 const WRITE_BOUNDARY_LINE =
   'ALL writes (Write/Edit/Bash file mutations) MUST resolve inside the session directory or a materialized project mount. NEVER write to a project root or any path outside them.';
 
@@ -151,10 +168,12 @@ export const buildScopeGuard = ({
           ...(canWrite ? [...MOUNT_RULE_LINES, materializeLine({ isBridgeServing })] : []),
         ]
       : [...mountedLines, ...strictBoundaryLines({ tag })];
+  const mountCommands = canWrite ? mountCommandLines({ isBridgeServing, mounts }) : [];
   return [
     `[${tag}]`,
     ...headLines({ tag, workingDir, mounts }),
     ...teachingLines,
+    ...mountCommands,
     `[/${tag}]`,
   ].join('\n');
 };

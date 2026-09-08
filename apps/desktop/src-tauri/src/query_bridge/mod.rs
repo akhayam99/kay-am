@@ -1,6 +1,7 @@
 mod cli;
 mod dispatch;
 mod github;
+pub mod mount;
 pub mod project;
 pub mod protocol;
 
@@ -264,7 +265,7 @@ async fn answer(app: &tauri::AppHandle, line: &str) -> QueryResponse {
     };
     match dispatch::dispatch(app, &request).await {
         Ok(data) => QueryResponse::ok(data),
-        Err(error) => QueryResponse::failed(error),
+        Err(error) => QueryResponse::refused(error),
     }
 }
 

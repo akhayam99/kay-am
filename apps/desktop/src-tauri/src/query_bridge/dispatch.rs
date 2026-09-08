@@ -5,10 +5,11 @@ use serde::Serialize;
 use serde_json::Value;
 use tauri::{AppHandle, Manager};
 
-use super::protocol::{spec_for, Access, QueryRequest};
+use super::mount::MountRow;
+use super::protocol::{spec_for, Access, BridgeError, QueryRequest, MOUNT_UNAVAILABLE};
 use crate::db::Db;
 
-type Args = BTreeMap<String, Value>;
+pub(super) type Args = BTreeMap<String, Value>;
 
 fn encode<T: Serialize>(value: T) -> Result<Value, String> {
     serde_json::to_value(value).map_err(|error| error.to_string())
@@ -48,12 +49,39 @@ pub(super) struct Scope<'a> {
     pub(super) workspace: &'a str,
     pub(super) session: &'a str,
     pub(super) project: Option<String>,
+    pub(super) mount: Option<String>,
+    pub(super) args: &'a Args,
+    pub(super) resolved: Option<MountRow>,
 }
 
 impl Scope<'_> {
     pub(super) fn project_id(&self) -> Option<&str> {
         self.project.as_deref()
     }
+
+    pub(super) fn mount_id(&self) -> Option<&str> {
+        self.mount.as_deref()
+    }
+
+    pub(super) fn require_mount(&self) -> Result<MountRow, BridgeError> {
+        self.resolved.clone().ok_or_else(|| {
+            BridgeError::coded(
+                MOUNT_UNAVAILABLE,
+                "this command needs a mount of this session",
+            )
+        })
+    }
+}
+
+fn is_mount_dependent(provider: &str, verb: &str) -> bool {
+    provider == "github" || (provider == "gitlab" && verb == "mr-create")
+}
+
+fn creates_request(provider: &str, verb: &str) -> bool {
+    matches!(
+        (provider, verb),
+        ("github", "pr-create") | ("gitlab", "mr-create")
+    )
 }
 
 fn config_field(provider: &str, scope: &Scope<'_>, key: &str) -> Result<String, String> {
@@ -110,31 +138,50 @@ fn named_project_id(app: &AppHandle, workspace_id: &str, name: &str) -> Result<S
     .ok_or_else(|| format!("unknown project: {}", name))
 }
 
-pub async fn dispatch(app: &AppHandle, request: &QueryRequest) -> Result<Value, String> {
+pub async fn dispatch(app: &AppHandle, request: &QueryRequest) -> Result<Value, BridgeError> {
     if request.workspace_id.is_empty() {
-        return Err("no workspace: pass --workspace <id>".to_string());
+        return Err("no workspace: pass --workspace <id>".into());
     }
     let spec = spec_for(&request.provider, &request.verb)
         .ok_or_else(|| format!("unknown command: {} {}", request.provider, request.verb))?;
     if request.provider == "project" {
         return super::project::materialize(app, request).await;
     }
-    if request.provider != "github" {
-        ensure_connected(app, &request.workspace_id, &request.provider)?;
-    }
     let project = match request.project.trim() {
         "" => None,
         name => Some(named_project_id(app, &request.workspace_id, name)?),
     };
-    let scope = Scope {
+    let mut scope = Scope {
         workspace: &request.workspace_id,
         session: &request.session_id,
         project,
+        mount: match request.mount.trim() {
+            "" => None,
+            id => Some(id.to_string()),
+        },
+        args: &request.args,
+        resolved: None,
     };
+    if request.provider == "mount" {
+        return super::mount::dispatch(app, &scope, &request.verb).await;
+    }
+    if request.provider != "github" {
+        ensure_connected(app, &request.workspace_id, &request.provider)?;
+    }
+    if is_mount_dependent(&request.provider, &request.verb) {
+        scope.resolved = Some(super::mount::resolve_scope_mount(app, &scope)?);
+    }
+    if creates_request(&request.provider, &request.verb) {
+        return super::mount::create_request(app, &scope, &request.provider).await;
+    }
     let args = &request.args;
     match spec.access {
-        Access::Read => run_read(app, &request.provider, &request.verb, &scope, args).await,
-        Access::Write => run_write(app, &request.provider, &request.verb, &scope, args).await,
+        Access::Read => run_read(app, &request.provider, &request.verb, &scope, args)
+            .await
+            .map_err(BridgeError::from),
+        Access::Write => run_write(app, &request.provider, &request.verb, &scope, args)
+            .await
+            .map_err(BridgeError::from),
     }
 }
 
@@ -900,6 +947,21 @@ mod tests {
     }
 
     #[test]
+    fn a_host_command_that_writes_to_one_mount_resolves_it_before_the_provider_runs() {
+        assert!(is_mount_dependent("github", "push"));
+        assert!(is_mount_dependent("gitlab", "mr-create"));
+        assert!(!is_mount_dependent("gitlab", "mrs"));
+        assert!(!is_mount_dependent("slack", "reply"));
+    }
+
+    #[test]
+    fn creating_a_review_request_leaves_the_generic_provider_arms_alone() {
+        assert!(creates_request("github", "pr-create"));
+        assert!(creates_request("gitlab", "mr-create"));
+        assert!(!creates_request("github", "pr-merge"));
+    }
+
+    #[test]
     fn an_absent_flag_reads_as_false() {
         assert!(!flag(&args(&[]), "all"));
         assert!(flag(&args(&[("all", Value::from(true))]), "all"));
@@ -945,6 +1007,9 @@ mod tests {
     }
 
     const READ_VERBS: &[(&str, &str)] = &[
+        ("mount", "list"),
+        ("mount", "inspect"),
+        ("mount", "operation"),
         ("linear", "issue"),
         ("linear", "issues-assigned"),
         ("linear", "comments"),
@@ -988,6 +1053,12 @@ mod tests {
 
     const WRITE_VERBS: &[(&str, &str)] = &[
         ("project", "materialize"),
+        ("mount", "fork"),
+        ("mount", "switch"),
+        ("mount", "attach"),
+        ("mount", "unmount"),
+        ("mount", "activate"),
+        ("mount", "resolve"),
         ("linear", "comment-create"),
         ("linear", "issue-update"),
         ("github", "pr-comment-create"),
@@ -997,6 +1068,7 @@ mod tests {
         ("github", "pr-merge"),
         ("github", "issue-comment-create"),
         ("github", "push"),
+        ("github", "pr-create"),
         ("gitlab", "issue-update"),
         ("gitlab", "issue-note-create"),
         ("gitlab", "mr-note-create"),
@@ -1005,6 +1077,7 @@ mod tests {
         ("gitlab", "mr-approve"),
         ("gitlab", "mr-unapprove"),
         ("gitlab", "mr-merge"),
+        ("gitlab", "mr-create"),
         ("jira", "comment-create"),
         ("jira", "issue-update"),
         ("jira", "transition"),

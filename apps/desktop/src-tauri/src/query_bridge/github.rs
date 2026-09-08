@@ -1,15 +1,16 @@
-use rusqlite::OptionalExtension;
 use serde_json::{json, Value};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 use super::dispatch::Scope;
-use crate::db::Db;
+use super::mount::MountRow;
 use crate::github::{read_token, run_gh, run_git_push, GhRunResult};
 
 const NOT_CONNECTED: &str =
     "github is not connected: paste a personal API key in Goodboy, or sign in with `gh auth login`";
 const NO_SESSION: &str = "no session context: this command only works inside a Goodboy agent turn";
-const NO_MOUNT: &str = "this session mounts no repository";
+const NO_WORKTREE: &str = "this mount has no worktree on disk: attach it before pushing";
+const HEAD_MOVED: &str =
+    "the worktree is not on the branch this mount records: resolve the mismatch before pushing";
 const BRANCH_REFUSED: &str =
     "push always pushes this session's own mount branch; drop the branch argument";
 const NO_BRANCH: &str = "this mount has no branch to push";
@@ -57,17 +58,11 @@ const THREAD_REPLY_MUTATION: &str = "mutation($threadId:ID!,$body:String!){
   }
 }";
 
-struct Mount {
-    path: String,
-    branch: String,
-    repo_slug: Option<String>,
-    project_id: Option<String>,
-}
-
 struct Ctx {
     workspace: String,
     project: Option<String>,
-    mount: Mount,
+    mount: MountRow,
+    cwd: String,
 }
 
 fn credential_gate(has_token: bool, is_gh_cli_signed_in: bool) -> Result<(), String> {
@@ -267,64 +262,14 @@ fn shape_threads(payload: &Value) -> Value {
     Value::Array(threads)
 }
 
-fn mount_for(
-    app: &AppHandle,
-    workspace_id: &str,
-    session_id: &str,
-    project_id: Option<&str>,
-) -> Result<Mount, String> {
-    let state = app.state::<Db>();
-    let conn = state
-        .0
-        .lock()
-        .map_err(|_| "db mutex poisoned".to_string())?;
-    let session_workspace: Option<String> = conn
-        .query_row(
-            "SELECT workspace_id FROM sessions WHERE id = ?1",
-            rusqlite::params![session_id],
-            |row| row.get(0),
-        )
-        .optional()
-        .map_err(|error| error.to_string())?;
-    match session_workspace {
-        None => return Err(format!("unknown session: {}", session_id)),
-        Some(owner) if owner != workspace_id => {
-            return Err("this session does not belong to the requested workspace".to_string())
-        }
-        Some(_) => {}
-    }
-    let mount: Option<(String, String, Option<String>, Option<String>)> = conn
-        .query_row(
-            "SELECT sw.worktree_path, sw.branch, sw.repo_slug, sw.project_id
-             FROM session_worktrees sw
-             JOIN sessions s ON s.id = sw.session_id
-             WHERE sw.session_id = ?1
-               AND (?2 IS NULL OR sw.project_id = ?2)
-               AND sw.worktree_path IS NOT NULL
-               AND sw.is_attached = 1
-             ORDER BY CASE WHEN sw.id = s.active_mount_id THEN 0 ELSE 1 END,
-                      sw.parallel_index ASC, sw.created_at ASC, sw.id ASC
-             LIMIT 1",
-            rusqlite::params![session_id, project_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
-        )
-        .optional()
-        .map_err(|error| error.to_string())?;
-    mount
-        .map(|(path, branch, repo_slug, project_id)| Mount {
-            path,
-            branch,
-            repo_slug,
-            project_id,
-        })
-        .ok_or_else(|| NO_MOUNT.to_string())
-}
-
-async fn context(app: &AppHandle, scope: &Scope<'_>) -> Result<Ctx, String> {
+async fn context(_app: &AppHandle, scope: &Scope<'_>) -> Result<Ctx, String> {
     if scope.session.is_empty() {
         return Err(NO_SESSION.to_string());
     }
-    let mount = mount_for(app, scope.workspace, scope.session, scope.project_id())?;
+    let mount = scope.require_mount().map_err(|error| error.message)?;
+    let cwd = mount
+        .working_dir()
+        .ok_or_else(|| "this mount has no directory to run gh in".to_string())?;
     let project = match &scope.project {
         Some(project) => Some(project.clone()),
         None => mount.project_id.clone(),
@@ -351,6 +296,7 @@ async fn context(app: &AppHandle, scope: &Scope<'_>) -> Result<Ctx, String> {
         workspace,
         project,
         mount,
+        cwd,
     })
 }
 
@@ -358,7 +304,7 @@ impl Ctx {
     async fn gh(&self, args: Vec<String>) -> Result<GhRunResult, String> {
         let workspace = self.workspace.clone();
         let project = self.project.clone();
-        let cwd = self.mount.path.clone();
+        let cwd = self.cwd.clone();
         tauri::async_runtime::spawn_blocking(move || {
             let token =
                 read_token(Some(&workspace), project.as_deref()).filter(|token| !token.is_empty());
@@ -620,6 +566,22 @@ pub(super) async fn issue_comment_create(
     text_out(res)
 }
 
+fn head_branch(worktree_path: &str) -> Result<String, String> {
+    crate::worktree::git(
+        std::path::Path::new(worktree_path),
+        &["rev-parse", "--abbrev-ref", "HEAD"],
+    )
+    .map(|out| out.trim().to_string())
+    .map_err(|error| error.to_string())
+}
+
+fn head_verdict(observed: &str, branch: &str) -> Result<(), String> {
+    if observed == branch {
+        return Ok(());
+    }
+    Err(format!("{} (worktree is on {})", HEAD_MOVED, observed))
+}
+
 pub(super) async fn push(
     app: &AppHandle,
     scope: &Scope<'_>,
@@ -632,10 +594,25 @@ pub(super) async fn push(
     if branch.is_empty() {
         return Err(NO_BRANCH.to_string());
     }
+    let Some(worktree_path) = ctx
+        .mount
+        .worktree_path
+        .clone()
+        .filter(|_| ctx.mount.is_physical())
+    else {
+        return Err(NO_WORKTREE.to_string());
+    };
+    let verify_path = worktree_path.clone();
+    let verify_branch = branch.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        head_verdict(&head_branch(&verify_path)?, &verify_branch)
+    })
+    .await
+    .map_err(|error| error.to_string())??;
     let args = push_args(&branch, force_with_lease);
     let workspace = ctx.workspace.clone();
     let project = ctx.project.clone();
-    let cwd = ctx.mount.path.clone();
+    let cwd = worktree_path;
     let res = tauri::async_runtime::spawn_blocking(move || {
         let token =
             read_token(Some(&workspace), project.as_deref()).filter(|token| !token.is_empty());
@@ -687,6 +664,16 @@ mod tests {
 
         assert!(error.contains("own mount branch"));
         assert_eq!(branch_override_refusal(None), Ok(()));
+    }
+
+    #[test]
+    fn push_refuses_a_worktree_that_moved_off_the_branch_the_mount_records() {
+        assert_eq!(head_verdict("goodboy/feat-x", "goodboy/feat-x"), Ok(()));
+
+        let error = head_verdict("goodboy/other", "goodboy/feat-x").expect_err("a moved head");
+
+        assert!(error.contains("goodboy/other"));
+        assert!(error.contains("resolve the mismatch"));
     }
 
     #[test]

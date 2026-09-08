@@ -71,6 +71,49 @@ project carries none. On a verb that already owns a `project` argument, such as
 a GitLab project path or a Jira project key, the flag keeps its verb-specific
 meaning and sets no scope.
 
+## A mount is named, never guessed
+
+A session holds several mounts of the same project, each with its own worktree,
+branch and pull request. `--mount <id>` is a universal flag, like `--workspace`
+and `--project`, and `mount list` prints the ids. When a command that acts on a
+mount is given none, the bridge serves it only if exactly one mount is eligible;
+otherwise it refuses with `ambiguous_mount` and the candidates, and never falls
+back to the first row.
+
+`git checkout -b` is ambiguous, and no reading of git state settles it: the
+worktree looks the same whether the agent moved this line of work to another
+branch or opened a second one beside it. So the agent declares the intent.
+`mount switch` moves the mount and leaves earlier pull requests as history;
+`mount fork` creates another mount with its own worktree and leaves the source
+untouched. When the observed head disagrees with the recorded branch, the app
+stores the observation and refuses to act until `mount resolve --intent
+switch|fork` says which reading is right.
+
+Every mutation takes a `--reason` and a `--request-id`. The request id is
+recorded before the app is asked to do anything, so a socket timeout answers
+`operation_pending` rather than a failure: the work may well have happened, and
+retrying with the same id returns the original result instead of creating a
+second mount. The same id with different arguments is a `request_conflict`.
+`mount operation --request-id <id>` reads that record back.
+
+Creating a pull request is a mutation of the same kind: `github pr-create` and
+`gitlab mr-create` need an explicit `--mount`, open a draft unless `--ready`,
+and look the request up before creating another one, so a retry after a lost
+answer does not open a duplicate.
+
+A refusal may carry a machine-readable code beside its sentence:
+`ambiguous_mount`, `mount_unavailable`, `branch_mismatch`, `branch_in_use`,
+`unsafe_cleanup`, `operation_pending`, `request_conflict`. Codes are additive;
+the envelope stays `{ok, data, error}`.
+
+## No verb writes an event
+
+There is no `session event` command. Typed actions record their own events
+inside the transaction that performed them, and polling records the requests it
+discovers on the host. Letting an agent write a lifecycle event would let it
+assert a merge that never happened, and nothing downstream could tell the
+difference.
+
 ## Where it is reachable
 
 The socket is created when the app starts and removed when it stops, so an

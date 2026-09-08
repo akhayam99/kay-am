@@ -23,6 +23,7 @@ import { ReleaseToast } from './features/changelog/components/ReleaseToast';
 import { OnboardingCard } from './features/onboarding/OnboardingCard';
 import { listenBridgeCommands } from './features/companion/commandExecutor';
 import { listenProjectMaterializeRequests } from './features/session/projectMaterializeBridge';
+import { listenMountCommands } from './features/session/mountQueryBridge';
 import { startWorktreeWriterBridge } from './features/session/resolve/worktreeWriterBridge';
 import { useProviderRefreshOnFocus } from './shared/hooks/useProviderRefreshOnFocus';
 import { useZoomShortcuts } from './shared/hooks/useZoomShortcuts';
@@ -169,6 +170,22 @@ export const App = () => {
     let off: (() => void) | undefined;
     let cancelled = false;
     void listenProjectMaterializeRequests().then((fn) => {
+      if (cancelled) {
+        fn();
+        return;
+      }
+      off = fn;
+    });
+    return () => {
+      cancelled = true;
+      off?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    let off: (() => void) | undefined;
+    let cancelled = false;
+    void listenMountCommands().then((fn) => {
       if (cancelled) {
         fn();
         return;

@@ -22,6 +22,7 @@ export const QUERY_BRIDGE_VERBS: Readonly<
     'pr-merge',
     'issue-comment-create',
     'push',
+    'pr-create',
   ],
   gitlab: [
     'issues-assigned',
@@ -41,6 +42,7 @@ export const QUERY_BRIDGE_VERBS: Readonly<
     'mr-approve',
     'mr-unapprove',
     'mr-merge',
+    'mr-create',
   ],
   jira: [
     'issues',

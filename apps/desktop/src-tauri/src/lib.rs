@@ -272,6 +272,7 @@ pub fn run() {
             worktree_writer::worktree_writer_status,
             query_bridge::query_bridge_serving,
             query_bridge::project::project_materialize_result,
+            query_bridge::mount::mount_command_result,
             attachment::attachment_write,
             attachment::attachment_read,
             attachment::attachment_delete,

@@ -11,7 +11,7 @@ import type {
 import { QUERY_BRIDGE_VERBS, buildIntegrationsGuard } from './integrationsGuard';
 import { buildScopeGuard } from './scopeGuard';
 
-const SESSION_SCOPED_PROVIDERS: ReadonlyArray<string> = ['project'];
+const SESSION_SCOPED_PROVIDERS: ReadonlyArray<string> = ['project', 'mount'];
 
 const catalogSource = (): string =>
   readFileSync(resolve(process.cwd(), 'src-tauri/src/query_bridge/protocol.rs'), 'utf8');
@@ -157,6 +157,17 @@ describe('the advertised verbs', () => {
     const rust = catalogVerbs();
 
     expect(rust['project']).toEqual(['materialize']);
+    expect(rust['mount']).toEqual([
+      'list',
+      'inspect',
+      'fork',
+      'switch',
+      'attach',
+      'unmount',
+      'activate',
+      'resolve',
+      'operation',
+    ]);
     const now = '2026-08-22T00:00:00.000Z' as IsoDateTime;
     const project: Project = {
       id: 'project-guard' as ProjectId,

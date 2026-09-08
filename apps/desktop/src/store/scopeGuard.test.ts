@@ -103,10 +103,30 @@ describe('buildScopeGuard', () => {
 
     const materializeLines = guard
       .split('\n')
-      .filter((line) => line.includes('<<materialize:') || line.includes('GOODBOY_BIN'));
+      .filter((line) => line.includes('<<materialize:') || line.includes('query project'));
     expect(materializeLines).toHaveLength(1);
     expect(materializeLines[0]).toContain('query project materialize');
     expect(guard).not.toContain('After emitting the marker, end your turn.');
+  });
+
+  it('names the mount verbs on one line once a mount exists and the bridge serves', () => {
+    const guard = buildScopeGuard({
+      ...base,
+      projects: [app],
+      mounts: [appMount],
+      isBridgeServing: true,
+    });
+
+    const lines = guard.split('\n').filter((line) => line.includes('query mount list'));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('mount fork');
+    expect(lines[0]).toContain('mount switch');
+  });
+
+  it('says nothing about mount verbs while the bridge is silent', () => {
+    const guard = buildScopeGuard({ ...base, projects: [app], mounts: [appMount] });
+
+    expect(guard).not.toContain('query mount list');
   });
 
   it('suppresses the materialize instruction for kinds that cannot write', () => {

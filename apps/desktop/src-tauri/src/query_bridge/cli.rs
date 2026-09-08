@@ -44,15 +44,17 @@ fn run(argv: &[String]) -> Result<String, String> {
             .trim()
             .to_string(),
         project: project_scope(&parsed.args, argv),
+        mount: named_value(argv, "mount")
+            .unwrap_or_default()
+            .trim()
+            .to_string(),
         provider: parsed.provider,
         verb: parsed.verb,
         args: parsed.args,
     };
     let response = ask(&request)?;
     if !response.ok {
-        return Err(response
-            .error
-            .unwrap_or_else(|| "the bridge refused the request".to_string()));
+        return Err(refusal(&response));
     }
     let data = response.data.unwrap_or(serde_json::Value::Null);
     if named_flag(argv, "json") {
@@ -82,6 +84,23 @@ fn project_scope(
             .trim()
             .to_string(),
     }
+}
+
+fn refusal(response: &QueryResponse) -> String {
+    let mut lines: Vec<String> = vec![response
+        .error
+        .clone()
+        .unwrap_or_else(|| "the bridge refused the request".to_string())];
+    if let Some(code) = &response.code {
+        lines.push(format!("code: {}", code));
+    }
+    if let Some(candidates) = &response.candidates {
+        lines.push(format!(
+            "candidates: {}",
+            serde_json::to_string(candidates).unwrap_or_default()
+        ));
+    }
+    lines.join("\n")
 }
 
 fn named_value(argv: &[String], name: &str) -> Option<String> {
@@ -238,6 +257,40 @@ mod tests {
         let argv = owned(&["gitlab", "issue", "--project", "group/app", "--iid", "42"]);
 
         assert_eq!(project_scope(&args, &argv), "");
+    }
+
+    #[test]
+    fn a_refusal_prints_its_machine_code_and_the_mounts_the_caller_can_choose_from() {
+        let response = QueryResponse {
+            ok: false,
+            data: None,
+            error: Some("this session holds more than one mount".to_string()),
+            code: Some("ambiguous_mount".to_string()),
+            candidates: Some(serde_json::json!([{ "mountId": "mount-1" }])),
+        };
+
+        let printed = refusal(&response);
+
+        assert!(printed.contains("more than one mount"));
+        assert!(printed.contains("code: ambiguous_mount"));
+        assert!(printed.contains("mount-1"));
+    }
+
+    #[test]
+    fn a_plain_refusal_prints_only_its_message() {
+        let printed = refusal(&QueryResponse::failed("unknown project: app"));
+
+        assert_eq!(printed, "unknown project: app");
+    }
+
+    #[test]
+    fn the_mount_override_is_read_from_argv_in_both_spellings() {
+        let spaced = vec!["--mount".to_string(), "mount-1".to_string()];
+        let inline = vec!["--mount=mount-2".to_string()];
+
+        assert_eq!(named_value(&spaced, "mount").as_deref(), Some("mount-1"));
+        assert_eq!(named_value(&inline, "mount").as_deref(), Some("mount-2"));
+        assert_eq!(named_value(&[], "mount"), None);
     }
 
     #[test]
