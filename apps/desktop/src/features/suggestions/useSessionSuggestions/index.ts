@@ -14,7 +14,6 @@ import { workflowHasOpenQuestions } from '../../context/openQuestionsGate';
 import { splitWorkflowRuns } from '../../workflows/activeWorkflowRuns';
 import { useAttachedWorkflowRuns } from '../../workflows/useAttachedWorkflowRuns';
 import { useWorkflowAdvanceStates } from '../../workflows/useWorkflowAdvanceStates';
-import { useResolverIndex } from '../../session/hooks/useResolverIndex';
 import { useWorktreeStatuses } from '../../session/hooks/useWorktreeStatuses';
 import {
   deriveSessionSuggestions,
@@ -92,7 +91,6 @@ export const useSessionSuggestions = ({ session, agents, withRebase = true }: Pa
   const events = useAppStore(
     (state) => state.sessionEvents?.[sessionId] ?? (EMPTY_ARRAY as ReadonlyArray<SessionEvent>),
   );
-  const resolverIndex = useResolverIndex(sessionId);
   const targets = useMemo(
     () =>
       withRebase
@@ -192,7 +190,6 @@ export const useSessionSuggestions = ({ session, agents, withRebase = true }: Pa
     plans,
     projects,
     resolveRows,
-    resolverIndex,
     sessionId,
     withRebase,
     worktreeStatuses,

@@ -99,7 +99,7 @@ export const mapNotificationAction = (
       },
     };
   }
-  if (action.kind === 'retry-push-resolutions') {
+  if (action.kind === 'retry-publication') {
     const { sessionId } = action;
     return {
       label: 'Retry',
@@ -117,7 +117,7 @@ export const mapNotificationAction = (
           void store.emitNotification(
             'error',
             'error',
-            'retry failed, comments left unresolved',
+            'retry failed, conversations left open',
             formatError(err),
             { sessionId },
           );

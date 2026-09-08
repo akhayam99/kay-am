@@ -95,13 +95,13 @@ for the same ten kinds (`generic`, `scout`, `planner`, `implementer`,
 `debugger`, `tester`, `reviewer`, `pr-reviewer`, `docs`, `resolver`) would
 compete with it. Use `AgentAvatar`.
 
-## Run and resolver states
+## Run states
 
 | State     | Concept        | Glyph          | Tone    | Used by                                              |
 | --------- | -------------- | -------------- | ------- | ---------------------------------------------------- |
-| pending   | `runPending`   | `CircleDashed` | neutral | `AgentStatusIcon`, `ResolverStateIcon`               |
+| pending   | `runPending`   | `CircleDashed` | neutral | `AgentStatusIcon`                                    |
 | running   | none           | pulsing dot    | info    | `StatusDot tone="info" pulsing`                      |
-| done      | `runDone`      | `CircleCheck`  | success | `AgentStatusIcon`, `ResolverStateIcon`, run status   |
+| done      | `runDone`      | `CircleCheck`  | success | `AgentStatusIcon`, run status                        |
 | failed    | `runFailed`    | `CircleX`      | danger  | `AgentStatusIcon`                                    |
 | cancelled | `runCancelled` | `CircleSlash`  | neutral | `AgentStatusIcon` (skipped), discarded workflow runs |
 

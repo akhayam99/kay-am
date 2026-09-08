@@ -252,7 +252,10 @@ breadcrumb IA, exit on close or Esc, and only one is open at a time.
   and the conversation list never leaves the screen while a mode is open. There
   is no GitHub studio layered over a session: a saved `pr` lens on a GitHub
   session lands on Review. The code-host lens keeps serving GitLab and
-  Bitbucket, which still open their own studios.
+  Bitbucket, which still open their own studios. Everything the lens shows
+  comes from one durable conversation model, and everything it sends leaves
+  through one publisher, so a restart finds the same rows in the same states
+  and there is no second path that pushes a reply or closes a thread.
 - **A lens surface is reached from the overview, never from a rail.** Rows and
   chips inside the overview route to it, expanding in place or opening a side
   panel; counts and dots are read-only signals on the row that routes there.

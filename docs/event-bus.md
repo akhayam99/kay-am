@@ -32,14 +32,13 @@ Every event on this page is a browser CustomEvent sent via `window.dispatchEvent
 
 ## Session
 
-| Event                         | Payload                                                        | Dispatched from                                                                            | Listened in             | Purpose                                        |
-| ----------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ----------------------- | ---------------------------------------------- |
-| `goodboy:open-github-studio`  | `{ sessionId?, prNumber?, threadId?, issueExternalId?, tab? }` | TrackerStudioLinks/index.tsx, OnboardingCard/StepRow.tsx, ConvertWorkspaceDialog/index.tsx | useAppOverlays/index.ts | Open GitHub workspace studio.                  |
-| `goodboy:open-github-session` | `{ sessionId, prNumber?, threadId? }`                          | none in-app: kept one release for the palette and external dispatchers                     | useAppOverlays/index.ts | Compatibility entry that calls `openReview`.   |
-| `goodboy:open-gitlab-mr`      | `{ sessionId }`                                                | ContextPanel/strips/GitlabMrStrip.tsx, ProjectMountRows/ProjectMountRow.tsx, PrPane.tsx    | useAppOverlays/index.ts | Navigate to session with GitLab MR details.    |
-| `goodboy:open-bitbucket-pr`   | `{ sessionId }`                                                | ContextPanel/strips/BitbucketPrStrip.tsx, PrPane.tsx                                       | useAppOverlays/index.ts | Navigate to session with Bitbucket PR details. |
-| `goodboy:open-diff-viewer`    | `{ sessionId?, workingDir? }`                                  | FilesPane and the diff entry points                                                        | useAppOverlays/index.ts | Open diff viewer for session.                  |
-| `goodboy:open-plan-studio`    | `{ sessionId, planId? }`                                       | PlanChip/index.tsx, WorkflowStepPlanBadge.tsx, AgentDetailPane/AgentBriefPlans.tsx         | useAppOverlays/index.ts | Open plan studio for session.                  |
+| Event                        | Payload                                                        | Dispatched from                                                                            | Listened in             | Purpose                                        |
+| ---------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ----------------------- | ---------------------------------------------- |
+| `goodboy:open-github-studio` | `{ sessionId?, prNumber?, threadId?, issueExternalId?, tab? }` | TrackerStudioLinks/index.tsx, OnboardingCard/StepRow.tsx, ConvertWorkspaceDialog/index.tsx | useAppOverlays/index.ts | Open GitHub workspace studio.                  |
+| `goodboy:open-gitlab-mr`     | `{ sessionId }`                                                | ContextPanel/strips/GitlabMrStrip.tsx, ProjectMountRows/ProjectMountRow.tsx, PrPane.tsx    | useAppOverlays/index.ts | Navigate to session with GitLab MR details.    |
+| `goodboy:open-bitbucket-pr`  | `{ sessionId }`                                                | ContextPanel/strips/BitbucketPrStrip.tsx, PrPane.tsx                                       | useAppOverlays/index.ts | Navigate to session with Bitbucket PR details. |
+| `goodboy:open-diff-viewer`   | `{ sessionId?, workingDir? }`                                  | FilesPane and the diff entry points                                                        | useAppOverlays/index.ts | Open diff viewer for session.                  |
+| `goodboy:open-plan-studio`   | `{ sessionId, planId? }`                                       | PlanChip/index.tsx, WorkflowStepPlanBadge.tsx, AgentDetailPane/AgentBriefPlans.tsx         | useAppOverlays/index.ts | Open plan studio for session.                  |
 
 ## Workflow
 

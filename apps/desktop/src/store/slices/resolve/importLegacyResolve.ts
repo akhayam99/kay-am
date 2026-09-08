@@ -3,7 +3,6 @@ import {
   hasResolveImport,
   listMessagesForAgent,
   listOpenQuestionsForSession,
-  listPendingResolutionsForSession,
   listResolveThreads,
 } from '@goodboy/db';
 import type { ResolveThread } from '@goodboy/types';
@@ -11,7 +10,7 @@ import { tauriDatabase } from '../../../shared/lib/db';
 import { classifyAgent } from '../../../features/session/agent-kind';
 import { agentThreadIds } from '../../../features/session/agentThreadIds';
 import { resolverTurnOutcomes } from '../../../features/session/resolverTurnOutcomes';
-import type { ResolverThreadOutcome } from '../../types';
+import type { ResolverThreadOutcome } from '../../../features/session/resolverTurnOutcomes';
 import { createResolveThread } from './createResolveThread';
 import { outcomePatch } from './outcomePatch';
 import type { SessionParams, SliceParams } from './types';
@@ -25,7 +24,6 @@ export const importLegacyResolve = async ({ get, sessionId }: Params): Promise<v
     return;
   }
   const existing = await listResolveThreads({ db, sessionId });
-  const pending = await listPendingResolutionsForSession({ db, sessionId });
   const questions = await listOpenQuestionsForSession(db, sessionId);
   const rows = new Map<string, ResolveThread>(existing.map((row) => [row.threadId, row]));
   const agents = (get().sessionPhaseRuns[sessionId] ?? []).filter(
@@ -60,9 +58,7 @@ export const importLegacyResolve = async ({ get, sessionId }: Params): Promise<v
       if (prior !== undefined && prior.revision > 0) {
         continue;
       }
-      const member = pending.find((row) => row.threadId === threadId);
-      const base =
-        prior ?? createResolveThread({ sessionId, threadId, agent, prNumber: member?.prNumber });
+      const base = prior ?? createResolveThread({ sessionId, threadId, agent });
       const outcome = outcomes[threadId];
       const question =
         owned.length === 1
@@ -91,24 +87,16 @@ export const importLegacyResolve = async ({ get, sessionId }: Params): Promise<v
                         : 'missing_result',
             }
           : outcomePatch({ outcome, verdict: verdicts[threadId] });
-      const preservePending = member !== undefined;
+      const isMigrated = prior !== undefined;
+      const isRevisedAnalysis = base.disposition === 'reply' && verdicts[threadId] !== undefined;
       rows.set(threadId, {
         ...base,
         ...patch,
-        ...(preservePending && {
-          state:
-            member.outcome === 'analyzed' && verdicts[threadId] !== undefined
-              ? (patch.state ?? base.state)
-              : base.state,
-          stateReason:
-            member.outcome === 'analyzed' && verdicts[threadId] !== undefined
-              ? (patch.stateReason ?? null)
-              : base.stateReason,
-          disposition:
-            member.outcome === 'analyzed' && verdicts[threadId] !== undefined
-              ? (patch.disposition ?? null)
-              : base.disposition,
-          replyDraft: member.reply ?? patch.replyDraft ?? base.replyDraft,
+        ...(isMigrated && {
+          state: isRevisedAnalysis ? (patch.state ?? base.state) : base.state,
+          stateReason: isRevisedAnalysis ? (patch.stateReason ?? null) : base.stateReason,
+          disposition: isRevisedAnalysis ? (patch.disposition ?? null) : base.disposition,
+          replyDraft: base.replyDraft ?? patch.replyDraft ?? null,
           commitShas: base.commitShas,
         }),
         updatedAt: Date.now(),

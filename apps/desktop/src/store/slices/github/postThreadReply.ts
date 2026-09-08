@@ -1,5 +1,5 @@
 import { addReviewThreadReply } from '@goodboy/core';
-import { markPendingResolutionReplyPosted, upsertResolvePublicationThread } from '@goodboy/db';
+import { upsertResolvePublicationThread } from '@goodboy/db';
 import type { ResolvePublicationThread, SessionId } from '@goodboy/types';
 import { tauriGhRunner } from '../../../features/github/github';
 import { tauriDatabase } from '../../../shared/lib/db';
@@ -48,9 +48,6 @@ export const postThreadReply = async ({
     prNumber: pr?.number,
     patch: { replyPostedAt: postedAt, replyId: posted.id },
   });
-  await markPendingResolutionReplyPosted({ db: tauriDatabase, sessionId, threadId }).catch(
-    () => undefined,
-  );
   await upsertResolvePublicationThread({
     db: tauriDatabase,
     thread: { ...frozen, replyPhase: 'posted', replyId: posted.id, replyPostedAt: postedAt },

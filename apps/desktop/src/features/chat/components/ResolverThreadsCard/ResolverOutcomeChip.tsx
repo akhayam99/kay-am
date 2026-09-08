@@ -1,20 +1,20 @@
 import { Ban, CheckCheck, CircleHelp, Lock, Search } from 'lucide-react';
 import { Chip, type Tone } from '@goodboy/ui';
-import type { ResolverThreadSettlementKind } from '../../../session/resolverThreadSettlements';
+import type { ResolverThreadVerdictKind } from './resolverThreadVerdicts';
 
 type Props = {
-  readonly kind: ResolverThreadSettlementKind;
+  readonly kind: ResolverThreadVerdictKind;
   readonly isClosed: boolean;
 };
 
-const COPY: Record<ResolverThreadSettlementKind, string> = {
+const COPY: Record<ResolverThreadVerdictKind, string> = {
   resolved: 'fixed',
   wontfix: 'no change',
   analyzed: 'explained',
   open: 'needs you',
 };
 
-const TONE: Record<ResolverThreadSettlementKind, Tone> = {
+const TONE: Record<ResolverThreadVerdictKind, Tone> = {
   resolved: 'success',
   wontfix: 'warning',
   analyzed: 'info',
@@ -26,7 +26,7 @@ const ICON = {
   wontfix: Ban,
   analyzed: Search,
   open: CircleHelp,
-} satisfies Record<ResolverThreadSettlementKind, typeof CheckCheck>;
+} satisfies Record<ResolverThreadVerdictKind, typeof CheckCheck>;
 
 const CLOSED_COPY = 'closed';
 

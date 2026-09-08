@@ -12,12 +12,6 @@ import { refreshGithubStatus } from './refreshGithubStatus';
 import { refreshSessionPr } from './refreshSessionPr';
 import { refreshSessionPrDetail } from './refreshSessionPrDetail';
 import { selectSessionPr } from './selectSessionPr';
-import { resolveGithubThread } from './resolveGithubThread';
-import { resolveAgentThreads } from './resolveAgentThreads';
-import { queueResolution } from './queueResolution';
-import { dequeueResolution } from './dequeueResolution';
-import { loadPendingResolutions } from './loadPendingResolutions';
-import { pushAllResolutions } from './pushAllResolutions';
 import { pushSessionBranch } from './pushSessionBranch';
 import { setGithubPat } from './setGithubPat';
 import { sweepGithub } from './sweepGithub';
@@ -31,12 +25,6 @@ export const createGithubSlice = (set: SetFn, get: GetFn) => {
     refreshSessionPr: refreshSessionPr(set, get),
     refreshSessionPrDetail: refreshSessionPrDetail(set, get),
     selectSessionPr: selectSessionPr(set, get),
-    resolveGithubThread: resolveGithubThread(set, get),
-    resolveAgentThreads: resolveAgentThreads(set, get),
-    queueResolution: queueResolution(set, get),
-    dequeueResolution: dequeueResolution(set, get),
-    loadPendingResolutions: loadPendingResolutions(set, get),
-    pushAllResolutions: pushAllResolutions(set, get),
     pushSessionBranch: (sessionId: SessionId) => pushSessionBranch(get, sessionId),
     createPrForSession: createPrForSession(set, get),
     markPrReady: markPrReady(set, get),

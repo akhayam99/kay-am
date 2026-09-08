@@ -246,12 +246,22 @@ plans are viewable in a dedicated studio that renders them as a tree. A plan
 is also where a planner declares the projects the work will touch, which is
 what materializes them when an implementing step starts.
 
-### Review resolution
+### Review conversations
 
-A diff comment is a user's annotation on a line under review. A resolver is
-the agent assigned to address one review or diff comment with a local commit,
-never a push. Resolvers run serially on the session worktree so two fixes
-cannot race over the same branch.
+A diff comment is a user's annotation on a line under review. A review
+conversation is the durable record of one review, issue or diff comment: a
+`resolve_threads` row carrying its state, its verdict, its reply draft and the
+commit shas that answer it. A fix attempt is a `resolve_attempts` row: one
+agent working one or more conversations with a local commit, never a push.
+Attempts run serially on the session worktree so two fixes cannot race over
+the same branch, and a restart rebuilds every row from the database instead of
+from a transcript.
+
+Nothing reaches GitHub until a publication runs. A publication freezes the
+conversations it will publish, pushes the branch once if code has to travel,
+then posts each reply and resolves each thread, recording every step so an
+interrupted run resumes without posting twice. One publisher owns that path;
+there is no second way to push a reply or close a thread.
 
 ### Permission rules
 

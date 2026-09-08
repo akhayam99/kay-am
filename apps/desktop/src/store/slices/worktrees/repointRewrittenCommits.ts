@@ -52,32 +52,4 @@ export const repointRewrittenCommits = async ({
       patch: { commitShas: row.commitShas.map((sha) => (replaced.has(sha) ? head.sha : sha)) },
     });
   }
-  set((state) => ({
-    resolverThreadOutcomes: Object.fromEntries(
-      Object.entries(state.resolverThreadOutcomes).map(([agentId, byThread]) => [
-        agentId,
-        Object.fromEntries(
-          Object.entries(byThread).map(([threadId, outcome]) => [
-            threadId,
-            outcome.kind === 'resolved' && replaced.has(outcome.commitSha)
-              ? { ...outcome, commitSha: head.sha }
-              : outcome,
-          ]),
-        ),
-      ]),
-    ),
-  }));
-  const stale = (get().sessionPendingResolutions[sessionId] ?? []).filter((row) =>
-    replaced.has(row.commitSha),
-  );
-  for (const row of stale) {
-    await get().dequeueResolution(sessionId, row.threadId);
-    await get().queueResolution(sessionId, {
-      threadId: row.threadId,
-      commitSha: head.sha,
-      prNumber: row.prNumber,
-      reply: row.reply,
-      outcome: row.outcome,
-    });
-  }
 };

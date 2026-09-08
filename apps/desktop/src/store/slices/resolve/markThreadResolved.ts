@@ -3,19 +3,17 @@ import { upsertResolvePublicationThread } from '@goodboy/db';
 import type { ResolvePublicationThread, SessionId } from '@goodboy/types';
 import { tauriDatabase } from '../../../shared/lib/db';
 import { tauriGhRunner } from '../../../features/github/github';
-import { sessionThreadGhOptions } from './sessionThreadGhOptions';
-import type { GetFn, SetFn } from './types';
+import { sessionThreadGhOptions } from '../github/sessionThreadGhOptions';
+import type { GetFn } from './types';
 
 type Params = {
-  readonly set: SetFn;
   readonly get: GetFn;
   readonly sessionId: SessionId;
   readonly threadId: string;
   readonly frozen: ResolvePublicationThread;
 };
 
-export const markThreadResolvedNoPush = async ({
-  set,
+export const markThreadResolved = async ({
   get,
   sessionId,
   threadId,
@@ -41,17 +39,5 @@ export const markThreadResolvedNoPush = async ({
   await upsertResolvePublicationThread({
     db: tauriDatabase,
     thread: { ...frozen, resolvePhase: 'resolved', resolvedAt },
-  });
-  set((state) => {
-    const known = state.sessionResolvedThreads[sessionId] ?? [];
-    if (known.includes(threadId)) {
-      return {};
-    }
-    return {
-      sessionResolvedThreads: {
-        ...state.sessionResolvedThreads,
-        [sessionId]: [...known, threadId],
-      },
-    };
   });
 };

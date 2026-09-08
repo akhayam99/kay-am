@@ -147,15 +147,15 @@ describe('mapNotificationAction', () => {
     window.removeEventListener('goodboy:reveal-chat', revealed);
   });
 
-  it('retry-push-resolutions: returns action with Retry label', () => {
-    const action: NotificationAction = { kind: 'retry-push-resolutions', sessionId: SESSION_ID };
+  it('retry-publication: returns action with Retry label', () => {
+    const action: NotificationAction = { kind: 'retry-publication', sessionId: SESSION_ID };
     const store = buildStore();
     const toastAction = mapNotificationAction(action, store as never);
     expect(toastAction?.label).toBe('Retry');
   });
 
-  it('retry-push-resolutions: onClick reconciles a failed publication and publishes the fresh preview', async () => {
-    const action: NotificationAction = { kind: 'retry-push-resolutions', sessionId: SESSION_ID };
+  it('retry-publication: onClick reconciles a failed publication and publishes the fresh preview', async () => {
+    const action: NotificationAction = { kind: 'retry-publication', sessionId: SESSION_ID };
     const store = buildStore();
     const toastAction = mapNotificationAction(action, store as never);
     toastAction?.onClick();
@@ -168,10 +168,10 @@ describe('mapNotificationAction', () => {
     expect(retryPublicationSpy).toHaveBeenCalledWith({ sessionId: SESSION_ID });
   });
 
-  it('retry-push-resolutions: reports a rejected retry instead of leaving an unhandled rejection', async () => {
+  it('retry-publication: reports a rejected retry instead of leaving an unhandled rejection', async () => {
     const unhandled = vi.fn();
     process.on('unhandledRejection', unhandled);
-    const action: NotificationAction = { kind: 'retry-push-resolutions', sessionId: SESSION_ID };
+    const action: NotificationAction = { kind: 'retry-publication', sessionId: SESSION_ID };
     const store = buildStore({
       retryPublication: vi.fn(async () => {
         throw new Error('the pull request could not be read');
@@ -185,7 +185,7 @@ describe('mapNotificationAction', () => {
     expect(emitNotificationSpy).toHaveBeenCalledWith(
       'error',
       'error',
-      'retry failed, comments left unresolved',
+      'retry failed, conversations left open',
       expect.stringContaining('the pull request could not be read'),
       { sessionId: SESSION_ID },
     );
@@ -195,8 +195,8 @@ describe('mapNotificationAction', () => {
     process.off('unhandledRejection', unhandled);
   });
 
-  it('retry-push-resolutions: reports a rejected publication', async () => {
-    const action: NotificationAction = { kind: 'retry-push-resolutions', sessionId: SESSION_ID };
+  it('retry-publication: reports a rejected publication', async () => {
+    const action: NotificationAction = { kind: 'retry-publication', sessionId: SESSION_ID };
     const store = buildStore({
       publishConversations: vi.fn(async () => {
         throw new Error('github refused the reply');
@@ -210,7 +210,7 @@ describe('mapNotificationAction', () => {
     expect(emitNotificationSpy).toHaveBeenCalledWith(
       'error',
       'error',
-      'retry failed, comments left unresolved',
+      'retry failed, conversations left open',
       expect.stringContaining('github refused the reply'),
       { sessionId: SESSION_ID },
     );

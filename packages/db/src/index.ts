@@ -225,12 +225,6 @@ export {
   deleteDiffComment,
 } from './queries/diff-comment';
 export {
-  queuePendingResolution,
-  listPendingResolutionsForSession,
-  markPendingResolutionReplyPosted,
-  deletePendingResolution,
-} from './queries/pending-resolution';
-export {
   insertPrReviewDraft,
   listPrReviewDraftsForSession,
   updatePrReviewDraftBody,
