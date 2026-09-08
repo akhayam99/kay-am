@@ -113,13 +113,14 @@ export const listUnsettledMountOperations = async ({
   readonly db: Database;
 }): Promise<ReadonlyArray<MountOperation>> => {
   const rows = await db.select<Row>(
-    `SELECT id, session_id AS sessionId, mount_id AS mountId, request_id AS requestId,
-            kind, status, expected_revision AS expectedRevision, input_json AS input,
-            result_json AS result, error_code AS errorCode,
-            created_at AS createdAt, updated_at AS updatedAt
-     FROM mount_operations
-     WHERE status IN ('pending', 'running', 'uncertain')
-     ORDER BY created_at, id`,
+    `SELECT o.id, o.session_id AS sessionId, o.mount_id AS mountId, o.request_id AS requestId,
+            o.kind, o.status, o.expected_revision AS expectedRevision, o.input_json AS input,
+            o.result_json AS result, o.error_code AS errorCode,
+            o.created_at AS createdAt, o.updated_at AS updatedAt
+     FROM mount_operations o
+     JOIN sessions s ON s.id = o.session_id
+     WHERE s.deleted_at IS NULL AND o.status IN ('pending', 'running', 'uncertain')
+     ORDER BY o.created_at, o.id`,
     [],
   );
   return rows.map(toDomain);

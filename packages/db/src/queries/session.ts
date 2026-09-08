@@ -467,14 +467,6 @@ export const purgeSessionForDelete = async ({
           )`,
       [id, id],
     );
-    await db.execute('UPDATE sessions SET active_mount_id = NULL WHERE id = ?', [id]);
-    await db.execute(
-      `DELETE FROM mount_pr_links
-       WHERE mount_id IN (SELECT id FROM session_worktrees WHERE session_id = ?)`,
-      [id],
-    );
-    await db.execute('DELETE FROM mount_operations WHERE session_id = ?', [id]);
-    await db.execute('DELETE FROM session_worktrees WHERE session_id = ?', [id]);
     const now = Date.now();
     await db.execute('UPDATE sessions SET deleted_at = ?, updated_at = ? WHERE id = ?', [
       now,

@@ -7,7 +7,7 @@ const {
   worktreeWriterStatus,
   listSessionMounts,
   purgeSessionForDelete,
-  purgeSessionMounts,
+  detachSessionMounts,
   cancelTurn,
   listLiveRunIds,
 } = vi.hoisted(() => ({
@@ -48,9 +48,10 @@ const {
     },
   ]),
   purgeSessionForDelete: vi.fn(async () => undefined),
-  purgeSessionMounts: vi.fn(
+  detachSessionMounts: vi.fn(
     async (_params: {
       sessionId: string;
+      detached: ReadonlyArray<Record<string, unknown>>;
       retained: ReadonlyArray<Record<string, unknown>>;
     }): Promise<void> => undefined,
   ),
@@ -61,7 +62,7 @@ const {
 vi.mock('@goodboy/db', () => ({
   listSessionMounts,
   purgeSessionForDelete,
-  purgeSessionMounts,
+  detachSessionMounts,
 }));
 vi.mock('../../../shared/lib/db', () => ({ tauriDatabase: {} }));
 vi.mock('../../../features/worktree/worktree', () => ({
@@ -113,9 +114,10 @@ describe('deleting a session', () => {
     await deleteTask(vi.fn(), (() => store) as never)(SESSION_ID);
 
     expect(order).toEqual(['terminals closed', 'worktree removed']);
-    expect(purgeSessionMounts).toHaveBeenCalledWith({
+    expect(detachSessionMounts).toHaveBeenCalledWith({
       db: {},
       sessionId: SESSION_ID,
+      detached: [{ mountId: 'mount-1', diskState: 'removed' }],
       retained: [],
     });
     expect(purgeSessionForDelete).toHaveBeenCalledWith({ db: {}, id: SESSION_ID });
@@ -131,7 +133,8 @@ describe('deleting a session', () => {
 
     await deleteTask(vi.fn(), (() => store) as never)(SESSION_ID);
 
-    const call = purgeSessionMounts.mock.calls[0]?.[0];
+    const call = detachSessionMounts.mock.calls[0]?.[0];
+    expect(call?.detached).toEqual([{ mountId: 'mount-1', diskState: 'present' }]);
     expect(call?.retained).toEqual([
       expect.objectContaining({
         worktreePath: '/repo/.goodboy/worktrees/gb-ghost',
@@ -156,13 +159,14 @@ describe('deleting a session', () => {
 
     expect(cancelTurn).toHaveBeenCalledWith('run-1');
     expect(removeWorktreeChecked).not.toHaveBeenCalled();
-    const call = purgeSessionMounts.mock.calls[0]?.[0];
+    const call = detachSessionMounts.mock.calls[0]?.[0];
     expect(call?.retained).toHaveLength(1);
+    expect(call?.detached).toEqual([{ mountId: 'mount-1', diskState: 'present' }]);
   });
 
-  it('stops before marking the session deleted when the mount purge fails', async () => {
+  it('stops before marking the session deleted when the mount detach fails', async () => {
     const store = makeStore();
-    purgeSessionMounts.mockRejectedValueOnce(new Error('database is locked'));
+    detachSessionMounts.mockRejectedValueOnce(new Error('database is locked'));
 
     await expect(deleteTask(vi.fn(), (() => store) as never)(SESSION_ID)).rejects.toThrow(
       'database is locked',

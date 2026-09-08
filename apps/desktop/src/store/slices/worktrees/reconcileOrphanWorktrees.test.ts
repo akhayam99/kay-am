@@ -4,7 +4,7 @@ const {
   listMountPathOwnership,
   listAllRetainedWorktreePaths,
   listUnsettledMountOperations,
-  purgeSessionMounts,
+  detachSessionMounts,
   deleteRetainedWorktreePath,
   markRetainedWorktreePathChecked,
   scanOrphanWorktrees,
@@ -29,9 +29,10 @@ const {
   listUnsettledMountOperations: vi.fn(
     async (): Promise<ReadonlyArray<Record<string, unknown>>> => [],
   ),
-  purgeSessionMounts: vi.fn(
+  detachSessionMounts: vi.fn(
     async (_params: {
       sessionId: string;
+      detached: ReadonlyArray<Record<string, unknown>>;
       retained: ReadonlyArray<Record<string, unknown>>;
     }): Promise<void> => undefined,
   ),
@@ -59,7 +60,7 @@ vi.mock('@goodboy/db', () => ({
   listMountPathOwnership,
   listAllRetainedWorktreePaths,
   listUnsettledMountOperations,
-  purgeSessionMounts,
+  detachSessionMounts,
   deleteRetainedWorktreePath,
   markRetainedWorktreePathChecked,
 }));
@@ -173,8 +174,9 @@ describe('reconciling the worktrees folder', () => {
 
     await run(store);
 
-    const call = purgeSessionMounts.mock.calls[0]?.[0];
+    const call = detachSessionMounts.mock.calls[0]?.[0];
     expect(call?.sessionId).toBe('sess-gone');
+    expect(call?.detached).toEqual([{ mountId: 'mount-gone', diskState: 'present' }]);
     expect(call?.retained).toEqual([
       expect.objectContaining({
         worktreePath: '/repo/.goodboy/worktrees/gb-gone',
@@ -188,7 +190,7 @@ describe('reconciling the worktrees folder', () => {
     });
   });
 
-  it('drops a stale row of a deleted session when the folder is gone', async () => {
+  it('releases the path of a deleted session when the folder is gone', async () => {
     listMountPathOwnership.mockResolvedValue([
       {
         mountId: 'mount-gone',
@@ -212,9 +214,14 @@ describe('reconciling the worktrees folder', () => {
 
     await run(store);
 
-    expect(purgeSessionMounts).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: 'sess-gone', retained: [] }),
+    expect(detachSessionMounts).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: 'sess-gone',
+        detached: [{ mountId: 'mount-gone', diskState: 'removed' }],
+        retained: [],
+      }),
     );
+    expect(scanOrphanWorktrees).toHaveBeenCalledWith({ repoPath: '/repo', knownPaths: [] });
   });
 
   it('keeps a retained path it cannot read and clears one that is gone', async () => {

@@ -198,9 +198,10 @@ export {
   updateSessionWorktreePath,
   updateSessionWorktreeRepoSlug,
   listAllSessionWorktrees,
+  detachSessionMounts,
   listArchivedSessionMounts,
   listMountPathOwnership,
-  purgeSessionMounts,
+  type MountDetachment,
   type MountPathOwnership,
   type SessionWorktree,
 } from './queries/session-worktree';

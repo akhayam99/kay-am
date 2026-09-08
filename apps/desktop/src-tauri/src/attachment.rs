@@ -283,6 +283,7 @@ pub fn attachment_cleanup_orphans(state: State<'_, Db>) -> Result<u64, Attachmen
         let mut stmt = conn.prepare(
             "SELECT sw.worktree_path, ga.rel_path
              FROM session_worktrees sw
+             JOIN sessions s ON s.id = sw.session_id
              LEFT JOIN goal_attachments ga
                ON ga.session_id = sw.session_id
                OR ga.workflow_run_id IN (
@@ -290,7 +291,7 @@ pub fn attachment_cleanup_orphans(state: State<'_, Db>) -> Result<u64, Attachmen
                  FROM session_workflows
                  WHERE session_id = sw.session_id
                )
-             WHERE sw.worktree_path IS NOT NULL AND sw.is_attached = 1",
+             WHERE s.deleted_at IS NULL AND sw.worktree_path IS NOT NULL AND sw.is_attached = 1",
         )?;
         let rows = stmt.query_map([], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))

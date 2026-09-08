@@ -9,7 +9,7 @@ const {
   scratchDirRemove,
   tidyRepoGoodboyDir,
   listWorktreesForSession,
-  purgeSessionMounts,
+  detachSessionMounts,
   updateSessionWorktreeBranch,
   listSessionMounts,
   updateSessionMountBranch,
@@ -42,9 +42,10 @@ const {
   scratchDirRemove: vi.fn(async () => undefined),
   tidyRepoGoodboyDir: vi.fn(async () => undefined),
   listWorktreesForSession: vi.fn(async () => [] as ReadonlyArray<unknown>),
-  purgeSessionMounts: vi.fn(
+  detachSessionMounts: vi.fn(
     async (_params: {
       sessionId: string;
+      detached: ReadonlyArray<{ mountId: string; diskState: string }>;
       retained: ReadonlyArray<{ worktreePath: string }>;
     }): Promise<void> => undefined,
   ),
@@ -65,7 +66,7 @@ const {
 vi.mock('@goodboy/db', () => ({
   archiveSession,
   listWorktreesForSession,
-  purgeSessionMounts,
+  detachSessionMounts,
   updateSessionWorktreeBranch,
   listSessionMounts,
   updateSessionMountBranch,
@@ -617,8 +618,9 @@ describe('story: a two-project session routes git work through the active mount'
     expect(removeWorktreeChecked).toHaveBeenCalledTimes(2);
     expect(removeSessionDirectory).toHaveBeenCalledOnce();
     expect(store.emitNotification).toHaveBeenCalled();
-    const call = purgeSessionMounts.mock.calls[0]?.[0];
+    const call = detachSessionMounts.mock.calls[0]?.[0];
     expect(call?.retained.map((entry) => entry.worktreePath)).toEqual([API_WORKTREE_PATH]);
+    expect(call?.detached.map((entry) => entry.diskState)).toContain('present');
   });
 });
 

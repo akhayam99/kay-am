@@ -119,8 +119,9 @@ const hasPathOwner = async ({
 }: PathOwnerParams): Promise<boolean> => {
   const rows = await db.select<{ readonly source: string }>(
     `SELECT 'mount' AS source
-     FROM session_worktrees
-     WHERE worktree_path = ? AND (? IS NULL OR id != ?)
+     FROM session_worktrees mount
+     JOIN sessions s ON s.id = mount.session_id
+     WHERE mount.worktree_path = ? AND s.deleted_at IS NULL AND (? IS NULL OR mount.id != ?)
      UNION ALL
      SELECT 'retained' AS source
      FROM retained_worktree_paths
@@ -486,7 +487,9 @@ export const listAllSessionWorktrees = async (
   db: Database,
 ): Promise<ReadonlyArray<SessionWorktree>> => {
   const rows = await db.select<SessionWorktreeRow>(
-    'SELECT * FROM session_worktrees WHERE worktree_path IS NOT NULL AND is_attached = 1',
+    `SELECT mount.* FROM session_worktrees mount
+     JOIN sessions s ON s.id = mount.session_id
+     WHERE s.deleted_at IS NULL AND mount.worktree_path IS NOT NULL AND mount.is_attached = 1`,
     [],
   );
   return rows.flatMap((row) => {
@@ -560,20 +563,45 @@ export const listMountPathOwnership = async (
   }));
 };
 
-type PurgeSessionMountsParams = {
+export type MountDetachment = {
+  readonly mountId: MountId;
+  readonly diskState: MountDiskState;
+};
+
+type DetachSessionMountsParams = {
   readonly db: Database;
   readonly sessionId: SessionId;
+  readonly detached: ReadonlyArray<MountDetachment>;
   readonly retained: ReadonlyArray<RetainedWorktreePath>;
 };
 
-export const purgeSessionMounts = async ({
+const DETACH_MOUNT_SQL = `UPDATE session_worktrees
+   SET last_worktree_path = COALESCE(worktree_path, last_worktree_path), worktree_path = NULL,
+       is_attached = 0, disk_state = ?, revision = revision + 1, updated_at = ?`;
+
+export const detachSessionMounts = async ({
   db,
   sessionId,
+  detached,
   retained,
-}: PurgeSessionMountsParams): Promise<void> => {
+}: DetachSessionMountsParams): Promise<void> => {
+  const now = Date.now();
   await db.exec('BEGIN IMMEDIATE');
   try {
     await db.execute('UPDATE sessions SET active_mount_id = NULL WHERE id = ?', [sessionId]);
+    for (const mount of detached) {
+      await db.execute(`${DETACH_MOUNT_SQL} WHERE session_id = ? AND id = ?`, [
+        mount.diskState,
+        now,
+        sessionId,
+        mount.mountId,
+      ]);
+    }
+    await db.execute(`${DETACH_MOUNT_SQL} WHERE session_id = ? AND worktree_path IS NOT NULL`, [
+      'unchecked',
+      now,
+      sessionId,
+    ]);
     for (const path of retained) {
       await db.execute('DELETE FROM retained_worktree_paths WHERE worktree_path = ?', [
         path.worktreePath,
@@ -599,13 +627,6 @@ export const purgeSessionMounts = async ({
         ],
       );
     }
-    await db.execute(
-      `DELETE FROM mount_pr_links
-       WHERE mount_id IN (SELECT id FROM session_worktrees WHERE session_id = ?)`,
-      [sessionId],
-    );
-    await db.execute('DELETE FROM mount_operations WHERE session_id = ?', [sessionId]);
-    await db.execute('DELETE FROM session_worktrees WHERE session_id = ?', [sessionId]);
     await db.exec('COMMIT');
   } catch (error) {
     await db.exec('ROLLBACK');

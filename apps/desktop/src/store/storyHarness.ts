@@ -121,7 +121,7 @@ export const dbModuleMock = () => ({
   insertSessionEvent: storySpies.insertSessionEvent,
   deleteSessionWorktreeForProject: storySpies.deleteSessionWorktreeForProject,
   updateSessionMountLifecycle: vi.fn(async () => true),
-  purgeSessionMounts: vi.fn(async () => undefined),
+  detachSessionMounts: vi.fn(async () => undefined),
   listSessionMounts: vi.fn(async () => []),
   insertTelemetry: vi.fn(),
   insertWorkspace: vi.fn(),

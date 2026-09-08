@@ -4,7 +4,12 @@ import type { Database } from '../client';
 import { migrations } from '../migrations';
 import { migrate } from '../migrations/runner';
 import { makeTestDatabase } from '../test-helpers/test-db';
-import { getMountOperation, listMountOperations, upsertMountOperation } from './mount-operation';
+import {
+  getMountOperation,
+  listMountOperations,
+  listUnsettledMountOperations,
+  upsertMountOperation,
+} from './mount-operation';
 
 const workspaceId = 'workspace' as WorkspaceId;
 const sessionId = 'session' as SessionId;
@@ -55,6 +60,18 @@ describe('mount operations', () => {
     const stored = await getMountOperation({ db, sessionId, requestId: 'request' });
 
     expect(stored).toMatchObject({ status: 'succeeded', result: { mountId } });
+    expect(await listMountOperations({ db, sessionId })).toHaveLength(1);
+  });
+
+  it('stops reporting an in-flight request once its session is deleted', async () => {
+    const db = await seed();
+    await upsertMountOperation({ db, operation: operation({ status: 'pending' }) });
+
+    expect(await listUnsettledMountOperations({ db })).toHaveLength(1);
+
+    await db.execute('UPDATE sessions SET deleted_at = ? WHERE id = ?', [Date.now(), sessionId]);
+
+    expect(await listUnsettledMountOperations({ db })).toEqual([]);
     expect(await listMountOperations({ db, sessionId })).toHaveLength(1);
   });
 });

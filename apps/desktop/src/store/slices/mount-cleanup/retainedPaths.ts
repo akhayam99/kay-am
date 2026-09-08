@@ -1,10 +1,11 @@
 import {
   deleteRetainedWorktreePath,
+  detachSessionMounts,
   listAllRetainedWorktreePaths,
   listMountPathOwnership,
   listUnsettledMountOperations,
   markRetainedWorktreePathChecked,
-  purgeSessionMounts,
+  type MountDetachment,
   type MountPathOwnership,
 } from '@goodboy/db';
 import type { IsoDateTime, RetainedWorktreePath, SessionId } from '@goodboy/types';
@@ -87,16 +88,22 @@ export const reconcileWorktreeOwnership = async ({
   const adopted: Array<RetainedWorktreePath> = [];
   for (const [sessionId, rows] of stale) {
     const transfers: Array<RetainedWorktreePath> = [];
+    const detached: Array<MountDetachment> = [];
     for (const row of rows) {
       const outcome = await probePath(row.worktreePath);
       if (outcome === 'missing') {
+        detached.push({ mountId: row.mountId, diskState: 'removed' });
         continue;
       }
+      detached.push({
+        mountId: row.mountId,
+        diskState: outcome === 'present' ? 'present' : 'unchecked',
+      });
       const project = projects.find((candidate) => candidate.id === row.projectId);
       transfers.push(toRetained({ row, repoRoot: project?.rootPath ?? '', now }));
     }
     try {
-      await purgeSessionMounts({ db: tauriDatabase, sessionId, retained: transfers });
+      await detachSessionMounts({ db: tauriDatabase, sessionId, detached, retained: transfers });
       adopted.push(...transfers);
     } catch {
       continue;

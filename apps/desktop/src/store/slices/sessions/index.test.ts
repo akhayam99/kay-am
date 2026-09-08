@@ -130,7 +130,7 @@ vi.mock('@goodboy/db', async () => {
     listWorkspaces: vi.fn(async () => []),
     listWorktreesForSession: vi.fn(async () => []),
     listSessionMounts: vi.fn(async () => []),
-    purgeSessionMounts: vi.fn(async () => undefined),
+    detachSessionMounts: vi.fn(async () => undefined),
     getSessionMount: vi.fn(async () => null),
     updateSessionMountLifecycle: updateSessionMountLifecycleSpy,
     listWorktreesForSessions: vi.fn(async () => new Map()),

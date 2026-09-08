@@ -84,7 +84,7 @@ vi.mock('@goodboy/db', () => ({
   listMountPathOwnership: vi.fn(async () => []),
   listAllRetainedWorktreePaths: vi.fn(async () => []),
   listUnsettledMountOperations: vi.fn(async () => []),
-  purgeSessionMounts: vi.fn(async () => undefined),
+  detachSessionMounts: vi.fn(async () => undefined),
   deleteRetainedWorktreePath: vi.fn(async () => undefined),
   markRetainedWorktreePathChecked: vi.fn(async () => undefined),
   deleteMountPullRequestLink: h.deleteMountPullRequestLink,

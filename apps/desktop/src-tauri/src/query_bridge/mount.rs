@@ -103,7 +103,7 @@ pub(super) fn session_mounts(
         .map_err(|_| "db mutex poisoned".to_string())?;
     let owner: Option<String> = conn
         .query_row(
-            "SELECT workspace_id FROM sessions WHERE id = ?1",
+            "SELECT workspace_id FROM sessions WHERE id = ?1 AND deleted_at IS NULL",
             rusqlite::params![session_id],
             |row| row.get(0),
         )

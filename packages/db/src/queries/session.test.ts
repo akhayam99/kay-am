@@ -119,6 +119,20 @@ describe('purgeSessionForDelete', () => {
       [sessionId],
     );
     await db.execute(
+      `INSERT INTO mount_pr_links
+         (id, mount_id, provider, host, repo_slug, pr_number, head_branch, base_branch, url,
+          state, snapshot_json, last_observed_at, created_at, updated_at)
+       VALUES ('link-1', 'worktree-1', 'github', 'github.com', 'acme/app', 7, 'branch', 'main',
+               'https://github.com/acme/app/pull/7', 'merged', '{}', 1, 1, 1)`,
+    );
+    await db.execute(
+      `INSERT INTO mount_operations
+         (id, session_id, mount_id, request_id, kind, status, expected_revision, input_json,
+          created_at, updated_at)
+       VALUES ('operation-1', ?, 'worktree-1', 'req-1', 'unmount', 'succeeded', 0, '{}', 1, 1)`,
+      [sessionId],
+    );
+    await db.execute(
       `INSERT INTO diff_comments (id, session_id, file_path, body, status, created_at)
        VALUES ('comment-1', ?, 'file', 'body', 'open', 1)`,
       [sessionId],
@@ -164,12 +178,12 @@ describe('purgeSessionForDelete', () => {
       ['telemetry_records', 'session_id', sessionId],
       ['session_workflows', 'session_id', sessionId],
       ['diff_comments', 'session_id', sessionId],
+      ['session_worktrees', 'session_id', sessionId],
+      ['mount_pr_links', 'mount_id', 'worktree-1'],
+      ['mount_operations', 'session_id', sessionId],
     ] as const) {
       await expect(countRows({ db, table, column, value })).resolves.toBe(1);
     }
-    await expect(
-      countRows({ db, table: 'session_worktrees', column: 'session_id', value: sessionId }),
-    ).resolves.toBe(0);
     await expect(
       countRows({ db, table: 'sessions', column: 'id', value: otherSessionId }),
     ).resolves.toBe(1);
