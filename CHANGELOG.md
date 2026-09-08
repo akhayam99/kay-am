@@ -38,7 +38,7 @@ And a chain of continuation turns now stops after three, refuses to reopen the
 mount it is already in, and says why in the turn instead of going quiet.
 
 The tests that would have caught this exist now. The store slice runs against
-a real database with its constraints on, rather than a stand in that accepted
+a real database with its constraints on, rather than a stand-in that accepted
 anything, because the fault lived exactly in the seam neither half covered.
 
 ## Goodboy v0.2.21
