@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { worktreeChangedFiles } from '../features/worktree/worktree';
+import { readMockMountDiffStat } from './mock-data';
 import { selectNonResolverStandaloneAgents, type AgentKind } from '../features/session/agent-kind';
 import type {
   Agent,
@@ -774,6 +775,10 @@ const loadMountDiffStat = ({
   worktreePath,
   revision,
 }: LoadMountDiffStatParams): Promise<MountDiffStat> => {
+  const mocked = readMockMountDiffStat(worktreePath);
+  if (mocked !== null) {
+    return Promise.resolve(mocked);
+  }
   const key = `${revision}@${worktreePath}`;
   const pending = inFlightMountDiffStats.get(key);
   if (pending !== undefined) {

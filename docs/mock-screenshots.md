@@ -32,7 +32,10 @@ network, DOM) give visibility Tauri's webview does not.
   A shell-exported env var before `pnpm dev` is **not** picked up the same
   way; it has to be this file.
 - `apps/desktop/src/store/mock-data.ts` exports `MOCK_ENABLED =
-import.meta.env.VITE_GOODBOY_MOCK === '1'`.
+import.meta.env.VITE_GOODBOY_MOCK === '1' && import.meta.env.MODE !== 'test'`.
+  The test-mode half is not optional: vitest reads the same `.env.local`, so
+  without it every suite that renders `App` gets a mock scene instead and fails
+  in a way that looks like a regression in the feature under test.
 - `App.tsx` checks it as the literal first line of the `App` component body,
   before any hook: `if (MOCK_ENABLED) { return <MockScene />; }`. It has to
   be before the hooks, not after, or React's hook-count invariant breaks on

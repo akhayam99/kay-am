@@ -39,10 +39,16 @@ import { useGithubPolling } from './features/github/hooks/useGithubPolling';
 import { useUpdaterPolling } from './features/updater/hooks/useUpdaterPolling';
 import { useGithubConnection } from './features/integrations/github/useGithubConnection';
 import { useSessionSidebarVisibility } from './features/workspace/hooks/useSessionSidebarVisibility';
+import { MOCK_ENABLED } from './store/mock-data';
+import { MockScene } from './app/components/MockScene';
 
 const KEEP_ALIVE_CAP = 5;
 
 export const App = () => {
+  if (MOCK_ENABLED) {
+    return <MockScene />;
+  }
+
   const hydrate = useAppStore((s) => s.hydrate);
   const retryHydrate = useAppStore((s) => s.retryHydrate);
   const checkForUpdates = useAppStore((s) => s.checkForUpdates);
