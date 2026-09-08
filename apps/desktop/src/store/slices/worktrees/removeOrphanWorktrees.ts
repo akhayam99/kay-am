@@ -16,8 +16,7 @@ type OwnerParams = {
 };
 
 const worktreeOwner = ({ projects, path }: OwnerParams): Project | undefined =>
-  projects.find((project) => path.startsWith(`${project.rootPath}/.goodboy/worktrees/`)) ??
-  projects[0];
+  projects.find((project) => path.startsWith(`${project.rootPath}/.goodboy/worktrees/`));
 
 export const removeOrphanWorktrees = (set: SetFn, get: GetFn) => {
   return async ({ workspaceId, paths }: Params): Promise<void> => {
