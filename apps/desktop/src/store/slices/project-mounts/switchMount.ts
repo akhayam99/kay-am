@@ -5,7 +5,9 @@ import {
   changeWorktreeBranch,
   invalidateLocalBranchesCache,
 } from '../../../features/worktree/worktree';
+import { deriveBitbucketProjection } from '../bitbucket-pr/mountBitbucketPr';
 import { deriveGithubProjection } from '../github/mountGithub';
+import { deriveGitlabProjection } from '../gitlab-mr/mountGitlabMr';
 import { mountError } from './mountErrors';
 import { withRepositoryAndMountLock } from './mountLocks';
 import {
@@ -99,6 +101,8 @@ export const switchMount = (set: SetFn, get: GetFn) => {
         set((state) => {
           const isPrimary = nextViews[0]?.id === mountId;
           const github = state.mountGithub?.[mountId];
+          const gitlab = state.mountGitlabMr?.[mountId];
+          const bitbucket = state.mountBitbucketPr?.[mountId];
           const next = {
             ...state,
             mountGithub:
@@ -119,11 +123,31 @@ export const switchMount = (set: SetFn, get: GetFn) => {
                     },
                   },
             mountSelectedPr: { ...state.mountSelectedPr, [mountId]: null },
+            mountGitlabMr:
+              gitlab === undefined
+                ? (state.mountGitlabMr ?? {})
+                : {
+                    ...state.mountGitlabMr,
+                    [mountId]: { ...gitlab, branch: target, mr: null, fetchedAt: null },
+                  },
+            mountBitbucketPr:
+              bitbucket === undefined
+                ? (state.mountBitbucketPr ?? {})
+                : {
+                    ...state.mountBitbucketPr,
+                    [mountId]: { ...bitbucket, branch: target, pr: null, fetchedAt: null },
+                  },
+            mountSelectedBitbucketPr: { ...state.mountSelectedBitbucketPr, [mountId]: null },
           };
           return {
             mountGithub: next.mountGithub,
             mountSelectedPr: next.mountSelectedPr,
+            mountGitlabMr: next.mountGitlabMr,
+            mountBitbucketPr: next.mountBitbucketPr,
+            mountSelectedBitbucketPr: next.mountSelectedBitbucketPr,
             ...deriveGithubProjection({ state: next, sessionId }),
+            ...deriveGitlabProjection({ state: next, sessionId }),
+            ...deriveBitbucketProjection({ state: next, sessionId }),
             sessionBranches: isPrimary
               ? { ...state.sessionBranches, [sessionId]: target }
               : state.sessionBranches,

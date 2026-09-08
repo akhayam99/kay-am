@@ -5,7 +5,7 @@ import { runBitbucketPrWrite } from './runBitbucketPrWrite';
 import type { BitbucketPrCommentParams, GetFn, SetFn } from './types';
 
 export const commentOnBitbucketPr = (set: SetFn, get: GetFn) => {
-  return async ({ sessionId, repo, pullRequestId, body }: BitbucketPrCommentParams) => {
+  return async ({ sessionId, mountId, repo, pullRequestId, body }: BitbucketPrCommentParams) => {
     const attributedBody = appendAttribution({
       body,
       isEnabled: isSessionAttributionEnabled({ get, sessionId }),
@@ -15,6 +15,8 @@ export const commentOnBitbucketPr = (set: SetFn, get: GetFn) => {
       set,
       get,
       sessionId,
+      ...(mountId === undefined ? {} : { mountId }),
+      repo,
       pullRequestId,
       write: async () => {
         await bitbucketCreatePullRequestComment({

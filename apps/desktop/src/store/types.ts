@@ -63,7 +63,10 @@ import type { SessionWorktree } from '@goodboy/db';
 import type { AgentKind } from '../features/session/agent-kind';
 import type { ResolverState } from '../features/workspace/components/WorkspacesSidebar/lib';
 import type { GitlabMergeRequest } from '../features/integrations/gitlab/client';
-import type { BitbucketRepo } from '../features/integrations/bitbucket/client';
+import type {
+  BitbucketPullRequest,
+  BitbucketRepo,
+} from '../features/integrations/bitbucket/client';
 import type { SessionBitbucketPrEntry } from './slices/bitbucket-pr/state';
 import type { SlackThreadsSliceState } from './slices/slack-threads/state';
 import type {
@@ -167,6 +170,29 @@ export type MountGithubState = SessionGithubState & {
   readonly host: string | null;
   readonly branch: string;
   readonly prs: ReadonlyArray<PullRequestState>;
+  readonly links: ReadonlyArray<MountPullRequestLink>;
+};
+
+export type MountGitlabMrState = SessionGitlabMrState & {
+  readonly mountId: MountId;
+  readonly projectId: ProjectId;
+  readonly revision: number;
+  readonly host: string | null;
+  readonly projectPath: string | null;
+  readonly branch: string;
+  readonly mrs: ReadonlyArray<GitlabMergeRequest>;
+  readonly links: ReadonlyArray<MountPullRequestLink>;
+};
+
+export type MountBitbucketPrState = SessionBitbucketPrEntry & {
+  readonly mountId: MountId;
+  readonly projectId: ProjectId;
+  readonly revision: number;
+  readonly host: string | null;
+  readonly repo: BitbucketRepo | null;
+  readonly repository: string | null;
+  readonly branch: string;
+  readonly prs: ReadonlyArray<BitbucketPullRequest>;
   readonly links: ReadonlyArray<MountPullRequestLink>;
 };
 
@@ -295,10 +321,12 @@ export type AppState = AppSliceState & {
     Record<SessionId, Readonly<Record<ProjectId, ReadonlyArray<PullRequestState>>>>
   >;
   readonly sessionSelectedPrNumber: Readonly<Record<SessionId, number | null>>;
+  readonly mountGitlabMr: Readonly<Record<MountId, MountGitlabMrState>>;
   readonly sessionGitlabMr: Readonly<Record<SessionId, SessionGitlabMrState>>;
+  readonly mountBitbucketPr: Readonly<Record<MountId, MountBitbucketPrState>>;
+  readonly mountSelectedBitbucketPr: Readonly<Record<MountId, MountPullRequestIdentity | null>>;
   readonly sessionBitbucketPr: Readonly<Record<SessionId, SessionBitbucketPrEntry>>;
   readonly sessionBitbucketRepo: Readonly<Record<SessionId, BitbucketRepo>>;
-  readonly sessionSelectedBitbucketPrId: Readonly<Record<SessionId, number | null>>;
   readonly reviewPrs: Readonly<Record<WorkspaceId, ReviewPrsState>>;
   readonly reviewDrafts: Readonly<Record<SessionId, ReadonlyArray<PrReviewDraft>>>;
   readonly sessionPendingResolutions: Readonly<Record<SessionId, ReadonlyArray<PendingResolution>>>;

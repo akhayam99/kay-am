@@ -20,10 +20,14 @@ import type {
 } from '@goodboy/types';
 import { tauriGhRunner } from '../../../features/github/github';
 import { tauriDatabase } from '../../../shared/lib/db';
-import { applyMountGithub, pullRequestFromLink, requestIdentityEquals } from './mountGithub';
-import { githubRequestIdentity, requestHost, toMountPullRequestLink } from './mountPrLink';
-import { observePrTransition } from './observePrTransition';
-import { mountRevision, type MountPrFetch } from './resolveSessionPrFetch';
+import {
+  mountRevision,
+  observeMountRequestTransition,
+  requestIdentityEquals,
+} from '../project-mounts/mountRequests';
+import { applyMountGithub, pullRequestFromLink } from './mountGithub';
+import { githubRequestHost, githubRequestIdentity, toMountPullRequestLink } from './mountPrLink';
+import { type MountPrFetch } from './resolveSessionPrFetch';
 import type { GetFn, SetFn } from './types';
 
 export type RefreshPrOptions = {
@@ -202,13 +206,14 @@ export const refreshMountPr = async ({
         } else {
           nextLinks.push(link);
         }
-        await observePrTransition({
+        await observeMountRequestTransition({
           get,
           sessionId,
           projectId: mount.projectId,
           previous,
           next: link,
-          pr,
+          title: pr.title,
+          url: pr.url,
         });
       }
       if (!isCurrent()) {
@@ -248,7 +253,9 @@ export const refreshMountPr = async ({
             revision,
             repository,
             host:
-              canonical === null ? (current?.host ?? null) : requestHost({ url: canonical.url }),
+              canonical === null
+                ? (current?.host ?? null)
+                : githubRequestHost({ url: canonical.url }),
             branch: mount.branch,
             prs,
             links: nextLinks,

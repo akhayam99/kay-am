@@ -94,7 +94,8 @@ import { createAttachmentsSlice } from './slices/attachments';
 import { createGithubSlice } from './slices/github';
 import type { CreatePrInput } from './slices/github/createPrForSession';
 import type { RefreshPrOptions } from './slices/github/refreshMountPr';
-import { createGitlabMrSlice } from './slices/gitlab-mr';
+import { createGitlabMrSlice, initialGitlabMrState } from './slices/gitlab-mr';
+import type { CreateMrInput, MergeMrInput, RefreshMrOptions } from './slices/gitlab-mr';
 import {
   createBitbucketPrSlice,
   initialBitbucketPrState,
@@ -719,10 +720,7 @@ type AppActions = {
   markPrReady(sessionId: SessionId, prNumber?: number): Promise<void>;
   convertPrToDraft(sessionId: SessionId, prNumber?: number): Promise<void>;
   mergePr(sessionId: SessionId, prNumber?: number, method?: PrMergeMethod): Promise<void>;
-  refreshSessionMr(
-    sessionId: SessionId,
-    opts?: { force?: boolean; silent?: boolean },
-  ): Promise<void>;
+  refreshSessionMr(sessionId: SessionId, opts?: RefreshMrOptions): Promise<void>;
   refreshReviewPrs(workspaceId: WorkspaceId): Promise<void>;
   startPrReviewSession(workspaceId: WorkspaceId, pr: ReviewablePr): Promise<SessionId>;
   loadReviewDrafts(sessionId: SessionId): Promise<void>;
@@ -735,16 +733,17 @@ type AppActions = {
     markers: ReadonlyArray<ExtractedReviewComment>,
   ): Promise<void>;
   publishPrReview(sessionId: SessionId, opts: PublishPrReviewOpts): Promise<PublishPrReviewResult>;
-  createMrForSession(
-    sessionId: SessionId,
-    opts?: { title?: string; description?: string; targetBranch?: string; draft?: boolean },
-  ): Promise<void>;
-  mergeMrForSession(sessionId: SessionId): Promise<void>;
+  createMrForSession(input: CreateMrInput): Promise<void>;
+  mergeMrForSession(input: MergeMrInput): Promise<void>;
   refreshSessionBitbucketPr(
     sessionId: SessionId,
     opts?: RefreshSessionBitbucketPrOptions,
   ): Promise<void>;
-  selectSessionBitbucketPr(sessionId: SessionId, pullRequestId: number | null): Promise<void>;
+  selectSessionBitbucketPr(
+    sessionId: SessionId,
+    pullRequestId: number | null,
+    mountId?: MountId,
+  ): Promise<void>;
   approveBitbucketPr(params: BitbucketPrWriteParams): Promise<void>;
   unapproveBitbucketPr(params: BitbucketPrWriteParams): Promise<void>;
   requestBitbucketPrChanges(params: BitbucketPrWriteParams): Promise<void>;
@@ -1011,7 +1010,7 @@ export const initialState: AppState = {
   sessionGithub: {},
   sessionProjectPrs: {},
   sessionSelectedPrNumber: {},
-  sessionGitlabMr: {},
+  ...initialGitlabMrState,
   ...initialBitbucketPrState,
   ...initialSlackThreadsState,
   reviewPrs: {},

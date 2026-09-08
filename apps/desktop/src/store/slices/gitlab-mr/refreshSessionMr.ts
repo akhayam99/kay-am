@@ -1,54 +1,20 @@
-import type { IsoDateTime, SessionId } from '@goodboy/types';
-import { formatError } from '@goodboy/ui';
-import { gitlabMrForBranch } from '../../../features/integrations/gitlab/client';
-import { resolveMrContext } from './resolveMrContext';
+import type { SessionId } from '@goodboy/types';
+import { refreshMountMr, type RefreshMrOptions } from './refreshMountMr';
+import { listSessionMrTargets, resolveSessionMrTarget } from './resolveMrContext';
 import type { GetFn, SetFn } from './types';
 
+export type { RefreshMrOptions };
+
 export const refreshSessionMr = (set: SetFn, get: GetFn) => {
-  return async (sessionId: SessionId, opts?: { force?: boolean; silent?: boolean }) => {
-    if (!opts?.force && get().sessionGitlabMr[sessionId]?.loading) {
-      return;
-    }
-    const ctx = await resolveMrContext(get, sessionId);
-    if (!ctx) {
-      return;
-    }
-    set((state) => ({
-      sessionGitlabMr: {
-        ...state.sessionGitlabMr,
-        [sessionId]: {
-          mr: state.sessionGitlabMr[sessionId]?.mr ?? null,
-          fetchedAt: state.sessionGitlabMr[sessionId]?.fetchedAt ?? null,
-          loading: true,
-          error: null,
-        },
-      },
-    }));
-    try {
-      const mr = await gitlabMrForBranch(ctx.workspaceId, ctx.host, ctx.projectPath, ctx.branch);
-      set((state) => ({
-        sessionGitlabMr: {
-          ...state.sessionGitlabMr,
-          [sessionId]: {
-            mr,
-            fetchedAt: new Date().toISOString() as IsoDateTime,
-            loading: false,
-            error: null,
-          },
-        },
-      }));
-    } catch (err) {
-      set((state) => ({
-        sessionGitlabMr: {
-          ...state.sessionGitlabMr,
-          [sessionId]: {
-            mr: state.sessionGitlabMr[sessionId]?.mr ?? null,
-            fetchedAt: state.sessionGitlabMr[sessionId]?.fetchedAt ?? null,
-            loading: false,
-            error: opts?.silent ? null : formatError(err),
-          },
-        },
-      }));
-    }
+  return async (sessionId: SessionId, opts?: RefreshMrOptions): Promise<void> => {
+    const targets =
+      opts?.mountId === undefined
+        ? listSessionMrTargets({ get, sessionId })
+        : [resolveSessionMrTarget({ get, sessionId, mountId: opts.mountId })].flatMap((target) =>
+            target === null ? [] : [target],
+          );
+    await Promise.all(
+      targets.map((target) => refreshMountMr({ set, get, sessionId, target, opts })),
+    );
   };
 };

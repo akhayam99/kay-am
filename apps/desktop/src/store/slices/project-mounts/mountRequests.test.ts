@@ -8,8 +8,8 @@ import type {
   PullRequestStateKind,
   SessionId,
 } from '@goodboy/types';
-import { observePrTransition } from './observePrTransition';
-import type { GetFn } from './types';
+import { observeMountRequestTransition } from './mountRequests';
+import type { GetFn } from '../../slice-types';
 
 const sessionId = 'session-1' as SessionId;
 const projectId = 'project-1' as ProjectId;
@@ -70,19 +70,20 @@ type RecordParams = {
 const record = vi.fn(async (_params: RecordParams) => undefined);
 const get = (() => ({ recordSessionEventOnce: record })) as unknown as GetFn;
 
-describe('observePrTransition', () => {
+describe('observeMountRequestTransition', () => {
   beforeEach(() => {
     record.mockClear();
   });
 
   it('records an approval observed between two polls', async () => {
-    await observePrTransition({
+    await observeMountRequestTransition({
       get,
       sessionId,
       projectId,
       previous: makeLink({ state: 'open' }),
       next: makeLink({ state: 'approved' }),
-      pr: makePr({ state: 'approved' }),
+      title: 'Persist the session trace',
+      url: 'https://github.com/acme/web/pull/42',
     });
 
     expect(record).toHaveBeenCalledWith({
@@ -103,65 +104,70 @@ describe('observePrTransition', () => {
   });
 
   it('records a merge observed between two polls', async () => {
-    await observePrTransition({
+    await observeMountRequestTransition({
       get,
       sessionId,
       projectId,
       previous: makeLink({ state: 'approved' }),
       next: makeLink({ state: 'merged' }),
-      pr: makePr({ state: 'merged' }),
+      title: 'Persist the session trace',
+      url: 'https://github.com/acme/web/pull/42',
     });
 
     expect(record.mock.calls[0]?.[0]).toMatchObject({ kind: 'pr_merged' });
   });
 
   it('stays quiet when the state did not move', async () => {
-    await observePrTransition({
+    await observeMountRequestTransition({
       get,
       sessionId,
       projectId,
       previous: makeLink({ state: 'open' }),
       next: makeLink({ state: 'open' }),
-      pr: makePr({ state: 'open' }),
+      title: 'Persist the session trace',
+      url: 'https://github.com/acme/web/pull/42',
     });
 
     expect(record).not.toHaveBeenCalled();
   });
 
   it('stays quiet on a transition with no event of its own', async () => {
-    await observePrTransition({
+    await observeMountRequestTransition({
       get,
       sessionId,
       projectId,
       previous: makeLink({ state: 'draft' }),
       next: makeLink({ state: 'open' }),
-      pr: makePr({ state: 'open' }),
+      title: 'Persist the session trace',
+      url: 'https://github.com/acme/web/pull/42',
     });
 
     expect(record).not.toHaveBeenCalled();
   });
 
   it('records a discovery the first time a request is linked', async () => {
-    await observePrTransition({
+    await observeMountRequestTransition({
       get,
       sessionId,
       projectId,
       previous: null,
       next: makeLink({ state: 'merged' }),
-      pr: makePr({ state: 'merged' }),
+      title: 'Persist the session trace',
+      url: 'https://github.com/acme/web/pull/42',
     });
 
     expect(record.mock.calls[0]?.[0]).toMatchObject({ kind: 'pr_discovered' });
   });
 
   it('keeps the repository of the observed request in the payload', async () => {
-    await observePrTransition({
+    await observeMountRequestTransition({
       get,
       sessionId,
       projectId,
       previous: null,
       next: makeLink({ state: 'open', repoSlug: 'acme/api' }),
-      pr: makePr({ state: 'open' }),
+      title: 'Persist the session trace',
+      url: 'https://github.com/acme/web/pull/42',
     });
 
     expect(record.mock.calls[0]?.[0]).toMatchObject({

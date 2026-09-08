@@ -3,10 +3,9 @@ import type {
   MountId,
   MountPullRequestIdentity,
   MountPullRequestLink,
-  ProjectId,
   PullRequestState,
-  SessionEventPayload,
 } from '@goodboy/types';
+import { buildMountRequestLink, requestHost } from '../project-mounts/mountRequests';
 
 type IdentityParams = {
   readonly repository: string;
@@ -19,33 +18,19 @@ type LinkParams = IdentityParams & {
   readonly observedAt: IsoDateTime;
 };
 
-type PayloadParams = {
-  readonly mountId: MountId;
-  readonly projectId: ProjectId;
-  readonly identity: MountPullRequestIdentity;
-  readonly title: string;
-  readonly url: string;
-  readonly branch?: string;
-};
-
 type HostParams = {
   readonly url: string;
 };
 
-export const requestHost = ({ url }: HostParams): string => {
-  try {
-    return new URL(url).hostname.toLowerCase();
-  } catch {
-    return 'github.com';
-  }
-};
+export const githubRequestHost = ({ url }: HostParams): string =>
+  requestHost({ url, fallback: 'github.com' });
 
 export const githubRequestIdentity = ({
   repository,
   pr,
 }: IdentityParams): MountPullRequestIdentity => ({
   provider: 'github',
-  host: requestHost({ url: pr.url }),
+  host: githubRequestHost({ url: pr.url }),
   repoSlug: repository,
   prNumber: pr.number,
 });
@@ -56,35 +41,15 @@ export const toMountPullRequestLink = ({
   pr,
   existing,
   observedAt,
-}: LinkParams): MountPullRequestLink => ({
-  id: existing?.id ?? crypto.randomUUID(),
-  mountId,
-  ...githubRequestIdentity({ repository, pr }),
-  headBranch: pr.headBranch,
-  baseBranch: pr.baseBranch,
-  url: pr.url,
-  state: pr.state,
-  snapshot: pr,
-  lastObservedAt: observedAt,
-  createdAt: existing?.createdAt ?? observedAt,
-  updatedAt: observedAt,
-});
-
-export const mountPrEventPayload = ({
-  mountId,
-  projectId,
-  identity,
-  title,
-  url,
-  branch,
-}: PayloadParams): SessionEventPayload => ({
-  mountId,
-  projectId,
-  provider: identity.provider,
-  host: identity.host,
-  repository: identity.repoSlug,
-  number: identity.prNumber,
-  title,
-  url,
-  ...(branch === undefined ? {} : { branch }),
-});
+}: LinkParams): MountPullRequestLink =>
+  buildMountRequestLink({
+    mountId,
+    identity: githubRequestIdentity({ repository, pr }),
+    headBranch: pr.headBranch,
+    baseBranch: pr.baseBranch,
+    url: pr.url,
+    state: pr.state,
+    snapshot: pr,
+    existing,
+    observedAt,
+  });

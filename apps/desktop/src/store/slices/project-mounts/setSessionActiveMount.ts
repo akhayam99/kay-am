@@ -1,6 +1,8 @@
 import { updateSessionActiveMount, updateSessionActiveProject } from '@goodboy/db';
 import { tauriDatabase } from '../../../shared/lib/db';
+import { deriveBitbucketProjection } from '../bitbucket-pr/mountBitbucketPr';
 import { deriveGithubProjection } from '../github/mountGithub';
+import { deriveGitlabProjection } from '../gitlab-mr/mountGitlabMr';
 import { mountError } from './mountErrors';
 import { selectWritableMounts } from './selectors';
 import type { GetFn, MountKeyInput, SetFn } from './types';
@@ -19,8 +21,6 @@ export const setSessionActiveMount = (set: SetFn, get: GetFn) => {
     }
     const projectId = mount.projectId;
     set((state) => {
-      const nextGitlab = { ...state.sessionGitlabMr };
-      delete nextGitlab[sessionId];
       const next = {
         ...state,
         sessionActiveMount: { ...state.sessionActiveMount, [sessionId]: mountId },
@@ -35,8 +35,9 @@ export const setSessionActiveMount = (set: SetFn, get: GetFn) => {
         sessionActiveMount: next.sessionActiveMount,
         sessionActiveProject: next.sessionActiveProject,
         sessionBranches: { ...state.sessionBranches, [sessionId]: mount.branch },
-        sessionGitlabMr: nextGitlab,
         ...deriveGithubProjection({ state: next, sessionId }),
+        ...deriveGitlabProjection({ state: next, sessionId }),
+        ...deriveBitbucketProjection({ state: next, sessionId }),
       };
     });
     if (get().githubStatus?.available === true) {

@@ -5,7 +5,8 @@ import { tauriGhRunner } from '../../../features/github/github';
 import { appendClosingReferences } from '../../../features/github/appendClosingReferences';
 import { closingIssueReferences } from '../../../features/github/closingIssueReferences';
 import { tauriDatabase } from '../../../shared/lib/db';
-import { mountPrEventPayload, requestHost } from './mountPrLink';
+import { mountRequestEventPayload } from '../project-mounts/mountRequests';
+import { githubRequestHost } from './mountPrLink';
 import { resolveSessionPrFetch } from './resolveSessionPrFetch';
 import type { GetFn, SetFn } from './types';
 
@@ -131,7 +132,7 @@ export const createPrForSession = (_set: SetFn, get: GetFn) => {
         id: crypto.randomUUID(),
         mountId: mount.id,
         provider: 'github',
-        host: requestHost({ url }),
+        host: githubRequestHost({ url }),
         repoSlug: repository,
         prNumber: number,
         headBranch: mount.branch,
@@ -147,7 +148,7 @@ export const createPrForSession = (_set: SetFn, get: GetFn) => {
       await get().recordSessionEventOnce({
         sessionId,
         kind: 'pr_created',
-        payload: mountPrEventPayload({
+        payload: mountRequestEventPayload({
           mountId: mount.id,
           projectId: mount.projectId,
           identity: link,

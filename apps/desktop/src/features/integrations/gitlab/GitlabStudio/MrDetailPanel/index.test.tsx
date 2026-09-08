@@ -168,7 +168,8 @@ describe('MrDetailPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create MR' }));
 
     await waitFor(() =>
-      expect(h.store.createMrForSession).toHaveBeenCalledWith(SESSION_ID, {
+      expect(h.store.createMrForSession).toHaveBeenCalledWith({
+        sessionId: SESSION_ID,
         title: 'Ship the GitLab release',
         description: 'Documents the release changes.',
         targetBranch: 'develop',
@@ -204,8 +205,7 @@ describe('MrDetailPanel', () => {
 
     await waitFor(() =>
       expect(h.store.createMrForSession).toHaveBeenCalledWith(
-        SESSION_ID,
-        expect.objectContaining({ draft: false }),
+        expect.objectContaining({ sessionId: SESSION_ID, draft: false }),
       ),
     );
   });

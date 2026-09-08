@@ -1,52 +1,77 @@
-import type { GitlabIntegrationBinding, ProjectId, SessionId, WorkspaceId } from '@goodboy/types';
+import type { GitlabIntegrationBinding, MountId, SessionId, WorkspaceId } from '@goodboy/types';
 import { worktreeRemoteUrl } from '../../../features/worktree/worktree';
 import { projectPathFromRemoteUrl } from '../../../shared/lib/remoteHost';
-import { getSessionRepo } from '../worktrees/getSessionRepo';
+import {
+  listMountFetches,
+  resolveMountFetch,
+  type MountFetch,
+} from '../project-mounts/mountRequests';
 import type { GetFn } from './types';
 
 export type MrContext = {
-  readonly sessionId: SessionId;
+  readonly target: MountFetch;
   readonly workspaceId: WorkspaceId;
-  readonly projectId: ProjectId;
-  readonly rootPath: string;
-  readonly branch: string;
   readonly host: string;
   readonly projectPath: string;
   readonly goal: string;
 };
 
-export const resolveMrContext = async (
-  get: GetFn,
-  sessionId: SessionId,
-): Promise<MrContext | null> => {
-  const session = get().sessions.find((s) => s.id === sessionId);
-  const repo = getSessionRepo({ get, sessionId });
-  if (repo == null || repo.branch.length === 0 || !session) {
+type ContextParams = {
+  readonly get: GetFn;
+  readonly sessionId: SessionId;
+  readonly target: MountFetch;
+};
+
+type TargetParams = {
+  readonly get: GetFn;
+  readonly sessionId: SessionId;
+  readonly mountId?: MountId;
+};
+
+const gitlabIntegration = ({
+  get,
+  workspaceId,
+}: {
+  readonly get: GetFn;
+  readonly workspaceId: WorkspaceId;
+}): GitlabIntegrationBinding | null =>
+  (get().workspaceIntegrations[workspaceId] ?? []).find(
+    (candidate): candidate is GitlabIntegrationBinding => candidate.provider === 'gitlab',
+  ) ?? null;
+
+export const resolveMrContext = async ({
+  get,
+  target,
+}: ContextParams): Promise<MrContext | null> => {
+  const session = target.session;
+  const integration = gitlabIntegration({ get, workspaceId: session.workspaceId });
+  if (integration === null) {
     return null;
   }
-  const workspace = get().workspaces.find((w) => w.id === session.workspaceId);
-  if (!workspace) {
-    return null;
-  }
-  const integration = (get().workspaceIntegrations[session.workspaceId] ?? []).find(
-    (i): i is GitlabIntegrationBinding => i.provider === 'gitlab',
-  );
-  if (!integration) {
-    return null;
-  }
-  const remoteUrl = await worktreeRemoteUrl(repo.repoRoot);
+  const remoteUrl = await worktreeRemoteUrl(target.mount.repoRoot);
   const projectPath = projectPathFromRemoteUrl(remoteUrl);
-  if (!projectPath) {
+  if (projectPath === null) {
     return null;
   }
   return {
-    sessionId,
+    target,
     workspaceId: session.workspaceId,
-    projectId: repo.projectId,
-    rootPath: repo.repoRoot,
-    branch: repo.branch,
     host: integration.config.host,
     projectPath,
     goal: session.goal,
   };
 };
+
+export const listSessionMrTargets = ({ get, sessionId }: TargetParams): ReadonlyArray<MountFetch> =>
+  listMountFetches({ state: get(), sessionId });
+
+export const resolveSessionMrTarget = ({
+  get,
+  sessionId,
+  mountId,
+}: TargetParams): MountFetch | null =>
+  resolveMountFetch({
+    state: get(),
+    sessionId,
+    ...(mountId === undefined ? {} : { mountId }),
+  });

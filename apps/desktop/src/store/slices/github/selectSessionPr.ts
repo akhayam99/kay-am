@@ -1,5 +1,6 @@
 import type { MountId, SessionId } from '@goodboy/types';
-import { applyMountGithub, requestIdentityEquals } from './mountGithub';
+import { requestIdentityEquals } from '../project-mounts/mountRequests';
+import { applyMountGithub } from './mountGithub';
 import { githubRequestIdentity } from './mountPrLink';
 import { resolveSessionPrFetch } from './resolveSessionPrFetch';
 import type { GetFn, SetFn } from './types';

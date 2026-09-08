@@ -2,9 +2,10 @@ import { detectRepoSlug, fetchPrDetail } from '@goodboy/core';
 import { formatError } from '@goodboy/ui';
 import type { IsoDateTime, MountId, SessionId } from '@goodboy/types';
 import { tauriGhRunner } from '../../../features/github/github';
-import { applyMountGithub, requestIdentityEquals } from './mountGithub';
+import { mountRevision, requestIdentityEquals } from '../project-mounts/mountRequests';
+import { applyMountGithub } from './mountGithub';
 import { githubRequestIdentity } from './mountPrLink';
-import { mountRevision, resolveSessionPrFetch } from './resolveSessionPrFetch';
+import { resolveSessionPrFetch } from './resolveSessionPrFetch';
 import type { ResolveUpdates } from '../resolve/types';
 import type { GetFn, SetFn } from './types';
 

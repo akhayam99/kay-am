@@ -1,8 +1,9 @@
-import type { IsoDateTime, SessionId } from '@goodboy/types';
+import type { IsoDateTime, MountId, MountPullRequestIdentity, SessionId } from '@goodboy/types';
 import type {
   BitbucketPullRequest,
   BitbucketRepo,
 } from '../../../features/integrations/bitbucket/client';
+import type { MountBitbucketPrState } from '../../types';
 
 export type SessionBitbucketPrEntry = {
   readonly pr: BitbucketPullRequest | null;
@@ -12,24 +13,15 @@ export type SessionBitbucketPrEntry = {
 };
 
 export type BitbucketPrSliceState = {
+  readonly mountBitbucketPr: Readonly<Record<MountId, MountBitbucketPrState>>;
+  readonly mountSelectedBitbucketPr: Readonly<Record<MountId, MountPullRequestIdentity | null>>;
   readonly sessionBitbucketPr: Readonly<Record<SessionId, SessionBitbucketPrEntry>>;
   readonly sessionBitbucketRepo: Readonly<Record<SessionId, BitbucketRepo>>;
-  readonly sessionSelectedBitbucketPrId: Readonly<Record<SessionId, number | null>>;
 };
 
 export const initialBitbucketPrState: BitbucketPrSliceState = {
+  mountBitbucketPr: {},
+  mountSelectedBitbucketPr: {},
   sessionBitbucketPr: {},
   sessionBitbucketRepo: {},
-  sessionSelectedBitbucketPrId: {},
 };
-
-type EntryParams = {
-  readonly entry: SessionBitbucketPrEntry | undefined;
-};
-
-export const carryForward = ({ entry }: EntryParams): SessionBitbucketPrEntry => ({
-  pr: entry?.pr ?? null,
-  fetchedAt: entry?.fetchedAt ?? null,
-  loading: false,
-  error: null,
-});

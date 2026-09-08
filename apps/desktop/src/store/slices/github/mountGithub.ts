@@ -7,8 +7,8 @@ import type {
   SessionId,
 } from '@goodboy/types';
 import type { AppState, MountGithubState, SessionGithubState } from '../../types';
+import { sessionMountTargets } from '../project-mounts/mountRequests';
 import { selectActiveMountId } from '../project-mounts/selectors';
-import { sessionMountTargets } from './resolveSessionPrFetch';
 
 export type GithubProjection = Pick<
   AppState,
@@ -27,11 +27,6 @@ type ProjectionState = Pick<
   | 'mountGithub'
   | 'mountSelectedPr'
 >;
-
-type IdentityParams = {
-  readonly identity: MountPullRequestIdentity;
-  readonly candidate: MountPullRequestIdentity;
-};
 
 type LinkParams = {
   readonly link: MountPullRequestLink;
@@ -54,12 +49,6 @@ const isPullRequestState = (value: unknown): value is PullRequestState => {
     typeof record.state === 'string'
   );
 };
-
-export const requestIdentityEquals = ({ identity, candidate }: IdentityParams): boolean =>
-  identity.provider === candidate.provider &&
-  identity.host === candidate.host &&
-  identity.repoSlug === candidate.repoSlug &&
-  identity.prNumber === candidate.prNumber;
 
 export const pullRequestFromLink = ({ link }: LinkParams): PullRequestState | null =>
   isPullRequestState(link.snapshot) ? link.snapshot : null;

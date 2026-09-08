@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { OverrideSettings, SessionId, WorkspaceId } from '@goodboy/types';
+import type {
+  IsoDateTime,
+  MountId,
+  MountPullRequestLink,
+  OverrideSettings,
+  ProjectId,
+  SessionId,
+  WorkspaceId,
+} from '@goodboy/types';
 import type { AppStore } from '../../store';
 import { overridesWithAttribution } from '../../../__tests__/helpers/attributionOverrides';
 import type { BitbucketPullRequest } from '../../../features/integrations/bitbucket/client';
@@ -39,20 +47,63 @@ vi.mock('../../../features/worktree/worktree', () => ({
   worktreeRemoteUrl: () => remoteUrlSpy(),
 }));
 
-vi.mock('../worktrees/getSessionRepo', () => ({
-  getSessionRepo: () => ({
-    repoRoot: '/repos/rocket',
-    worktreePath: '/repos/rocket',
-    branch: 'ak/feat-thing',
-    mountName: null,
-    workspaceId: 'ws-1' as WorkspaceId,
+const links: Array<MountPullRequestLink> = [];
+
+vi.mock('@goodboy/db', () => ({
+  listMountPullRequestLinks: vi.fn(async ({ mountId }: { readonly mountId: MountId }) =>
+    links.filter((link) => link.mountId === mountId),
+  ),
+  upsertMountPullRequestLink: vi.fn(async ({ link }: { readonly link: MountPullRequestLink }) => {
+    const index = links.findIndex(
+      (candidate) =>
+        candidate.mountId === link.mountId &&
+        candidate.host === link.host &&
+        candidate.repoSlug === link.repoSlug &&
+        candidate.prNumber === link.prNumber,
+    );
+    if (index >= 0) {
+      links.splice(index, 1, link);
+    } else {
+      links.push(link);
+    }
+    return true;
   }),
 }));
+
+vi.mock('../../../shared/lib/db', () => ({ tauriDatabase: {} }));
 
 const { createBitbucketPrSlice, initialBitbucketPrState } = await import('./index');
 
 const SESSION_ID = 'sess-1' as SessionId;
 const WORKSPACE_ID = 'ws-1' as WorkspaceId;
+const PROJECT_ID = 'project-1' as ProjectId;
+const M1 = 'mount-1' as MountId;
+const M2 = 'mount-2' as MountId;
+
+type MountParams = {
+  readonly id: MountId;
+  readonly branch: string;
+  readonly revision?: number;
+};
+
+const mountView = ({ id, branch, revision = 1 }: MountParams): unknown => ({
+  id,
+  sessionId: SESSION_ID,
+  projectId: PROJECT_ID,
+  mountName: 'rocket',
+  worktreePath: `/repos/rocket/${id}`,
+  lastWorktreePath: null,
+  repoRoot: '/repos/rocket',
+  branch,
+  baseBranch: 'main',
+  parallelIndex: 0,
+  repoSlug: null,
+  isAttached: true,
+  diskState: 'present',
+  revision,
+  createdAt: '2026-09-01T00:00:00.000Z' as IsoDateTime,
+  updatedAt: '2026-09-01T00:00:00.000Z' as IsoDateTime,
+});
 
 const buildPr = (id: number): BitbucketPullRequest => ({
   id,
@@ -79,13 +130,24 @@ type TestState = Record<string, unknown>;
 
 type BuildStoreParams = {
   readonly workspaceOverrides?: Record<string, OverrideSettings>;
+  readonly mounts?: ReadonlyArray<unknown>;
+  readonly activeMountId?: MountId;
 };
 
-const buildStore = ({ workspaceOverrides = {} }: BuildStoreParams = {}) => {
+const buildStore = ({
+  workspaceOverrides = {},
+  mounts = [mountView({ id: M1, branch: 'ak/feat-thing' })],
+  activeMountId = M1,
+}: BuildStoreParams = {}) => {
   let state: TestState = {
     ...initialBitbucketPrState,
     workspaceOverrides,
     sessions: [{ id: SESSION_ID, workspaceId: WORKSPACE_ID, goal: 'ship it' }],
+    sessionProjectMounts: {},
+    sessionMounts: { [SESSION_ID]: mounts },
+    sessionActiveMount: { [SESSION_ID]: activeMountId },
+    sessionActiveProject: { [SESSION_ID]: PROJECT_ID },
+    recordSessionEventOnce: vi.fn(async () => undefined),
     workspaceIntegrations: {
       [WORKSPACE_ID]: [
         {
@@ -113,6 +175,7 @@ describe('bitbucket-pr slice', () => {
     pullRequestForBranchSpy.mockReset();
     getPullRequestSpy.mockReset();
     remoteUrlSpy.mockClear();
+    links.length = 0;
   });
 
   it('resolves the session branch to its pull request and records the repo', async () => {
@@ -200,6 +263,7 @@ describe('bitbucket-pr write verbs', () => {
     getPullRequestSpy.mockResolvedValue(buildPr(12));
     pullRequestForBranchSpy.mockReset();
     Object.values(writeSpies).forEach((spy) => spy.mockReset());
+    links.length = 0;
   });
 
   it.each([
