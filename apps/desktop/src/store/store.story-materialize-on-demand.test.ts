@@ -482,6 +482,33 @@ describe('story: an agent asks for write access with the materialize marker', ()
   });
 });
 
+describe('story: the branch a project would adopt is checked out elsewhere', () => {
+  it('refuses the mount with a branch-taken code instead of a raw git failure', async () => {
+    seedSession([appProject, webProject]);
+    storySpies.createWorktree.mockRejectedValueOnce({
+      kind: 'branch_in_use',
+      message: 'branch ak/web is already checked out at /tmp/web/.goodboy/worktrees/holder',
+    } as never);
+
+    const failure = await useAppStore
+      .getState()
+      .materializeProject({
+        sessionId: SESSION_ID,
+        projectId: WEB_PROJECT_ID,
+        reason: 'the agent asked for write access',
+      })
+      .catch((error: unknown) => error);
+
+    expect(failure).toMatchObject({ code: 'branch-taken', recoverable: true });
+    expect((failure as Error).message).toBe(
+      'branch ak/web is already checked out at /tmp/web/.goodboy/worktrees/holder',
+    );
+    expect(recordedEvent('project_materialization_refused')?.payload).toMatchObject({
+      projectName: 'web',
+    });
+  });
+});
+
 describe('story: the user detaches a project from the mounted strip', () => {
   it('removes a clean worktree along with its mount and records the detach', async () => {
     seedMountedWeb();
@@ -494,8 +521,8 @@ describe('story: the user detaches a project from the mounted strip', () => {
       repoPath: '/tmp/web',
       worktreePath: WEB_MOUNT_PATH,
     });
-    expect(storySpies.deleteSessionWorktreeForProject).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: SESSION_ID, projectId: WEB_PROJECT_ID }),
+    expect(storySpies.markSessionMountRemovedByPath).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: SESSION_ID, worktreePath: WEB_MOUNT_PATH }),
     );
     expect(useAppStore.getState().sessionProjectMounts[SESSION_ID]).toEqual([appMount]);
     expect(useAppStore.getState().sessionWorktrees[SESSION_ID]).toEqual([APP_MOUNT_PATH]);

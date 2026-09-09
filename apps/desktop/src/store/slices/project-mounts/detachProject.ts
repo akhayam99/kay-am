@@ -1,13 +1,7 @@
-import type {
-  IsoDateTime,
-  MountId,
-  ProjectId,
-  SessionId,
-  SessionProjectMount,
-} from '@goodboy/types';
+import type { IsoDateTime, ProjectId, SessionId, SessionProjectMount } from '@goodboy/types';
 import {
-  deleteSessionWorktreeForProject,
-  markSessionMountsRemoved,
+  markSessionMountRemoved,
+  markSessionMountRemovedByPath,
   updateSessionActiveProject,
   updateSessionMountLifecycle,
 } from '@goodboy/db';
@@ -20,25 +14,39 @@ export type DetachProjectInput = {
   readonly projectId: ProjectId;
 };
 
-type Outcome = {
+type DropParams = {
+  readonly set: SetFn;
+  readonly sessionId: SessionId;
   readonly mount: SessionProjectMount;
-  readonly kept: boolean;
-  readonly reason: string | null;
+};
+
+const dropMountFromSession = ({ set, sessionId, mount }: DropParams): void => {
+  set((state) => ({
+    sessionProjectMounts: {
+      ...state.sessionProjectMounts,
+      [sessionId]: (state.sessionProjectMounts[sessionId] ?? []).filter(
+        (candidate) => candidate !== mount,
+      ),
+    },
+    sessionWorktrees: {
+      ...state.sessionWorktrees,
+      [sessionId]: (state.sessionWorktrees[sessionId] ?? []).filter(
+        (path) => path !== mount.worktreePath,
+      ),
+    },
+  }));
 };
 
 export const detachProject = (set: SetFn, get: GetFn) => {
   return async ({ sessionId, projectId }: DetachProjectInput): Promise<void> => {
     const mounts = get().sessionProjectMounts[sessionId] ?? [];
-    const first = mounts.find((candidate) => candidate.projectId === projectId);
+    const detached = mounts.filter((candidate) => candidate.projectId === projectId);
+    const first = detached[0];
     if (first === undefined) {
       throw new Error(`project not mounted in this session: ${projectId}`);
     }
-    const detached = mounts.filter((candidate) => candidate.projectId === projectId);
     const project = get().projects.find((candidate) => candidate.id === projectId);
     const projectName = project?.name ?? first.mountName;
-    const outcomes: Array<Outcome> = [];
-    const removedMountIds: Array<MountId> = [];
-    let hasUnidentifiedRemoval = false;
     for (const mount of detached) {
       const result = await cleanupMountDirectory({
         get,
@@ -54,43 +62,46 @@ export const detachProject = (set: SetFn, get: GetFn) => {
         },
       });
       const kept = result.decision.kind === 'kept';
-      outcomes.push({
-        mount,
-        kept,
-        reason: result.decision.kind === 'kept' ? result.decision.reason : null,
-      });
+      const reason = result.decision.kind === 'kept' ? result.decision.reason : null;
       const mountId = mount.mountId;
       const revision = mount.revision;
-      if (kept) {
-        if (mountId !== undefined && revision !== undefined) {
-          await updateSessionMountLifecycle({
-            db: tauriDatabase,
-            sessionId,
-            mountId,
-            worktreePath: mount.worktreePath,
-            isAttached: false,
-            diskState: result.diskState,
-            expectedRevision: revision,
-            updatedAt: new Date().toISOString() as IsoDateTime,
-          });
-        }
-        continue;
+      if (kept && mountId !== undefined && revision !== undefined) {
+        await updateSessionMountLifecycle({
+          db: tauriDatabase,
+          sessionId,
+          mountId,
+          worktreePath: mount.worktreePath,
+          isAttached: false,
+          diskState: result.diskState,
+          expectedRevision: revision,
+          updatedAt: new Date().toISOString() as IsoDateTime,
+        });
       }
-      if (mountId === undefined) {
-        hasUnidentifiedRemoval = true;
-        continue;
+      if (!kept && mountId !== undefined) {
+        await markSessionMountRemoved({ db: tauriDatabase, sessionId, mountId });
       }
-      removedMountIds.push(mountId);
+      if (!kept && mountId === undefined) {
+        await markSessionMountRemovedByPath({
+          db: tauriDatabase,
+          sessionId,
+          worktreePath: mount.worktreePath,
+        });
+      }
+      dropMountFromSession({ set, sessionId, mount });
+      await get().recordSessionEvent({
+        sessionId,
+        kind: 'project_detached',
+        payload: {
+          projectId,
+          projectName,
+          branch: mount.branch,
+          worktreePath: mount.worktreePath,
+          kept,
+          ...(reason != null ? { reason } : {}),
+        },
+      });
     }
-    if (removedMountIds.length > 0) {
-      await markSessionMountsRemoved({ db: tauriDatabase, sessionId, mountIds: removedMountIds });
-    }
-    const keptCount = outcomes.filter((outcome) => outcome.kept).length;
-    if (hasUnidentifiedRemoval && keptCount === 0) {
-      await deleteSessionWorktreeForProject({ db: tauriDatabase, sessionId, projectId });
-    }
-    const remaining = mounts.filter((candidate) => candidate.projectId !== projectId);
-    const detachedPaths = new Set(detached.map((candidate) => candidate.worktreePath));
+    const remaining = get().sessionProjectMounts[sessionId] ?? [];
     const activeId = get().sessionActiveProject[sessionId] ?? null;
     const nextActiveId =
       activeId === projectId ? (remaining[0]?.projectId ?? null) : (activeId ?? null);
@@ -101,33 +112,9 @@ export const detachProject = (set: SetFn, get: GetFn) => {
         projectId: nextActiveId,
       }).catch(() => undefined);
     }
-    for (const outcome of outcomes) {
-      await get().recordSessionEvent({
-        sessionId,
-        kind: 'project_detached',
-        payload: {
-          projectId,
-          projectName,
-          branch: outcome.mount.branch,
-          worktreePath: outcome.mount.worktreePath,
-          kept: outcome.kept,
-          ...(outcome.reason != null ? { reason: outcome.reason } : {}),
-        },
-      });
-    }
     set((state) => {
       const worktreeRecords = state.sessionWorktreeRecords?.[sessionId];
       return {
-        sessionProjectMounts: {
-          ...state.sessionProjectMounts,
-          [sessionId]: remaining,
-        },
-        sessionWorktrees: {
-          ...state.sessionWorktrees,
-          [sessionId]: (state.sessionWorktrees[sessionId] ?? []).filter(
-            (path) => !detachedPaths.has(path),
-          ),
-        },
         ...(worktreeRecords !== undefined
           ? {
               sessionWorktreeRecords: {
