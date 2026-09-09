@@ -13,10 +13,19 @@ type Props = {
   readonly presentation?: 'icon' | 'button';
 };
 
+const emptyPickerMessage = ({
+  hasWorkspaceProjects,
+}: {
+  readonly hasWorkspaceProjects: boolean;
+}): string =>
+  hasWorkspaceProjects
+    ? 'Every workspace project is already mounted.'
+    : 'Add a project in workspace settings to mount it here.';
+
 export const MountProjectAction = ({ sessionId, workspaceId, presentation = 'icon' }: Props) => {
   const dropdown = useDropdown({ width: 'w-80', expectedHeight: 320 });
   const [isComplete, setIsComplete] = useState(false);
-  const projects = useAppStore(
+  const availableProjects = useAppStore(
     useShallow((state) => {
       const mounts = state.sessionProjectMounts[sessionId] ?? [];
       return state.projects.filter(
@@ -26,13 +35,16 @@ export const MountProjectAction = ({ sessionId, workspaceId, presentation = 'ico
       );
     }),
   );
-  const label = presentation === 'icon' ? 'Mount a project' : 'Mount project';
+  const hasWorkspaceProjects = useAppStore((state) =>
+    state.projects.some((project) => project.workspaceId === workspaceId),
+  );
+  const label = 'Mount project';
 
   return (
     <AnchoredPopover
       dropdown={dropdown}
       role="dialog"
-      ariaLabel="Mount a project"
+      ariaLabel={label}
       anchorClassName="shrink-0"
       trigger={
         presentation === 'icon' ? (
@@ -67,14 +79,14 @@ export const MountProjectAction = ({ sessionId, workspaceId, presentation = 'ico
         )
       }
     >
-      {projects.length === 0 || isComplete ? (
+      {availableProjects.length === 0 || isComplete ? (
         <p className="px-3 py-2 text-xs text-muted-foreground">
-          Every workspace project is already mounted
+          {emptyPickerMessage({ hasWorkspaceProjects })}
         </p>
       ) : (
         <MountProjectList
           sessionId={sessionId}
-          projects={projects}
+          projects={availableProjects}
           onDone={() => {
             setIsComplete(true);
             dropdown.close();

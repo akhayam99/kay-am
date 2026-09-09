@@ -21,7 +21,8 @@ export const MountProjectList = ({ sessionId, projects, onDone }: Props) => {
   const materializeProject = useAppStore((state) => state.materializeProject);
   const emitNotification = useAppStore((state) => state.emitNotification);
   const [query, setQuery] = useState('');
-  const [isBusy, setIsBusy] = useState(false);
+  const [mountingProjectId, setMountingProjectId] = useState<Project['id'] | null>(null);
+  const isBusy = mountingProjectId !== null;
   const isSearchable = projects.length > SEARCH_THRESHOLD;
   const filtered = useMemo(
     () => projects.filter((project) => project.name.toLowerCase().includes(query.toLowerCase())),
@@ -29,7 +30,7 @@ export const MountProjectList = ({ sessionId, projects, onDone }: Props) => {
   );
 
   const mountProject = async ({ project }: MountParams) => {
-    setIsBusy(true);
+    setMountingProjectId(project.id);
     try {
       await materializeProject({ sessionId, projectId: project.id, reason: MANUAL_REASON });
       setQuery('');
@@ -40,7 +41,7 @@ export const MountProjectList = ({ sessionId, projects, onDone }: Props) => {
         workspaceId: project.workspaceId,
       });
     } finally {
-      setIsBusy(false);
+      setMountingProjectId(null);
     }
   };
 
@@ -64,16 +65,19 @@ export const MountProjectList = ({ sessionId, projects, onDone }: Props) => {
           <ul>
             {filtered.map((project) => {
               const GlyphIcon = projectGlyph({ kind: project.kind });
+              const isMounting = mountingProjectId === project.id;
               return (
                 <li key={project.id}>
                   <button
                     type="button"
                     disabled={isBusy}
                     aria-label={`Mount ${project.name}`}
+                    aria-busy={isMounting}
                     onClick={() => void mountProject({ project })}
                     className={cn(
-                      'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-foreground motion-safe:transition-colors hover:bg-muted/40',
-                      isBusy && 'pointer-events-none opacity-50',
+                      'flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-sm text-foreground motion-safe:transition-colors hover:bg-muted/40',
+                      isBusy && !isMounting && 'pointer-events-none opacity-50',
+                      isMounting && 'spin-border spin-border-info',
                     )}
                   >
                     <GlyphIcon
