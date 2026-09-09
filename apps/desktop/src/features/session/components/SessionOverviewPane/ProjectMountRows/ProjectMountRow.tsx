@@ -7,7 +7,6 @@ import type { MountRowView } from '../../../../../store/slices/project-mounts/mo
 import { CONCEPT_ICONS, ICON_SIZE } from '../../../../../shared/components/conceptIcons';
 import { useToast } from '../../../../../app/components/Toast';
 import { useMountRemoteHostKind } from '../../../../worktree/useMountRemoteHostKind';
-import { PullRequestChip } from '../../../../github/components/PullRequestChip';
 import { DiffStat } from '../../DiffStat';
 import { EditorMenu } from '../EditorMenu';
 import { MountBranchDecision } from './MountBranchDecision';
@@ -26,21 +25,20 @@ type Props = {
   readonly diffStat: MountDiffStat | null;
   readonly worktreeStatus: WorktreeStatus | null;
   readonly isStatusPending?: boolean;
+  readonly hasSeriesColumn?: boolean;
   readonly onSelectLens: (lens: LensKind) => void;
 };
 
 const UTILITY_REVEAL =
   'opacity-0 motion-safe:transition-opacity group-hover/mount-row:opacity-100 group-focus-within/mount-row:opacity-100';
 
-const SLOT_POSITION = 'flex w-10 shrink-0 items-center';
 const SLOT_BRANCH = 'flex min-w-0 flex-1 items-center';
+const SLOT_SERIES = 'flex w-14 shrink-0 items-center';
 const SLOT_SYNC = 'flex w-7 shrink-0 items-center justify-center';
-const SLOT_DIFF = 'flex w-28 shrink-0 items-center';
-const SLOT_STATE = 'flex w-28 shrink-0 items-center';
-const SLOT_REQUEST = 'flex w-14 shrink-0 items-center';
+const SLOT_DIFF = 'flex w-24 shrink-0 items-center';
+const SLOT_STATE = 'flex w-32 shrink-0 items-center';
 const SLOT_ACTION = 'flex w-20 shrink-0 items-center';
-const SLOT_TOOLS = 'flex w-24 shrink-0 items-center justify-end';
-const SLOT_MENU = 'flex w-7 shrink-0 items-center justify-center';
+const SLOT_UTILITY = 'flex w-28 shrink-0 items-center justify-end';
 
 const ACTIVITY_DOT = cn(
   'pointer-events-none absolute -right-0.5 -top-0.5 size-1.5 rounded-full',
@@ -65,6 +63,7 @@ export const ProjectMountRow = ({
   diffStat,
   worktreeStatus,
   isStatusPending: isStatusPendingProp = false,
+  hasSeriesColumn = false,
   onSelectLens,
 }: Props) => {
   const setSessionActiveMount = useAppStore((state) => state.setSessionActiveMount);
@@ -112,15 +111,6 @@ export const ProjectMountRow = ({
       className="group/mount-row flex w-full flex-col"
     >
       <div className="flex min-h-10 w-full items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/40">
-        <div className={SLOT_POSITION}>
-          {row.series === null ? null : (
-            <Tooltip content={`Part ${row.series.label} of ${row.series.name}`}>
-              <span className="rounded-md bg-muted/50 px-1.5 py-0.5 text-2xs tabular-nums text-muted-foreground">
-                {row.series.label}
-              </span>
-            </Tooltip>
-          )}
-        </div>
         <div className={SLOT_BRANCH}>
           {isStatusPending && row.branch === '' ? (
             <span data-testid="project-branch-skeleton" className="shrink-0">
@@ -136,6 +126,17 @@ export const ProjectMountRow = ({
             />
           )}
         </div>
+        {hasSeriesColumn ? (
+          <div className={SLOT_SERIES}>
+            {row.series === null ? null : (
+              <Tooltip content={`Part ${row.series.label} of ${row.series.name}`}>
+                <span className="truncate text-3xs tabular-nums text-muted-foreground/70">
+                  {`Part ${row.series.label}`}
+                </span>
+              </Tooltip>
+            )}
+          </div>
+        ) : null}
         <div className={SLOT_SYNC}>
           {isRepo && row.isAttached ? (
             isStatusPending ? (
@@ -179,13 +180,7 @@ export const ProjectMountRow = ({
         </div>
         <div className={SLOT_STATE}>
           {row.isAttached ? (
-            row.request === null ? null : (
-              <PullRequestChip
-                state={row.request.isDraft ? 'draft' : row.request.state}
-                variant="badge"
-                iconSize={9}
-              />
-            )
+            <MountRequestLink sessionId={sessionId} row={row} label={label} />
           ) : (
             <Chip
               tone="neutral"
@@ -193,18 +188,15 @@ export const ProjectMountRow = ({
               uppercase
               bordered={false}
               icon={<CONCEPT_ICONS.worktree size={9} aria-hidden />}
-              label={row.isOnDisk ? 'Worktree kept' : 'Unmounted'}
+              label={row.isOnDisk ? 'Files kept' : 'Files gone'}
               title={
                 row.isOnDisk
-                  ? 'Unmounted, its worktree is still on disk'
-                  : 'Unmounted, its worktree is gone'
+                  ? 'Not mounted. Its files are still on disk.'
+                  : 'Not mounted. Its files were removed.'
               }
               className="shrink-0"
             />
           )}
-        </div>
-        <div className={SLOT_REQUEST}>
-          <MountRequestLink sessionId={sessionId} row={row} label={label} />
         </div>
         <div className={SLOT_ACTION}>
           {row.isAttached ? (
@@ -230,7 +222,7 @@ export const ProjectMountRow = ({
             </button>
           )}
         </div>
-        <div className={SLOT_TOOLS}>
+        <div className={SLOT_UTILITY}>
           {!hasTools || worktreePath === null ? null : (
             <>
               <EditorMenu
@@ -279,8 +271,6 @@ export const ProjectMountRow = ({
               </span>
             </>
           )}
-        </div>
-        <div className={SLOT_MENU}>
           <ProjectDetachMenu
             sessionId={sessionId}
             projectId={row.projectId}
