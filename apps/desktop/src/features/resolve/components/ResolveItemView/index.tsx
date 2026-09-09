@@ -55,6 +55,7 @@ type Props = {
   readonly onCancelRevise: () => void;
   readonly onSendToAgent: () => void;
   readonly onLater: () => void;
+  readonly onReopen: () => void;
   readonly onOpenInDiff: () => void;
   readonly onOpenCommit: (params: { readonly sha: string }) => void;
   readonly onRunCheck: () => void;
@@ -89,6 +90,7 @@ export const ResolveItemView = ({
   onCancelRevise,
   onSendToAgent,
   onLater,
+  onReopen,
   onOpenInDiff,
   onOpenCommit,
   onRunCheck,
@@ -100,22 +102,32 @@ export const ResolveItemView = ({
   const isDelivered = row.status === 'pushed';
   const question = row.thread.question;
   const fieldId = `resolve-item-${row.thread.threadId}`;
-  const menuItems: ReadonlyArray<OverflowMenuItem> = [
-    {
-      kind: 'item',
-      key: 'revise',
-      label: RESOLVE_QUEUE_ACTION_LABEL.askForChanges,
-      disabled: isBusy || isDelivered,
-      onClick: onStartRevise,
-    },
-    {
-      kind: 'item',
-      key: 'later',
-      label: RESOLVE_QUEUE_ACTION_LABEL.later,
-      disabled: isBusy || isDelivered,
-      onClick: onLater,
-    },
-  ];
+  const menuItems: ReadonlyArray<OverflowMenuItem> = isDelivered
+    ? [
+        {
+          kind: 'item',
+          key: 'reopen',
+          label: RESOLVE_ITEM_LABEL.reopen,
+          disabled: isBusy,
+          onClick: onReopen,
+        },
+      ]
+    : [
+        {
+          kind: 'item',
+          key: 'revise',
+          label: RESOLVE_QUEUE_ACTION_LABEL.askForChanges,
+          disabled: isBusy,
+          onClick: onStartRevise,
+        },
+        {
+          kind: 'item',
+          key: 'later',
+          label: RESOLVE_QUEUE_ACTION_LABEL.later,
+          disabled: isBusy,
+          onClick: onLater,
+        },
+      ];
 
   return (
     <div

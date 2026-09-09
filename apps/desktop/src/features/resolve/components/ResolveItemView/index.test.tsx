@@ -125,6 +125,7 @@ const renderView = (overrides: Partial<Parameters<typeof ResolveItemView>[0]> = 
       onCancelRevise={vi.fn()}
       onSendToAgent={vi.fn()}
       onLater={vi.fn()}
+      onReopen={vi.fn()}
       onOpenInDiff={vi.fn()}
       onOpenCommit={vi.fn()}
       onRunCheck={vi.fn()}

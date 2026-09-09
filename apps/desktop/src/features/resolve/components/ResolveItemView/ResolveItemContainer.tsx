@@ -72,6 +72,7 @@ export const ResolveItemContainer = ({
   );
   const acceptResolveQueueItem = useAppStore((s) => s.acceptResolveQueueItem);
   const deferResolveQueueItem = useAppStore((s) => s.deferResolveQueueItem);
+  const reopenResolveQueueItem = useAppStore((s) => s.reopenResolveQueueItem);
   const runResolveCheck = useAppStore((s) => s.runResolveCheck);
   const forceCloseResolver = useAppStore((s) => s.forceCloseResolver);
   const selectAgent = useAppStore((s) => s.selectAgent);
@@ -165,6 +166,17 @@ export const ResolveItemContainer = ({
     });
   };
 
+  const onReopen = (): void => {
+    void guard({
+      run: () =>
+        reopenResolveQueueItem({
+          sessionId,
+          itemId: row.item.id,
+          revision: row.thread.revision,
+        }),
+    });
+  };
+
   const onRunCheck = (): void => {
     if (candidate === null || checkScript === null || worktreePath === null) {
       return;
@@ -219,6 +231,7 @@ export const ResolveItemContainer = ({
         setMode('reply');
       }}
       onLater={onLater}
+      onReopen={onReopen}
       onOpenInDiff={() => {
         if (candidate === null) {
           return;
