@@ -18,3 +18,11 @@ export const mountError = ({ code, message, mountId }: Params): MountError =>
     mountId: mountId ?? null,
     recoverable: true as const,
   });
+
+export const worktreeErrorKind = ({ error }: { readonly error: unknown }): string | null => {
+  if (error === null || typeof error !== 'object') {
+    return null;
+  }
+  const kind = (error as { readonly kind?: unknown }).kind;
+  return typeof kind === 'string' ? kind : null;
+};

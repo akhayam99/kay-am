@@ -378,6 +378,31 @@ describe('project mount lifecycle', () => {
     expect(h.createWorktree).not.toHaveBeenCalled();
   });
 
+  it('names the worktree that holds a branch when adoption collides with it', async () => {
+    const { slice } = makeSlice();
+    h.branchNames = ['ak/base', 'ak/taken'];
+    h.createWorktree.mockRejectedValue(
+      Object.assign(
+        new Error('branch ak/taken is already checked out at /repos/api/.goodboy/worktrees/holder'),
+        { kind: 'branch_in_use' },
+      ),
+    );
+
+    const failure = await slice
+      .forkMount({
+        sessionId: SESSION_ID,
+        projectId: PROJECT_ID,
+        branch: 'ak/taken',
+        adoptExistingBranch: true,
+      })
+      .catch((error: unknown) => error);
+
+    expect(failure).toMatchObject({ code: 'branch-taken' });
+    expect((failure as Error).message).toContain(
+      'already checked out at /repos/api/.goodboy/worktrees/holder',
+    );
+  });
+
   it('keeps the created directory when the mount row cannot be written', async () => {
     const { slice } = makeSlice();
     const collidingPath = `${REPO_ROOT}/.goodboy/worktrees/foreign`;

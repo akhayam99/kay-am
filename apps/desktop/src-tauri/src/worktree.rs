@@ -20,6 +20,10 @@ pub enum WorktreeError {
     NoCommit(String),
     #[error("git failed: {message}")]
     Git { message: String },
+    #[error(
+        "branch {branch} is already checked out at {path}. switch that worktree to another branch, or fork a new one instead"
+    )]
+    BranchInUse { branch: String, path: String },
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
     #[error("invalid utf-8 in git output")]
@@ -35,6 +39,7 @@ impl WorktreeError {
             WorktreeError::NoRepository(_) => "no_repository",
             WorktreeError::NoCommit(_) => "no_commit",
             WorktreeError::Git { .. } => "git",
+            WorktreeError::BranchInUse { .. } => "branch_in_use",
             WorktreeError::Io(_) => "io",
             WorktreeError::InvalidUtf8 => "invalid_utf8",
         }
@@ -395,6 +400,18 @@ pub async fn worktree_create(args: CreateArgs) -> Result<CreatedWorktree, Worktr
         .map_err(|e| WorktreeError::Io(std::io::Error::other(e.to_string())))?
 }
 
+fn branch_checkout_path_with(
+    repo_path: &Path,
+    branch: &str,
+    run_git: &mut dyn FnMut(&Path, &[&str]) -> Result<String, WorktreeError>,
+) -> Option<String> {
+    let stdout = run_git(repo_path, &["worktree", "list", "--porcelain"]).ok()?;
+    parse_porcelain(&stdout)
+        .into_iter()
+        .find(|entry| entry.branch.as_deref() == Some(branch))
+        .map(|entry| entry.path)
+}
+
 fn worktree_create_blocking(args: CreateArgs) -> Result<CreatedWorktree, WorktreeError> {
     let repo_path = PathBuf::from(&args.repo_path);
     if !repo_path.exists() {
@@ -469,6 +486,14 @@ fn worktree_create_blocking(args: CreateArgs) -> Result<CreatedWorktree, Worktre
         )
         .is_ok();
         if local_exists {
+            if let Some(holder) =
+                branch_checkout_path_with(&repo_path, name, &mut |cwd, args| git(cwd, args))
+            {
+                return Err(WorktreeError::BranchInUse {
+                    branch: name.to_string(),
+                    path: holder,
+                });
+            }
             git(
                 &repo_path,
                 &[
@@ -3371,6 +3396,63 @@ mod rewrite_tests {
             ),
             "fatal: repository 'https://github.com/acme/widgets' not found"
         );
+    }
+
+    #[test]
+    fn a_branch_checked_out_elsewhere_is_read_from_the_worktree_listing() {
+        let listing = "worktree /repo\nHEAD aaaa\nbranch refs/heads/main\n\nworktree /repo/.goodboy/worktrees/one\nHEAD bbbb\nbranch refs/heads/feature/one\n\nworktree /repo/.goodboy/worktrees/two\nHEAD cccc\ndetached\n";
+
+        let holder = super::branch_checkout_path_with(Path::new("/repo"), "feature/one", &mut |_, _| {
+            Ok(listing.to_string())
+        });
+        let free = super::branch_checkout_path_with(Path::new("/repo"), "feature/two", &mut |_, _| {
+            Ok(listing.to_string())
+        });
+
+        assert_eq!(holder.as_deref(), Some("/repo/.goodboy/worktrees/one"));
+        assert_eq!(free, None);
+    }
+
+    #[test]
+    fn adopting_a_branch_another_worktree_holds_names_that_worktree() {
+        let root = std::fs::canonicalize(init_repo("adopt-in-use")).unwrap();
+        commit(&root, "a.txt", "a\n", "first");
+        let parent_dir = root.join(".goodboy").join("worktrees");
+        let holder = parent_dir.join("holder");
+        std::fs::create_dir_all(&parent_dir).unwrap();
+        git_ok(
+            &root,
+            &[
+                "worktree",
+                "add",
+                "-b",
+                "feature/shared",
+                holder.to_str().unwrap(),
+            ],
+        );
+
+        let error = worktree_create_blocking(CreateArgs {
+            repo_path: root.to_string_lossy().into_owned(),
+            branch_prefix: "feature".to_string(),
+            slug: "shared".to_string(),
+            parent_dir: Some(parent_dir.to_string_lossy().into_owned()),
+            existing_branch: Some("feature/shared".to_string()),
+            fallback_ref: None,
+            base_branch: None,
+            dir_name: Some("second".to_string()),
+        })
+        .unwrap_err();
+
+        let super::WorktreeError::BranchInUse { branch, path } = error else {
+            panic!("expected a branch-in-use error, found {error:?}");
+        };
+        assert_eq!(branch, "feature/shared");
+        assert_eq!(
+            std::fs::canonicalize(&path).unwrap(),
+            std::fs::canonicalize(&holder).unwrap()
+        );
+        assert!(!parent_dir.join("second").exists());
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
