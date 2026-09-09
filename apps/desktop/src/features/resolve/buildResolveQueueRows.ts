@@ -10,6 +10,8 @@ import { groupThreads } from '../github/comment-threads';
 import { prCommentLocation } from '../session/pr-comment-location';
 import {
   deriveResolveQueueStatus,
+  isDeliveryComplete,
+  resolveDeliveryReceiptsFor,
   type ResolveQueueStatus,
 } from '../../store/slices/resolve/deriveResolveQueueStatus';
 
@@ -22,6 +24,15 @@ export type ResolveQueueReviewerNote = {
   readonly line: number | null;
 };
 
+export type ResolveQueueDelivery = {
+  readonly isReplyPosted: boolean;
+  readonly replyPostedAt: number | null;
+  readonly isThreadResolved: boolean;
+  readonly resolvedAt: number | null;
+  readonly isComplete: boolean;
+  readonly replyBody: string | null;
+};
+
 export type ResolveQueueRow = {
   readonly item: ResolveQueueItem;
   readonly thread: ResolveThread;
@@ -30,6 +41,7 @@ export type ResolveQueueRow = {
   readonly reviewerNote: ResolveQueueReviewerNote | null;
   readonly proposal: string | null;
   readonly coveredThreadIds: ReadonlyArray<string>;
+  readonly delivery: ResolveQueueDelivery | null;
 };
 
 type Params = {
@@ -82,6 +94,36 @@ const coveredThreadIdsFor = ({
     .map((entry) => entry.thread.threadId);
 };
 
+const deliveryFor = ({
+  item,
+  thread,
+  deliveryReceipts,
+}: {
+  readonly item: ResolveQueueItem;
+  readonly thread: ResolveThread;
+  readonly deliveryReceipts: ReadonlyArray<ResolvePublicationThread>;
+}): ResolveQueueDelivery | null => {
+  const receipts = resolveDeliveryReceiptsFor({ item, thread, deliveryReceipts });
+  const latest = receipts.reduce<ResolvePublicationThread | null>(
+    (best, receipt) =>
+      best === null || (receipt.replyAttemptedAt ?? 0) >= (best.replyAttemptedAt ?? 0)
+        ? receipt
+        : best,
+    null,
+  );
+  if (latest === null) {
+    return null;
+  }
+  return {
+    isReplyPosted: latest.replyPhase === 'posted',
+    replyPostedAt: latest.replyPostedAt,
+    isThreadResolved: latest.resolvePhase === 'resolved',
+    resolvedAt: latest.resolvedAt,
+    isComplete: isDeliveryComplete({ receipt: latest }),
+    replyBody: latest.replyBody,
+  };
+};
+
 export const buildResolveQueueRows = ({
   entries,
   attempts,
@@ -108,6 +150,7 @@ export const buildResolveQueueRows = ({
       reviewerNote: notes.get(thread.threadId) ?? null,
       proposal: thread.replyDraft,
       coveredThreadIds: coveredThreadIdsFor({ thread, entries }),
+      delivery: deliveryFor({ item, thread, deliveryReceipts }),
     };
   });
 };

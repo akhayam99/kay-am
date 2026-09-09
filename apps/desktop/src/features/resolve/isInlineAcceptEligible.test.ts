@@ -72,6 +72,7 @@ const row = ({
   reviewerNote: null,
   proposal: null,
   coveredThreadIds,
+  delivery: null,
 });
 
 describe('isInlineAcceptEligible', () => {

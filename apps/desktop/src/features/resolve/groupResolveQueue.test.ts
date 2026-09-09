@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ResolveQueueItem, ResolveThread, SessionId } from '@goodboy/types';
 import type { ResolveQueueStatus } from '../../store/slices/resolve/deriveResolveQueueStatus';
-import { groupResolveQueue } from './groupResolveQueue';
+import { groupResolveQueue, groupSharedRuns } from './groupResolveQueue';
 import type { ResolveQueueRow } from './buildResolveQueueRows';
 
 const sessionId = 'session' as SessionId;
@@ -53,14 +53,16 @@ const row = ({
   status,
   reviewerCreatedAtMs,
   integratedSha = null,
+  activeAttemptId = null,
 }: {
   readonly threadId: string;
   readonly status: ResolveQueueStatus;
   readonly reviewerCreatedAtMs: number;
   readonly integratedSha?: string | null;
+  readonly activeAttemptId?: string | null;
 }): ResolveQueueRow => ({
   item: { ...baseItem, id: `item-${threadId}`, threadId, integratedSha },
-  thread: { ...baseThread, id: `row-${threadId}`, threadId },
+  thread: { ...baseThread, id: `row-${threadId}`, threadId, activeAttemptId },
   status,
   attempt: null,
   reviewerNote: {
@@ -73,6 +75,7 @@ const row = ({
   },
   proposal: null,
   coveredThreadIds: [],
+  delivery: null,
 });
 
 describe('groupResolveQueue', () => {
@@ -88,14 +91,24 @@ describe('groupResolveQueue', () => {
       }),
     ];
     const groups = groupResolveQueue({ rows });
-    expect(groups.forYou.map((entry) => entry.thread.threadId)).toEqual([
+    expect(groups.needsReview.map((entry) => entry.thread.threadId)).toEqual([
       'oldest',
       'middle',
       'newest',
     ]);
   });
 
-  it('excludes working, ready_to_push, pushed and later from the for-you bucket', () => {
+  it('keeps failed and uncertain delivery in the needs-review bucket', () => {
+    const rows = [
+      row({ threadId: 'f', status: 'delivery_failed', reviewerCreatedAtMs: 1 }),
+      row({ threadId: 'u', status: 'confirm_delivery', reviewerCreatedAtMs: 2 }),
+    ];
+    const groups = groupResolveQueue({ rows });
+    expect(groups.needsReview.map((entry) => entry.thread.threadId)).toEqual(['f', 'u']);
+    expect(groups.completed).toHaveLength(0);
+  });
+
+  it('excludes only later and pushed from the active bucket', () => {
     const rows = [
       row({ threadId: 'w', status: 'working', reviewerCreatedAtMs: 1 }),
       row({
@@ -113,17 +126,37 @@ describe('groupResolveQueue', () => {
       row({ threadId: 'l', status: 'later', reviewerCreatedAtMs: 4 }),
     ];
     const groups = groupResolveQueue({ rows });
-    expect(groups.forYou).toHaveLength(0);
-    expect(groups.workingCount).toBe(1);
-    expect(groups.readyToPushCount).toBe(1);
-    expect(groups.pushed.map((entry) => entry.thread.threadId)).toEqual(['p']);
+    expect(groups.needsReview).toHaveLength(0);
+    expect(groups.active.map((entry) => entry.thread.threadId)).toEqual(['w', 'r']);
+    expect(groups.completed.map((entry) => entry.thread.threadId)).toEqual(['p']);
     expect(groups.later.map((entry) => entry.thread.threadId)).toEqual(['l']);
   });
 
-  it('never counts a later item as pushed or resolved', () => {
+  it('never counts a later item as completed', () => {
     const rows = [row({ threadId: 'l', status: 'later', reviewerCreatedAtMs: 1 })];
     const groups = groupResolveQueue({ rows });
-    expect(groups.pushed).toHaveLength(0);
+    expect(groups.completed).toHaveLength(0);
     expect(groups.later).toHaveLength(1);
+  });
+});
+
+describe('groupSharedRuns', () => {
+  it('gathers the members of one attempt under a single named group, keeping list order', () => {
+    const rows = [
+      row({ threadId: 'a', status: 'for_you', reviewerCreatedAtMs: 1, activeAttemptId: 'run-1' }),
+      row({ threadId: 'b', status: 'for_you', reviewerCreatedAtMs: 2 }),
+      row({ threadId: 'c', status: 'for_you', reviewerCreatedAtMs: 3, activeAttemptId: 'run-1' }),
+    ];
+    const groups = groupSharedRuns({ rows });
+    expect(groups.map((group) => group.attemptId)).toEqual(['run-1', null]);
+    expect(groups[0]?.rows.map((entry) => entry.thread.threadId)).toEqual(['a', 'c']);
+    expect(groups[1]?.rows.map((entry) => entry.thread.threadId)).toEqual(['b']);
+  });
+
+  it('gives a lone member of an attempt no shared-run heading', () => {
+    const rows = [
+      row({ threadId: 'a', status: 'for_you', reviewerCreatedAtMs: 1, activeAttemptId: 'run-1' }),
+    ];
+    expect(groupSharedRuns({ rows }).map((group) => group.attemptId)).toEqual([null]);
   });
 });

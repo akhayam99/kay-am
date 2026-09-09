@@ -17,6 +17,8 @@ const FORBIDDEN_STRINGS: ReadonlyArray<string> = [
 
 const FORBIDDEN_WORDS: ReadonlyArray<string> = ['deliver', 'manifest', 'expected head', 'receipt'];
 
+const ALLOWED_SENTENCES: ReadonlySet<string> = new Set(['Delivery failed', 'Confirm delivery']);
+
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx']);
 
 const collectSourceFiles = ({ root }: { readonly root: string }): ReadonlyArray<string> => {
@@ -84,6 +86,15 @@ describe('resolve queue copy guard', () => {
     expect(sentences).toContain('The branch carries a commit you did not approve');
   });
 
+  it('names the two delivery outcomes the owner still has to act on', () => {
+    const sentences = prose({
+      contents: readFileSync(join(HERE, 'resolveQueueCopy.ts'), 'utf8'),
+    });
+    for (const allowed of ALLOWED_SENTENCES) {
+      expect(sentences).toContain(allowed);
+    }
+  });
+
   it('keeps the engineering vocabulary out of every sentence a user reads', () => {
     const offenders: Array<string> = [];
     for (const root of roots) {
@@ -92,6 +103,9 @@ describe('resolve queue copy guard', () => {
           continue;
         }
         for (const sentence of prose({ contents: readFileSync(file, 'utf8') })) {
+          if (ALLOWED_SENTENCES.has(sentence.trim())) {
+            continue;
+          }
           for (const word of FORBIDDEN_WORDS) {
             if (sentence.toLowerCase().includes(word)) {
               offenders.push(`${file}: "${sentence}"`);
