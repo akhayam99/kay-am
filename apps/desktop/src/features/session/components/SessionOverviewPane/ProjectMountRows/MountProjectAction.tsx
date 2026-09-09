@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FolderPlus } from 'lucide-react';
-import { AnchoredPopover, Tooltip, useDropdown } from '@goodboy/ui';
+import { AnchoredPopover, Button, IconButton, useDropdown } from '@goodboy/ui';
 import type { SessionId, WorkspaceId } from '@goodboy/types';
 import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '../../../../../store';
@@ -33,10 +33,26 @@ export const MountProjectAction = ({ sessionId, workspaceId, presentation = 'ico
       dropdown={dropdown}
       role="dialog"
       ariaLabel="Mount a project"
+      anchorClassName="shrink-0"
       trigger={
-        <Tooltip content="Mount a project">
-          <button
-            type="button"
+        presentation === 'icon' ? (
+          <IconButton
+            variant="ghost"
+            icon={FolderPlus}
+            iconSize={ICON_SIZE.row}
+            label={label}
+            aria-haspopup="dialog"
+            aria-expanded={dropdown.open}
+            onClick={() => {
+              setIsComplete(false);
+              dropdown.toggle();
+            }}
+            className="size-6 shrink-0"
+          />
+        ) : (
+          <Button
+            variant="ghost"
+            size="sm"
             aria-label={label}
             aria-haspopup="dialog"
             aria-expanded={dropdown.open}
@@ -44,16 +60,11 @@ export const MountProjectAction = ({ sessionId, workspaceId, presentation = 'ico
               setIsComplete(false);
               dropdown.toggle();
             }}
-            className={
-              presentation === 'icon'
-                ? 'inline-flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]'
-                : 'inline-flex h-7 items-center gap-1.5 rounded-md border border-border-soft px-2.5 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]'
-            }
           >
             <FolderPlus size={ICON_SIZE.row} aria-hidden />
-            {presentation === 'button' ? <span>{label}</span> : null}
-          </button>
-        </Tooltip>
+            {label}
+          </Button>
+        )
       }
     >
       {projects.length === 0 || isComplete ? (

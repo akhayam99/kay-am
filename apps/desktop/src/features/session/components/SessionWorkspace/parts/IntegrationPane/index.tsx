@@ -265,8 +265,7 @@ export const IntegrationPane = ({ sessionId, workspaceId, provider, eyebrow }: P
       />
       <div className="flex justify-center">
         <CountToggle
-          label="Completed"
-          itemsLabel={meta.nounPlural}
+          label="completed"
           count={workItems.history.length}
           isShown={showHistory}
           icon={Check}

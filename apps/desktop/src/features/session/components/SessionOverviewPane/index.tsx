@@ -70,6 +70,7 @@ export const SessionOverviewPane = ({ session, onSelectLens }: Props) => {
             goal={
               <GoalOverviewRegion
                 sessionId={sessionId}
+                sessionTitle={session.goal}
                 value={goalSlot?.value ?? ''}
                 historyCount={goalHistoryCount}
                 isLoading={goalSlot == null && slotLoading.slots}
@@ -84,18 +85,14 @@ export const SessionOverviewPane = ({ session, onSelectLens }: Props) => {
         }
         animationClassName="animate-fade-in"
       >
-        <div className="flex flex-col gap-6">
-          <TimelinePane
-            session={session}
-            runs={runs}
-            actions={
-              <OverviewActions sessionId={sessionId} onOpenWorkflowBuilder={openWorkflowBuilder} />
-            }
-            kickoff={
-              <SessionKickoff session={session} onOpenWorkflowBuilder={openWorkflowBuilder} />
-            }
-          />
-        </div>
+        <TimelinePane
+          session={session}
+          runs={runs}
+          actions={
+            <OverviewActions sessionId={sessionId} onOpenWorkflowBuilder={openWorkflowBuilder} />
+          }
+          kickoff={<SessionKickoff session={session} onOpenWorkflowBuilder={openWorkflowBuilder} />}
+        />
       </PaneShell>
     </InspectorSplit>
   );

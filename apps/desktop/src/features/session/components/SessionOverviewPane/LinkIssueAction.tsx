@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ChevronLeft, Link2, Plus } from 'lucide-react';
-import { AnchoredPopover, Tooltip, cn, useDropdown } from '@goodboy/ui';
+import { AnchoredPopover, IconButton, Tooltip, cn, useDropdown } from '@goodboy/ui';
 import type { Session, SessionExternalTaskProvider } from '@goodboy/types';
 import { EMPTY_ARRAY, useAppStore } from '../../../../store';
 import { useGithubConnection } from '../../../integrations/github/useGithubConnection';
@@ -19,9 +19,6 @@ const INTEGRATION_TRACKERS: ReadonlyArray<Tracker> = [
   { provider: 'jira', label: 'Jira' },
   { provider: 'gitlab', label: 'GitLab' },
 ];
-
-const TRIGGER_BUTTON =
-  'inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground motion-safe:transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]';
 
 const CHIP_TRIGGER = cn(VITAL_CHIP, 'border-dashed border-border bg-transparent');
 
@@ -81,16 +78,16 @@ export const LinkIssueAction = ({ session, presentation = 'icon', isCollapsed = 
             </button>
           </Tooltip>
         ) : (
-          <Tooltip content="Link an issue">
-            <button
-              type="button"
-              aria-label="Link an issue"
-              onClick={onToggle}
-              className={TRIGGER_BUTTON}
-            >
-              <Link2 size={ICON_SIZE.row} aria-hidden />
-            </button>
-          </Tooltip>
+          <IconButton
+            variant="ghost"
+            icon={Link2}
+            iconSize={ICON_SIZE.row}
+            label="Link an issue"
+            aria-haspopup="dialog"
+            aria-expanded={dropdown.open}
+            onClick={onToggle}
+            className="size-6 shrink-0"
+          />
         )
       }
     >

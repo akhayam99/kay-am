@@ -21,9 +21,6 @@ type Props = {
   readonly onSelectLens: (lens: LensKind) => void;
 };
 
-const ICON_BUTTON =
-  'relative inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]';
-
 type LabelParams = {
   readonly row: MountRowView;
 };
@@ -41,6 +38,9 @@ export const ProjectMountGroup = ({
 }: Props) => {
   const [isCompletedShown, setIsCompletedShown] = useState(false);
   const canFork = group.projectKind === 'repo';
+  const hasSeriesColumn = [...group.rows, ...group.completedRows].some(
+    (row) => row.series !== null,
+  );
   const GlyphIcon = projectGlyph({ kind: group.projectKind });
   const headPath =
     group.rows.find((row) => row.worktreePath !== null)?.worktreePath ??
@@ -59,27 +59,33 @@ export const ProjectMountGroup = ({
         row.worktreePath === null ? null : (worktreeStatuses.get(row.worktreePath) ?? null)
       }
       isStatusPending={row.worktreePath !== null && pendingWorktrees.has(row.worktreePath)}
+      hasSeriesColumn={hasSeriesColumn}
       onSelectLens={onSelectLens}
     />
   );
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-lg border border-border-soft bg-elevated/30">
-      <div className="flex min-h-9 w-full items-center gap-2 border-b border-border-soft px-3 py-1.5">
+    <div className="flex min-w-0 flex-col gap-1">
+      <div className="flex min-h-8 w-full items-center gap-2 px-2">
         <GlyphIcon
           size={ICON_SIZE.control}
           aria-hidden
           className="shrink-0 text-muted-foreground"
         />
         <span className="truncate text-sm font-medium text-foreground">{group.projectName}</span>
-        {group.seriesProgress === null ? null : (
-          <Tooltip content="Positions you declared for this split, not a stack">
-            <span className="truncate text-2xs tabular-nums text-muted-foreground">
-              {group.seriesProgress}
-            </span>
+        {group.seriesName === null ? null : (
+          <Tooltip content="Each part of this split is its own branch and pull request">
+            <span className="truncate text-2xs text-muted-foreground">{group.seriesName}</span>
           </Tooltip>
         )}
         <div className="ml-auto flex shrink-0 items-center gap-1">
+          <CountToggle
+            label="completed"
+            count={group.completedRows.length}
+            isShown={isCompletedShown}
+            icon={ChevronDown}
+            onChange={setIsCompletedShown}
+          />
           {canFork ? (
             <NewBranchMountAction
               sessionId={sessionId}
@@ -94,34 +100,12 @@ export const ProjectMountGroup = ({
             projectName={group.projectName}
             worktreePath={headPath}
             worktreeStatus={worktreeStatuses.get(headPath) ?? null}
-            triggerClassName={ICON_BUTTON}
           />
         </div>
       </div>
-      <ul aria-label={`${group.projectName} branch mounts`} className="flex flex-col pl-3">
-        {group.completedRows.length === 0 ? null : (
-          <li className="flex flex-col border-b border-border-soft last:border-b-0">
-            <div className="flex px-3 py-1">
-              <CountToggle
-                label="Completed"
-                itemsLabel="branch mounts"
-                count={group.completedRows.length}
-                isShown={isCompletedShown}
-                icon={ChevronDown}
-                onChange={setIsCompletedShown}
-              />
-            </div>
-            {isCompletedShown ? (
-              <ul
-                aria-label={`${group.projectName} completed branch mounts`}
-                className="flex flex-col border-t border-border-soft"
-              >
-                {group.completedRows.map(renderRow)}
-              </ul>
-            ) : null}
-          </li>
-        )}
+      <ul aria-label={`${group.projectName} branch mounts`} className="flex flex-col gap-1 pl-2">
         {group.rows.map(renderRow)}
+        {isCompletedShown ? group.completedRows.map(renderRow) : null}
       </ul>
     </div>
   );

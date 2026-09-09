@@ -2,8 +2,6 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { ReactNode } from 'react';
-import type { OverflowMenuItem } from '@goodboy/ui';
 import type {
   IsoDateTime,
   MountId,
@@ -63,42 +61,6 @@ vi.mock('../../../../../app/components/Toast', () => ({
 vi.mock('../../../../../shared/lib/editor', () => ({
   openInEditor: vi.fn(async () => undefined),
 }));
-vi.mock('@goodboy/ui', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@goodboy/ui')>();
-  const { Tooltip } = actual;
-  return {
-    ...actual,
-    OverflowMenu: ({
-      items,
-      label,
-      tooltip,
-      triggerClassName,
-      trigger,
-    }: {
-      readonly items: ReadonlyArray<OverflowMenuItem>;
-      readonly label: string;
-      readonly tooltip: string;
-      readonly triggerClassName: string;
-      readonly trigger: ReactNode;
-    }) => (
-      <span>
-        <Tooltip content={tooltip}>
-          <button type="button" aria-label={label} className={triggerClassName}>
-            {trigger}
-          </button>
-        </Tooltip>
-        {items.map((item) =>
-          item.kind === 'item' ? (
-            <button key={item.key} type="button" onClick={item.onClick}>
-              {item.label}
-            </button>
-          ) : null,
-        )}
-      </span>
-    ),
-  };
-});
-
 import { tooltipTextOf } from '../../../../../__tests__/helpers/tooltip';
 import { openInEditor } from '../../../../../shared/lib/editor';
 import { ProjectMountRow } from './ProjectMountRow';
@@ -130,12 +92,14 @@ const renderRow = ({
   diffStat = null,
   worktreeStatus = null,
   isStatusPending = false,
+  hasSeriesColumn = false,
   row = baseRow,
   label = 'API',
 }: {
   readonly diffStat?: { additions: number; deletions: number } | null;
   readonly worktreeStatus?: WorktreeStatus | null;
   readonly isStatusPending?: boolean;
+  readonly hasSeriesColumn?: boolean;
   readonly row?: MountRowView;
   readonly label?: string;
 }) =>
@@ -149,6 +113,7 @@ const renderRow = ({
         diffStat={diffStat}
         worktreeStatus={worktreeStatus}
         isStatusPending={isStatusPending}
+        hasSeriesColumn={hasSeriesColumn}
         onSelectLens={vi.fn()}
       />
     </ul>,
@@ -261,10 +226,10 @@ describe('ProjectMountRow availability', () => {
     isOnDisk: true,
   };
 
-  it('offers mount on an unmounted row and states the kept worktree in the state slot', async () => {
+  it('offers mount on an unmounted row and states the kept files in the state slot', async () => {
     renderRow({ row: detached });
 
-    expect(screen.getByText('Worktree kept')).toBeDefined();
+    expect(screen.getByText('Files kept')).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: 'Mount API' }));
 
     await waitFor(() =>
@@ -333,35 +298,65 @@ describe('ProjectMountRow column grammar', () => {
     renderRow({ row: detached });
     const unmounted = slotsOf().map((slot) => slot.className);
 
-    expect(attached).toHaveLength(9);
+    expect(attached).toHaveLength(6);
     expect(unmounted).toEqual(attached);
   });
 
-  it('holds the unmounted status in the slot the request state uses', () => {
+  it('leads with the branch and gives it every pixel the metadata does not take', () => {
+    renderRow({ row: { ...baseRow, request: openRequest } });
+    const [branch] = slotsOf();
+
+    expect(branch?.className).toContain('flex-1');
+    expect(branch?.querySelector('[data-testid="branch-chip"]')).not.toBeNull();
+  });
+
+  it('adds the series column only where a group declares a split', () => {
+    renderRow({ row: baseRow });
+    expect(slotsOf()).toHaveLength(6);
+    cleanup();
+
+    renderRow({
+      hasSeriesColumn: true,
+      row: {
+        ...baseRow,
+        series: {
+          seriesId: 'series-1',
+          name: 'restyle',
+          position: 3,
+          plannedCount: 6,
+          label: '3/6',
+        },
+      },
+    });
+    const slots = slotsOf();
+
+    expect(slots).toHaveLength(7);
+    expect(slots[1]?.textContent).toBe('Part 3/6');
+  });
+
+  it('holds the state of a row in one slot, request state and number together', () => {
     renderRow({
       diffStat: { additions: 3, deletions: 1 },
       row: { ...baseRow, request: openRequest },
     });
-    expect(slotsOf()[4]?.textContent).toBe('In review');
-    expect(slotsOf()[5]?.textContent).toBe('#12');
+    expect(slotsOf()[3]?.textContent).toBe('In review·#12');
     cleanup();
 
     renderRow({ row: detached });
-    expect(slotsOf()[4]?.textContent).toBe('Worktree kept');
-    expect(slotsOf()[5]?.textContent).toBe('');
+    expect(slotsOf()[3]?.textContent).toBe('Files kept');
   });
 
   it('keeps the mount action in the action slot and the menu last', () => {
     renderRow({ row: detached });
     const slots = slotsOf();
 
-    expect(slots[6]?.textContent).toBe('Mount');
+    expect(slots[4]?.textContent).toBe('Mount');
     expect(slots.at(-1)?.querySelector('[data-testid="detach-menu"]')).not.toBeNull();
   });
 
   it('leaves the diff slot empty rather than letting the next column slide left', () => {
     renderRow({ row: detached });
-    expect(slotsOf()[3]?.textContent).toBe('');
+    expect(slotsOf()[2]?.textContent).toBe('');
   });
 });
 
@@ -377,7 +372,7 @@ describe('ProjectMountRow folder action', () => {
     renderRow({});
 
     fireEvent.click(screen.getByRole('button', { name: 'Open the folder of API' }));
-    fireEvent.click(screen.getByRole('button', { name: 'VS Code' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'VS Code' }));
 
     expect(openInEditor).toHaveBeenCalledWith('/api', 'code');
   });

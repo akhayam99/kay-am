@@ -316,15 +316,20 @@ export const TimelinePane = ({ session, runs, actions, kickoff }: Props) => {
     ? suggestions.filter((suggestion) => suggestion.kind !== 'plan-ready')
     : [];
   const isLoading = (!areEventsLoaded || !areAgentsLoaded) && model.entries.length === 0;
+  const emptyHint =
+    areEventsLoaded && areAgentsLoaded && model.entries.length === 0
+      ? 'Nothing yet. Agents, workflows and session facts land here as they happen.'
+      : undefined;
 
   if (model.entries.length === 0 && kickoff != null && areEventsLoaded && areAgentsLoaded) {
     return <>{kickoff}</>;
   }
 
   return (
-    <section aria-label="Activity" className="flex flex-col gap-2.5">
+    <section aria-label="Activity" className="flex flex-col gap-2">
       <SectionHeader
         label="Activity"
+        hint={emptyHint}
         className="px-0.5"
         action={
           <div className="flex items-center gap-1">
@@ -340,11 +345,7 @@ export const TimelinePane = ({ session, runs, actions, kickoff }: Props) => {
       />
       {isLoading ? (
         <TimelineSkeleton />
-      ) : model.entries.length === 0 ? (
-        <p className="px-0.5 py-2 text-xs text-muted-foreground">
-          Nothing yet. Agents, workflows, and session facts land here as they happen.
-        </p>
-      ) : visibleEntries.length === 0 ? (
+      ) : model.entries.length === 0 ? null : visibleEntries.length === 0 ? (
         <p className="px-0.5 py-2 text-xs text-muted-foreground">
           Everything is hidden by the activity filter. Show a category to bring it back.
         </p>

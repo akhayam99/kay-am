@@ -1,6 +1,13 @@
 import { useState } from 'react';
 import { ArrowDown, ArrowUp, GitBranch, RefreshCw, Upload } from 'lucide-react';
-import { AnchoredPopover, cn, formatError, useDropdown } from '@goodboy/ui';
+import {
+  AnchoredPopover,
+  IconButton,
+  cn,
+  formatError,
+  tintClasses,
+  useDropdown,
+} from '@goodboy/ui';
 import type { MountId, ProjectId, SessionId, WorktreeStatus } from '@goodboy/types';
 import { useAppStore } from '../../../../../store';
 import { distanceAhead } from '../../../../../shared/lib/gitStatus';
@@ -20,6 +27,15 @@ type CommitBaseBranchParams = {
   readonly candidate: string | null;
 };
 
+type NotifyParams = {
+  readonly title: string;
+  readonly message: string;
+};
+
+type TargetProjectParams = {
+  readonly action: () => Promise<void>;
+};
+
 export const ProjectSyncControl = ({ sessionId, projectId, mountId, status }: Props) => {
   const dropdown = useDropdown({ width: 'w-64', expectedHeight: 160 });
   const setSessionActiveProject = useAppStore((state) => state.setSessionActiveProject);
@@ -33,7 +49,7 @@ export const ProjectSyncControl = ({ sessionId, projectId, mountId, status }: Pr
   const updateProjectBaseBranch = useAppStore((state) => state.updateProjectBaseBranch);
   const [baseError, setBaseError] = useState<string | null>(null);
   const baseBranch = configuredBaseBranch ?? 'main';
-  const notify = ({ title, message }: { readonly title: string; readonly message: string }) => {
+  const notify = ({ title, message }: NotifyParams) => {
     void emitNotification('error', 'error', title, message, { sessionId });
   };
   const rebase = useRebaseAgent({
@@ -50,7 +66,7 @@ export const ProjectSyncControl = ({ sessionId, projectId, mountId, status }: Pr
   const upstreamAhead =
     status == null ? null : distanceAhead({ distance: status.upstreamDistance });
   const canPush = upstreamAhead != null && upstreamAhead > 0;
-  const targetProject = async ({ action }: { readonly action: () => Promise<void> }) => {
+  const targetProject = async ({ action }: TargetProjectParams) => {
     await setSessionActiveProject({
       sessionId,
       projectId,
@@ -78,38 +94,46 @@ export const ProjectSyncControl = ({ sessionId, projectId, mountId, status }: Pr
       dropdown={dropdown}
       role="menu"
       ariaLabel="Branch sync actions"
+      anchorClassName="shrink-0"
       trigger={
-        <button
-          type="button"
-          aria-label="Branch sync actions"
-          aria-haspopup="menu"
-          aria-expanded={dropdown.open}
-          onClick={dropdown.toggle}
-          className="relative inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]"
-        >
-          <RefreshCw size={ICON_SIZE.row} aria-hidden />
+        <span className="relative inline-flex shrink-0">
+          <IconButton
+            variant="ghost"
+            icon={RefreshCw}
+            iconSize={ICON_SIZE.row}
+            label="Branch sync actions"
+            aria-haspopup="menu"
+            aria-expanded={dropdown.open}
+            onClick={dropdown.toggle}
+            className="size-7"
+          />
           {distance != null && distance.behind > 0 ? (
             <span
               data-testid="project-behind-badge"
-              className="absolute -right-1 -top-1 flex min-w-3.5 items-center justify-center rounded-full bg-warning px-1 text-[9px] font-semibold leading-3.5 text-warning-foreground"
+              className={cn(
+                'pointer-events-none absolute -right-1 -top-1 flex min-w-3.5 items-center justify-center rounded-full px-1 text-3xs font-semibold leading-3.5',
+                tintClasses('warning').solid,
+              )}
             >
               {distance.behind}
             </span>
           ) : null}
-        </button>
+        </span>
       }
     >
       <div className="flex flex-col py-1">
         <div className="flex flex-col gap-1 border-b border-border-soft px-3 py-2 text-xs tabular-nums text-muted-foreground">
           <div className="flex items-center gap-3">
-            <span className="font-medium text-foreground">Compared with</span>
-            <BaseBranchSelect
-              repoPath={repoPath}
-              value={configuredBaseBranch}
-              disabled={repoPath === ''}
-              onCommit={(candidate) => commitBaseBranch({ candidate })}
-            />
-            <span className="ml-auto flex items-center gap-1">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <span className="font-medium text-foreground">Compared with</span>
+              <BaseBranchSelect
+                repoPath={repoPath}
+                value={configuredBaseBranch}
+                disabled={repoPath === ''}
+                onCommit={(candidate) => commitBaseBranch({ candidate })}
+              />
+            </div>
+            <span className="flex items-center gap-1">
               <ArrowDown size={11} aria-hidden />
               {distance?.behind ?? '--'}
             </span>

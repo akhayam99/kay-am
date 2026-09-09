@@ -212,7 +212,11 @@ describe('TimelinePane on an empty session', () => {
 
     expect(screen.getByRole('button', { name: 'Add workflow' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Filter' })).toBeDefined();
-    expect(screen.getByText(/Nothing yet/)).toBeDefined();
+    expect(
+      screen.getByText(
+        'Nothing yet. Agents, workflows and session facts land here as they happen.',
+      ),
+    ).toBeDefined();
     expect(screen.queryByRole('button', { name: 'Mark all seen' })).toBeNull();
   });
 });

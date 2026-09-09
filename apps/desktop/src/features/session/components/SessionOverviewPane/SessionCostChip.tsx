@@ -117,10 +117,16 @@ export const SessionCostChip = ({ sessionId }: Props) => {
     });
   }, [open, popupRef]);
 
+  const isSilent = sessionCost <= 0 && sessionBudget == null && capState === 'clear';
+
   const openSpendScope = () => {
     openImpactStudio({ scope: { kind: 'session', sessionId } });
     toggle();
   };
+
+  if (isSilent) {
+    return null;
+  }
 
   return (
     <AnchoredPopover

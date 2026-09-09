@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import type { Session } from '@goodboy/types';
 
 const { store } = vi.hoisted(() => ({
@@ -11,9 +11,6 @@ const { store } = vi.hoisted(() => ({
     clearPendingTitleFocus: vi.fn(),
     sessionGithub: {},
     sessionExternalTasks: {},
-    setScriptsLensScope: vi.fn(),
-    sessionProjectMounts: {} as Record<string, ReadonlyArray<{ projectId: string }>>,
-    projects: [] as ReadonlyArray<{ id: string; kind: string }>,
   },
 }));
 
@@ -35,9 +32,13 @@ vi.mock('../../hooks/useSessionTitleRename', () => ({
   }),
 }));
 
-vi.mock('./EditorMenu', () => ({ EditorMenu: () => <button aria-label="Open worktree" /> }));
 vi.mock('./SessionDestructiveActions', () => ({
-  SessionDestructiveActions: () => <button aria-label="Session actions" />,
+  SessionDestructiveActions: () => (
+    <>
+      <button aria-label="Archive session" />
+      <button aria-label="Delete session" />
+    </>
+  ),
 }));
 vi.mock('./ContextChip', () => ({ ContextChip: () => <span>Context</span> }));
 vi.mock('./SessionCostChip', () => ({
@@ -47,9 +48,6 @@ vi.mock('./LinkedWorkChips', () => ({ LinkedWorkChips: () => <span>Linked work</
 vi.mock('./LinkIssueAction', () => ({ LinkIssueAction: () => <button>Link issue</button> }));
 vi.mock('./ProjectMountRows', () => ({
   ProjectMountRows: () => <section aria-label="Mounted projects" />,
-}));
-vi.mock('./ProjectMountRows/MountProjectAction', () => ({
-  MountProjectAction: () => <button aria-label="Mount a project" />,
 }));
 vi.mock('@goodboy/ui', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@goodboy/ui')>();
@@ -70,24 +68,16 @@ describe('HeaderBand', () => {
   beforeEach(() => {
     store.pendingTitleFocusSessionId = null;
     store.clearPendingTitleFocus.mockClear();
-    store.setScriptsLensScope.mockClear();
-    store.sessionProjectMounts = {};
-    store.projects = [];
   });
 
-  it('puts Scripts first in the title actions and opens it without scope', () => {
-    const onSelectLens = vi.fn();
-    render(<HeaderBand session={session} onSelectLens={onSelectLens} goal={<div>Goal</div>} />);
+  it('keeps only archive and delete in the title action zone', () => {
+    render(<HeaderBand session={session} onSelectLens={vi.fn()} goal={<div>Goal</div>} />);
 
-    expect(screen.getByRole('button', { name: 'Mount a project' })).toBeDefined();
-    expect(screen.queryByRole('button', { name: /terminal/i })).toBeNull();
-    const scripts = screen.getByRole('button', { name: 'Scripts' });
-    expect(scripts.parentElement?.firstElementChild).toBe(scripts);
-
-    fireEvent.click(scripts);
-
-    expect(store.setScriptsLensScope).toHaveBeenCalledWith({ scope: null });
-    expect(onSelectLens).toHaveBeenCalledWith('scripts');
+    expect(screen.getByRole('button', { name: 'Archive session' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Delete session' })).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Scripts' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open worktree' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Mount a project' })).toBeNull();
   });
 
   it('renders mounted projects before the goal', () => {
@@ -98,27 +88,15 @@ describe('HeaderBand', () => {
     expect(projects.compareDocumentPosition(goal) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('keeps the folder action for a session with no mount', () => {
+  it('closes the title and context zone with one divider before the sections', () => {
     render(<HeaderBand session={session} onSelectLens={vi.fn()} goal={<div>Goal</div>} />);
 
-    expect(screen.getByRole('button', { name: 'Open worktree' })).toBeDefined();
-  });
-
-  it('keeps the folder action when every mount is a plain folder', () => {
-    store.sessionProjectMounts = { 'session-1': [{ projectId: 'docs' }] };
-    store.projects = [{ id: 'docs', kind: 'folder' }];
-    render(<HeaderBand session={session} onSelectLens={vi.fn()} goal={<div>Goal</div>} />);
-
-    expect(screen.getByRole('button', { name: 'Open worktree' })).toBeDefined();
-  });
-
-  it('drops the folder action once a repo is mounted, since the row owns it', () => {
-    store.sessionProjectMounts = { 'session-1': [{ projectId: 'api' }] };
-    store.projects = [{ id: 'api', kind: 'repo' }];
-    render(<HeaderBand session={session} onSelectLens={vi.fn()} goal={<div>Goal</div>} />);
-
-    expect(screen.queryByRole('button', { name: 'Open worktree' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Mount a project' })).toBeDefined();
+    const divider = screen.getByRole('separator');
+    const projects = screen.getByRole('region', { name: 'Mounted projects' });
+    expect(
+      divider.compareDocumentPosition(projects) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.getAllByRole('separator')).toHaveLength(1);
   });
 
   it('renders a backticked title as inline code without the backticks', () => {
@@ -135,8 +113,8 @@ describe('HeaderBand', () => {
 
     const context = screen.getByText('Context');
     const chip = screen.getByTestId('session-cost-chip');
-    expect(context.parentElement).toBe(chip.parentElement?.parentElement);
-    expect(chip.parentElement?.className).toContain('ml-auto');
-    expect(chip.parentElement?.lastElementChild).toBe(chip);
+    const contextRow = context.parentElement?.parentElement;
+    expect(contextRow?.lastElementChild?.lastElementChild).toBe(chip);
+    expect(contextRow?.contains(context)).toBe(true);
   });
 });

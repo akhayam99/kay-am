@@ -1,6 +1,7 @@
 import type { SessionId } from '@goodboy/types';
 import { useAppStore } from '../../../../../store';
 import type { MountRowView } from '../../../../../store/slices/project-mounts/mountRowModel';
+import { PullRequestChip } from '../../../../github/components/PullRequestChip';
 
 type Props = {
   readonly sessionId: SessionId;
@@ -28,9 +29,14 @@ export const MountRequestLink = ({ sessionId, row, label }: Props) => {
           requestNumber: request.number,
         })
       }
-      className="flex shrink-0 items-center rounded-md px-1.5 py-1 font-mono text-xs tabular-nums text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+      className="flex min-w-0 shrink-0 items-center rounded-md px-1 py-1 hover:bg-muted/40"
     >
-      {`#${request.number}`}
+      <PullRequestChip
+        state={request.isDraft ? 'draft' : request.state}
+        variant="badge"
+        number={request.number}
+        iconSize={9}
+      />
     </button>
   );
 };

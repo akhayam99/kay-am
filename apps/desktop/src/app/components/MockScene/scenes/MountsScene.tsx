@@ -510,10 +510,10 @@ export const MountsScene = () => {
       return;
     }
     const interval = window.setInterval(() => {
-      const toggle = document.querySelector<HTMLButtonElement>(
-        'button[title="show completed branch mounts"]',
+      const toggle = [...document.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
+        button.textContent?.startsWith('Completed'),
       );
-      if (toggle === null) {
+      if (toggle === undefined) {
         return;
       }
       toggle.click();
