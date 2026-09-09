@@ -14,19 +14,21 @@ export const runMountRecoveryOnce = ({ sessionId, run }: Params): void => {
     return;
   }
   running.add(sessionId);
-  void run().then(
-    () => {
-      settled.add(sessionId);
-      running.delete(sessionId);
-    },
-    (error: unknown) => {
-      running.delete(sessionId);
-      console.error(
-        `[mounts] operation recovery failed for session ${sessionId}`,
-        formatError(error),
-      );
-    },
-  );
+  void Promise.resolve()
+    .then(run)
+    .then(
+      () => {
+        settled.add(sessionId);
+        running.delete(sessionId);
+      },
+      (error: unknown) => {
+        running.delete(sessionId);
+        console.error(
+          `[mounts] operation recovery failed for session ${sessionId}`,
+          formatError(error),
+        );
+      },
+    );
 };
 
 export const resetMountRecoveryGuard = (): void => {

@@ -14,16 +14,17 @@ export const verifyMountViews = async ({
   sessionId,
   views,
 }: Params): Promise<ReadonlyArray<SessionMountView>> => {
+  const projects = get().projects;
   const available = await verifyAvailableWorktrees({
     sessionId,
     candidates: views.flatMap((view) =>
       view.worktreePath === null || !view.isAttached ? [] : [view],
     ),
-    projects: get().projects,
+    projects,
   });
   const availableIds = new Set(available.map((view) => view.id));
   return (await loadMountViews({ get, sessionId })).map((view) => {
-    const project = get().projects.find((candidate) => candidate.id === view.projectId);
+    const project = projects.find((candidate) => candidate.id === view.projectId);
     if (
       view.worktreePath === null ||
       !view.isAttached ||
