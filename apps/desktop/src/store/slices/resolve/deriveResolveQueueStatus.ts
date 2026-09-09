@@ -15,6 +15,7 @@ export type ResolveQueueStatus =
   | 'changed_since_accepted'
   | 'delivery_failed'
   | 'confirm_delivery'
+  | 'run_failed'
   | 'wont_fix'
   | 'wont_fix_sent';
 
@@ -100,7 +101,7 @@ export const deriveResolveQueueStatus = ({
       undelivered: 'wont_fix',
     });
   }
-  if (activeAttempt?.phase === 'running') {
+  if (activeAttempt?.phase === 'running' || activeAttempt?.phase === 'queued') {
     return 'working';
   }
   if (thread.question !== null && thread.state === 'needs_answer') {
@@ -117,6 +118,9 @@ export const deriveResolveQueueStatus = ({
       delivered: 'pushed',
       undelivered: 'ready_to_push',
     });
+  }
+  if (activeAttempt?.phase === 'failed' || activeAttempt?.phase === 'cancelled') {
+    return 'run_failed';
   }
   return 'for_you';
 };

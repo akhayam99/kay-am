@@ -20,6 +20,7 @@ const NEEDS_REVIEW_STATUSES: ReadonlySet<ResolveQueueStatus> = new Set([
   'changed_since_accepted',
   'delivery_failed',
   'confirm_delivery',
+  'run_failed',
 ]);
 
 const HISTORY_STATUSES: ReadonlySet<ResolveQueueStatus> = new Set(['later', 'pushed']);

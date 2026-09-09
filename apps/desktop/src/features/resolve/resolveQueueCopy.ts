@@ -12,6 +12,7 @@ export const RESOLVE_QUEUE_STATUS_LABEL: Record<ResolveQueueStatus, string> = {
   changed_since_accepted: 'Review again',
   delivery_failed: 'Delivery failed',
   confirm_delivery: 'Confirm delivery',
+  run_failed: 'Run did not finish',
   wont_fix: 'Will not fix',
   wont_fix_sent: 'Will not fix, reply sent',
 };
@@ -20,6 +21,7 @@ export const RESOLVE_QUEUE_ACTION_LABEL = {
   resume: 'Resume',
   later: 'Later',
   approveFix: 'Approve fix',
+  answerAgent: 'Answer agent',
   wontFix: 'Will not fix',
   askForChanges: 'Ask agent to revise',
   send: 'Send to agent',
@@ -27,6 +29,8 @@ export const RESOLVE_QUEUE_ACTION_LABEL = {
   openComment: 'Open comment',
   cancel: 'Cancel',
 } as const;
+
+export const RESOLVE_QUEUE_REFRESH_LABEL = 'the latest comments';
 
 export const RESOLVE_RUN_IN_PROGRESS = 'Resolve run in progress';
 

@@ -11,6 +11,7 @@ export const BADGE_TONE_BY_STATUS: Record<ResolveQueueStatus, Tone> = {
   changed_since_accepted: 'warning',
   delivery_failed: 'danger',
   confirm_delivery: 'warning',
+  run_failed: 'warning',
   wont_fix: 'neutral',
   wont_fix_sent: 'neutral',
 };
