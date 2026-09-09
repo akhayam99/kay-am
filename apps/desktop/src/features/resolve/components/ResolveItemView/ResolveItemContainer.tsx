@@ -8,17 +8,16 @@ import { acceptedItemIds } from '../../acceptedItemIds';
 import { summariseResolveChecks } from '../../checkReceipts';
 import type { ResolveQueueRow } from '../../buildResolveQueueRows';
 import { useResolveCandidateDiff } from '../../hooks/useResolveCandidateDiff';
-import { resolveQueueNeighbours } from '../../orderResolveQueueRows';
 import { candidateHeadSha, selectResolveCandidate } from '../../selectResolveCandidate';
 import { selectResolveCheckScript } from '../../selectResolveCheckScript';
 import type { ResolveCandidateWithItems } from '../../../../store/slices/resolve/state';
+import type { ResolveDecisionMode } from './DecisionBlock';
 import { ResolveItemView } from './index';
 
 type Props = {
   readonly sessionId: SessionId;
   readonly row: ResolveQueueRow;
   readonly allRows: ReadonlyArray<ResolveQueueRow>;
-  readonly orderedRows: ReadonlyArray<ResolveQueueRow>;
   readonly worktreePath: string | null;
   readonly onSelect: (threadId: string | null) => void;
   readonly onAskForChanges: (params: {
@@ -38,11 +37,26 @@ const EMPTY_CHECK_RUNS: ReadonlyArray<ResolveCheckRun> = [];
 const EMPTY_QUEUE_ITEMS: ReadonlyArray<ResolveQueueItemWithThread> = [];
 const EMPTY_SCRIPT_GROUPS: ReadonlyArray<ScriptGroup> = [];
 
+const approveBlockedReasonFor = ({ row }: { readonly row: ResolveQueueRow }): string | null => {
+  if (row.status === 'working') {
+    return 'The run has to stop first';
+  }
+  if (row.status === 'agent_asked') {
+    return 'Answer the agent question first';
+  }
+  if (row.status === 'ready_to_push') {
+    return 'Already approved';
+  }
+  if (row.status === 'later') {
+    return 'Resume this comment first';
+  }
+  return null;
+};
+
 export const ResolveItemContainer = ({
   sessionId,
   row,
   allRows,
-  orderedRows,
   worktreePath,
   onSelect,
   onAskForChanges,
@@ -66,6 +80,7 @@ export const ResolveItemContainer = ({
 
   const [reply, setReply] = useState(row.proposal ?? '');
   const [instruction, setInstruction] = useState('');
+  const [mode, setMode] = useState<ResolveDecisionMode>('reply');
   const [isBusy, setIsBusy] = useState(false);
   const [isCheckRunning, setIsCheckRunning] = useState(false);
   const [unprovable, setUnprovable] = useState<string | null>(null);
@@ -74,6 +89,7 @@ export const ResolveItemContainer = ({
   useEffect(() => {
     setReply(row.proposal ?? '');
     setInstruction('');
+    setMode('reply');
     setError(null);
     setUnprovable(null);
   }, [row.proposal, row.thread.threadId]);
@@ -107,10 +123,6 @@ export const ResolveItemContainer = ({
       }),
     [allRows, row.coveredThreadIds],
   );
-  const neighbours = resolveQueueNeighbours({
-    rows: orderedRows,
-    threadId: row.thread.threadId,
-  });
   const checkScript = useMemo(
     () => selectResolveCheckScript({ groups: scriptGroups }),
     [scriptGroups],
@@ -132,7 +144,7 @@ export const ResolveItemContainer = ({
     }
   };
 
-  const onAccept = (): void => {
+  const onApprove = (): void => {
     void guard({
       run: () =>
         acceptResolveQueueItem({
@@ -182,22 +194,30 @@ export const ResolveItemContainer = ({
       diffError={diff.error}
       checks={checks}
       costUsd={costUsd}
+      candidateSha={candidate === null ? null : candidate.candidateSha}
       reply={reply}
       instruction={instruction}
+      mode={mode}
       isBusy={isBusy}
-      canAccept={row.status === 'for_you' || row.status === 'changed_since_accepted'}
+      canApprove={row.status === 'for_you' || row.status === 'changed_since_accepted'}
+      approveBlockedReason={approveBlockedReasonFor({ row })}
       canRunCheck={candidate !== null && checkScript !== null}
       isCheckRunning={isCheckRunning}
       checksNote={unprovable}
       error={error}
-      hasPrevious={neighbours.previousThreadId !== null}
-      hasNext={neighbours.nextThreadId !== null}
       onChangeReply={setReply}
       onChangeInstruction={setInstruction}
-      onAccept={onAccept}
-      onAskForChanges={() =>
-        onAskForChanges({ threadId: row.thread.threadId, instruction: instruction.trim() })
-      }
+      onApprove={onApprove}
+      onStartRevise={() => setMode('revise')}
+      onCancelRevise={() => {
+        setInstruction('');
+        setMode('reply');
+      }}
+      onSendToAgent={() => {
+        onAskForChanges({ threadId: row.thread.threadId, instruction: instruction.trim() });
+        setInstruction('');
+        setMode('reply');
+      }}
       onLater={onLater}
       onOpenInDiff={() => {
         if (candidate === null) {
@@ -210,6 +230,14 @@ export const ResolveItemContainer = ({
           line: row.reviewerNote?.line ?? null,
         });
       }}
+      onOpenCommit={({ sha }) =>
+        onOpenInDiff({
+          threadId: row.thread.threadId,
+          sha,
+          path: row.reviewerNote?.path ?? null,
+          line: row.reviewerNote?.line ?? null,
+        })
+      }
       onRunCheck={onRunCheck}
       onStopRun={() => {
         if (row.attempt !== null) {
@@ -221,9 +249,7 @@ export const ResolveItemContainer = ({
           void selectAgent(sessionId, row.attempt.agentId);
         }
       }}
-      onPrevious={() => onSelect(neighbours.previousThreadId)}
-      onNext={() => onSelect(neighbours.nextThreadId)}
-      onCollapse={() => onSelect(null)}
+      onSelectRelated={(threadId) => onSelect(threadId)}
     />
   );
 };

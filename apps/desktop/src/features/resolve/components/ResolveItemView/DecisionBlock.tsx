@@ -1,77 +1,66 @@
-import { Button, Textarea } from '@goodboy/ui';
-import { RESOLVE_QUEUE_ACTION_LABEL, acceptFixLabel } from '../../resolveQueueCopy';
+import { Markdown, SectionHeader, Textarea } from '@goodboy/ui';
 import { RESOLVE_ITEM_LABEL } from '../../resolveItemCopy';
 
+export type ResolveDecisionMode = 'reply' | 'revise';
+
 type Props = {
-  readonly coveredCount: number;
+  readonly fieldId: string;
   readonly reply: string;
   readonly instruction: string;
+  readonly mode: ResolveDecisionMode;
+  readonly isDelivered: boolean;
+  readonly deliveredReply: string | null;
   readonly isBusy: boolean;
-  readonly canAccept: boolean;
-  readonly error: string | null;
   readonly onChangeReply: (value: string) => void;
   readonly onChangeInstruction: (value: string) => void;
-  readonly onAccept: () => void;
-  readonly onAskForChanges: () => void;
-  readonly onLater: () => void;
 };
 
 export const DecisionBlock = ({
-  coveredCount,
+  fieldId,
   reply,
   instruction,
+  mode,
+  isDelivered,
+  deliveredReply,
   isBusy,
-  canAccept,
-  error,
   onChangeReply,
   onChangeInstruction,
-  onAccept,
-  onAskForChanges,
-  onLater,
 }: Props) => (
   <div className="flex min-w-0 flex-col gap-2">
-    <p className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
-      {RESOLVE_ITEM_LABEL.decision}
-    </p>
-    <div className="flex min-w-0 flex-col gap-1">
-      <label className="text-2xs text-muted-foreground" htmlFor="resolve-item-reply">
-        {RESOLVE_ITEM_LABEL.replyPreview}
-      </label>
+    <SectionHeader
+      label={isDelivered ? RESOLVE_ITEM_LABEL.replyPosted : RESOLVE_ITEM_LABEL.reply}
+      headingLevel={3}
+    />
+    {isDelivered ? (
+      <Markdown
+        text={deliveredReply ?? reply}
+        variant="preview"
+        className="max-w-[65ch] text-sm text-foreground"
+      />
+    ) : (
       <Textarea
-        id="resolve-item-reply"
+        id={`${fieldId}-reply`}
+        aria-label={RESOLVE_ITEM_LABEL.replyPreview}
         value={reply}
         rows={3}
+        disabled={isBusy}
+        className="max-h-48 text-sm"
         onChange={(event) => onChangeReply(event.target.value)}
       />
-    </div>
-    <div className="flex min-w-0 flex-col gap-1">
-      <label className="text-2xs text-muted-foreground" htmlFor="resolve-item-instruction">
-        {RESOLVE_QUEUE_ACTION_LABEL.askForChanges}
-      </label>
-      <Textarea
-        id="resolve-item-instruction"
-        value={instruction}
-        rows={2}
-        placeholder="Say what to do differently"
-        onChange={(event) => onChangeInstruction(event.target.value)}
-      />
-    </div>
-    {error !== null && <p className="text-2xs text-warning">{error}</p>}
-    <div className="flex flex-wrap items-center gap-2">
-      <Button size="sm" variant="success" disabled={isBusy || !canAccept} onClick={onAccept}>
-        {acceptFixLabel({ coveredCount })}
-      </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        disabled={isBusy || instruction.trim() === ''}
-        onClick={onAskForChanges}
-      >
-        {RESOLVE_QUEUE_ACTION_LABEL.askForChanges}
-      </Button>
-      <Button size="sm" variant="ghost" disabled={isBusy} onClick={onLater}>
-        {RESOLVE_QUEUE_ACTION_LABEL.later}
-      </Button>
-    </div>
+    )}
+    {mode === 'revise' && (
+      <div className="flex min-w-0 flex-col gap-2">
+        <SectionHeader label="Instructions for agent" headingLevel={3} />
+        <Textarea
+          id={`${fieldId}-instruction`}
+          aria-label="Instructions for agent"
+          value={instruction}
+          rows={3}
+          disabled={isBusy}
+          className="max-h-48 text-sm"
+          onChange={(event) => onChangeInstruction(event.target.value)}
+        />
+      </div>
+    )}
   </div>
 );

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { FileDiff } from '@goodboy/types';
 import type { ResolveChecksSummary } from '../../checkReceipts';
 import type { ResolveQueueRow, ResolveQueueReviewerNote } from '../../buildResolveQueueRows';
@@ -29,20 +29,23 @@ const rowOf = ({
   note,
   coveredThreadIds = [],
   proposal = 'Added the early return.',
+  integratedSha = null,
 }: {
   readonly threadId: string;
   readonly note: ResolveQueueReviewerNote;
   readonly coveredThreadIds?: ReadonlyArray<string>;
   readonly proposal?: string | null;
+  readonly integratedSha?: string | null;
 }): ResolveQueueRow =>
   ({
-    item: { id: `item-${threadId}` },
-    thread: { threadId, revision: 1, stateReason: null },
+    item: { id: `item-${threadId}`, integratedSha },
+    thread: { threadId, revision: 1, stateReason: null, commitShas: null, question: null },
     status: 'for_you',
     attempt: null,
     reviewerNote: note,
     proposal,
     coveredThreadIds,
+    delivery: null,
   }) as unknown as ResolveQueueRow;
 
 const fileDiffOf = ({
@@ -104,28 +107,30 @@ const renderView = (overrides: Partial<Parameters<typeof ResolveItemView>[0]> = 
       diffError={null}
       checks={NOTHING_RAN}
       costUsd={null}
+      candidateSha={null}
       reply="Added the early return."
       instruction=""
+      mode="reply"
       isBusy={false}
-      canAccept
+      canApprove
+      approveBlockedReason={null}
       checksNote={null}
       canRunCheck={false}
       isCheckRunning={false}
       error={null}
-      hasPrevious={false}
-      hasNext={false}
       onChangeReply={vi.fn()}
       onChangeInstruction={vi.fn()}
-      onAccept={vi.fn()}
-      onAskForChanges={vi.fn()}
+      onApprove={vi.fn()}
+      onStartRevise={vi.fn()}
+      onCancelRevise={vi.fn()}
+      onSendToAgent={vi.fn()}
       onLater={vi.fn()}
       onOpenInDiff={vi.fn()}
+      onOpenCommit={vi.fn()}
       onRunCheck={vi.fn()}
       onStopRun={vi.fn()}
       onViewWork={vi.fn()}
-      onPrevious={vi.fn()}
-      onNext={vi.fn()}
-      onCollapse={vi.fn()}
+      onSelectRelated={vi.fn()}
       {...overrides}
     />,
   );
@@ -133,21 +138,77 @@ const renderView = (overrides: Partial<Parameters<typeof ResolveItemView>[0]> = 
 afterEach(cleanup);
 
 describe('the resolve item view', () => {
-  it('shows every comment the proposal covers, not only the one the user clicked', () => {
+  it('leads with the full reviewer request and its location', () => {
     renderView();
 
     expect(screen.getByText('This retries forever on a 500.')).toBeDefined();
-    expect(screen.getByText('The parser swallows the error here.')).toBeDefined();
-    expect(screen.getByText('src/parser.ts:31')).toBeDefined();
+    expect(screen.getByText('src/retry.ts:84')).toBeDefined();
   });
 
-  it('counts the covered comments on the accept verb', () => {
+  it('lists the other comments of the shared run without repeating the agent draft', () => {
     renderView();
 
-    expect(screen.getByRole('button', { name: 'Accept fix (2)' })).toBeDefined();
+    expect(screen.getByText('Related comments')).toBeDefined();
+    expect(
+      screen.getByRole('button', { name: 'The parser swallows the error here.' }),
+    ).toBeDefined();
+    expect(screen.getByText('Shared run · 2 comments')).toBeDefined();
   });
 
-  it('renders every hunk of a small change, across every file it touches', () => {
+  it('selects a sibling comment in place instead of approving it', () => {
+    const onSelectRelated = vi.fn();
+    renderView({ onSelectRelated });
+
+    fireEvent.click(screen.getByRole('button', { name: 'The parser swallows the error here.' }));
+
+    expect(onSelectRelated).toHaveBeenCalledWith('t-parser');
+  });
+
+  it('approves this comment alone from the fixed header action', () => {
+    const onApprove = vi.fn();
+    renderView({ onApprove });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Approve fix' }));
+
+    expect(onApprove).toHaveBeenCalledOnce();
+  });
+
+  it('states the gate on a blocked approval instead of an unexplained disabled button', () => {
+    renderView({ canApprove: false, approveBlockedReason: 'Answer the agent question first' });
+
+    const approve = screen.getByRole('button', { name: 'Approve fix' });
+    expect(approve.hasAttribute('disabled')).toBe(true);
+  });
+
+  it('shows the exact reply that goes back to the reviewer', () => {
+    renderView();
+
+    expect(screen.getByLabelText('Reply to reviewer')).toHaveProperty(
+      'value',
+      'Added the early return.',
+    );
+  });
+
+  it('says there is no fixing commit rather than showing a candidate as the fix', () => {
+    renderView();
+
+    expect(screen.getByText('No fixing commit')).toBeDefined();
+  });
+
+  it('opens the exact recorded commit from the fixing-commit line', () => {
+    const onOpenCommit = vi.fn();
+    renderView({
+      row: { ...LEAD, item: { ...LEAD.item, integratedSha: 'a1b2c3d4e5f6a7b8' } } as typeof LEAD,
+      onOpenCommit,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'a1b2c3d' }));
+
+    expect(onOpenCommit).toHaveBeenCalledWith({ sha: 'a1b2c3d4e5f6a7b8' });
+  });
+
+  it('summarises the change and offers one way into the whole diff', () => {
+    const onOpenInDiff = vi.fn();
     renderView({
       files: [
         fileDiffOf({ path: 'src/retry.ts', added: ['  if (attempts > 3) return;'] }),
@@ -156,31 +217,22 @@ describe('the resolve item view', () => {
           added: ['  expect(parse("x")).toThrow();', '  expect(calls).toBe(1);'],
         }),
       ],
+      onOpenInDiff,
     });
 
-    expect(screen.getByText(/if \(attempts > 3\) return;/)).toBeDefined();
-    expect(screen.getByText(/expect\(parse\("x"\)\)\.toThrow\(\);/)).toBeDefined();
-    expect(screen.getByText(/expect\(calls\)\.toBe\(1\);/)).toBeDefined();
-    expect(screen.getByText('Lines 30-31')).toBeDefined();
-    expect(screen.getByText('Lines 30-32')).toBeDefined();
     expect(screen.getByText('2 files · 3 changed lines')).toBeDefined();
+    expect(screen.queryByText(/if \(attempts > 3\) return;/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Open diff' }));
+    expect(onOpenInDiff).toHaveBeenCalledOnce();
   });
 
-  it('keeps the added test readable when the rest of the change is too large to show', () => {
-    const large = fileDiffOf({ path: 'src/retry.ts', added: ['  noop();'] });
-    renderView({
-      files: [
-        { ...large, additions: 90, deletions: 10 },
-        fileDiffOf({ path: 'src/retry.test.ts', added: ['  expect(calls).toBe(2);'] }),
-      ],
-    });
+  it('says no captured change rather than claiming a fix', () => {
+    renderView();
 
-    expect(screen.getByText(/expect\(calls\)\.toBe\(2\);/)).toBeDefined();
-    expect(screen.queryByText(/noop\(\);/)).toBeNull();
-    expect(screen.getByText('1 more file is only in the diff')).toBeDefined();
+    expect(screen.getByText('No captured change')).toBeDefined();
   });
 
-  it('says why the run ended badly instead of leaving the proposal alone on screen', () => {
+  it('says why the run ended badly instead of leaving the reply alone on screen', () => {
     renderView({
       row: {
         ...LEAD,
@@ -193,14 +245,14 @@ describe('the resolve item view', () => {
     ).toBeDefined();
   });
 
-  it('says nothing ran rather than implying a check passed', () => {
+  it('says no checks ran rather than implying a check passed', () => {
     renderView();
 
-    expect(screen.getByText('Nothing ran against this proposal')).toBeDefined();
-    expect(screen.queryByText('Machine verified')).toBeNull();
+    expect(screen.getByText('No checks run')).toBeDefined();
+    expect(screen.queryByText('Passed')).toBeNull();
   });
 
-  it('separates the agent claim from the machine receipt', () => {
+  it('says Passed on a fresh receipt only after the receipts are disclosed', () => {
     renderView({
       checks: {
         receipts: [
@@ -230,12 +282,14 @@ describe('the resolve item view', () => {
       } as unknown as ResolveChecksSummary,
     });
 
-    expect(
-      screen.getByText('Passes on the proposal. It never ran on the current code'),
-    ).toBeDefined();
-    expect(screen.getByText('A scoped run, not the full suite.')).toBeDefined();
-    expect(screen.getByText('Machine verified')).toBeDefined();
-    expect(screen.getByText('Agent claim, not checked here')).toBeDefined();
+    expect(screen.getByText('Passes on proposal; current code not checked')).toBeDefined();
+    expect(screen.getByText('Scoped checks')).toBeDefined();
+    expect(screen.queryByText('Passed')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Check runs \(1\)/ }));
+
+    expect(screen.getByText('Passed')).toBeDefined();
+    expect(screen.getByText('pnpm test')).toBeDefined();
   });
 
   it('marks a run whose tree moved as stale instead of green', () => {
@@ -268,17 +322,30 @@ describe('the resolve item view', () => {
       } as unknown as ResolveChecksSummary,
     });
 
+    expect(screen.getByText('Checks out of date')).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: /Check runs \(1\)/ }));
     expect(screen.getByText('Stale')).toBeDefined();
-    expect(screen.queryByText('Machine verified')).toBeNull();
-    expect(screen.getByText('Every run is stale, so nothing here is proven')).toBeDefined();
+    expect(screen.queryByText('Passed')).toBeNull();
   });
 
-  it('shows the exact reply that goes back to the reviewer', () => {
-    renderView();
+  it('commits a revision request through its own footer, never through the reply', () => {
+    const onSendToAgent = vi.fn();
+    renderView({ mode: 'revise', instruction: 'Cap the attempts at three.', onSendToAgent });
 
-    expect(screen.getByLabelText('This exact text goes back to the reviewer')).toHaveProperty(
+    expect(screen.queryByRole('button', { name: 'Approve fix' })).toBeNull();
+    expect(screen.getByLabelText('Instructions for agent')).toHaveProperty(
       'value',
-      'Added the early return.',
+      'Cap the attempts at three.',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Send to agent' }));
+    expect(onSendToAgent).toHaveBeenCalledOnce();
+  });
+
+  it('refuses to send an empty instruction to the agent', () => {
+    renderView({ mode: 'revise', instruction: '   ' });
+
+    expect(screen.getByRole('button', { name: 'Send to agent' }).hasAttribute('disabled')).toBe(
+      true,
     );
   });
 });

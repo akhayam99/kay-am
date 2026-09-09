@@ -17,6 +17,7 @@ const h = vi.hoisted(() => {
     branchPrs: [] as ReadonlyArray<unknown>,
     sessionResolveQueueItems: {} as Record<string, ReadonlyArray<unknown>>,
     sessionResolvePublications: {} as Record<string, ReadonlyArray<unknown>>,
+    sessionResolveAttempts: {} as Record<string, ReadonlyArray<unknown>>,
     activePublicationPreview: {} as Record<string, unknown>,
     reviewDrafts: {} as Record<string, ReadonlyArray<unknown>>,
     diffComments: {} as Record<string, ReadonlyArray<unknown>>,
@@ -53,6 +54,7 @@ const h = vi.hoisted(() => {
     publishPrReview: vi.fn(async () => ({ published: 1, stale: [], failed: [], mismatched: [] })),
     loadReviewDrafts: vi.fn(async () => undefined),
     openDiffLens: vi.fn(),
+    selectAgent: vi.fn(async () => undefined),
   };
   const useAppStore = Object.assign(<T,>(selector: (s: typeof state) => T) => selector(state), {
     getState: () => state,
@@ -271,10 +273,10 @@ describe('ReviewPane', () => {
     );
   });
 
-  it('counts what is accepted but not delivered on the one push button', () => {
+  it('offers one publication review anchor for work approved but not sent', () => {
     render(<ReviewPane session={SESSION} />);
 
-    expect(screen.getByRole('button', { name: 'Reply 1' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Review publication' })).toBeDefined();
   });
 
   it('costs one press and one confirmation in the same strip', async () => {
@@ -284,11 +286,11 @@ describe('ReviewPane', () => {
     });
     const { rerender } = render(<ReviewPane session={SESSION} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reply 1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Review publication' }));
     await waitFor(() => expect(h.state.preparePublication).toHaveBeenCalledTimes(1));
     rerender(<ReviewPane session={SESSION} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reply 1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
 
     await waitFor(() => expect(h.state.publishConversations).toHaveBeenCalledTimes(1));
     expect(h.state.publishConversations.mock.calls[0]?.[0]).toMatchObject({
@@ -330,7 +332,7 @@ describe('ReviewPane', () => {
     });
     const { rerender } = render(<ReviewPane session={SESSION} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reply 1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Review publication' }));
     await waitFor(() => expect(h.state.preparePublication).toHaveBeenCalled());
     rerender(<ReviewPane session={SESSION} />);
     fireEvent.click(screen.getByRole('button', { name: 'PR activity' }));
