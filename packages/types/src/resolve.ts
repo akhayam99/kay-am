@@ -47,7 +47,7 @@ export type ResolveAttempt = Readonly<{
   createdAt: number;
 }>;
 
-export type ResolveQueueApprovalState = 'none' | 'accepted' | 'deferred';
+export type ResolveQueueApprovalState = 'none' | 'accepted' | 'deferred' | 'wont_fix';
 
 export type ResolveQueueItem = Readonly<{
   id: string;

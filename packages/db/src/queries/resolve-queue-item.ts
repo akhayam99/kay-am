@@ -159,6 +159,24 @@ export const setResolveQueueItemApproval = async ({
   return result.rowsAffected === 1;
 };
 
+export const refuseResolveQueueItem = async ({
+  db,
+  sessionId,
+  itemId,
+  revision,
+  replyHash,
+}: ApprovalParams): Promise<boolean> => {
+  const now = Date.now();
+  const result = await db.execute(
+    `UPDATE resolve_queue_items SET approval_state = 'wont_fix', approved_revision = ?, approved_reply_hash = ?, deferred_at = NULL, updated_at = ?
+     WHERE id = ? AND session_id = ? AND superseded_at IS NULL AND candidate_revision = ?
+       AND delivered_at IS NULL AND integrated_sha IS NULL
+       AND EXISTS (SELECT 1 FROM resolve_threads r WHERE r.session_id = resolve_queue_items.session_id AND r.thread_id = resolve_queue_items.thread_id AND r.revision = ?)`,
+    [revision, replyHash, now, itemId, sessionId, revision, revision],
+  );
+  return result.rowsAffected === 1;
+};
+
 export const deferResolveQueueItem = async ({
   db,
   sessionId,
@@ -178,7 +196,7 @@ export const undeferResolveQueueItem = async ({
   itemId,
 }: ItemParams): Promise<boolean> => {
   const result = await db.execute(
-    `UPDATE resolve_queue_items SET approval_state = 'none', deferred_at = NULL, updated_at = ? WHERE id = ? AND session_id = ? AND superseded_at IS NULL AND approval_state = 'deferred'`,
+    `UPDATE resolve_queue_items SET approval_state = 'none', approved_revision = NULL, approved_reply_hash = NULL, deferred_at = NULL, updated_at = ? WHERE id = ? AND session_id = ? AND superseded_at IS NULL AND delivered_at IS NULL AND approval_state IN ('deferred', 'wont_fix')`,
     [Date.now(), itemId, sessionId],
   );
   return result.rowsAffected === 1;
@@ -191,7 +209,7 @@ export const markResolveQueueItemDelivered = async ({
   deliveredAt,
 }: DeliveredParams): Promise<boolean> => {
   const result = await db.execute(
-    `UPDATE resolve_queue_items SET delivered_at = ?, updated_at = ? WHERE id = ? AND session_id = ? AND superseded_at IS NULL AND approval_state = 'accepted' AND approved_revision = candidate_revision`,
+    `UPDATE resolve_queue_items SET delivered_at = ?, updated_at = ? WHERE id = ? AND session_id = ? AND superseded_at IS NULL AND approval_state IN ('accepted', 'wont_fix') AND approved_revision = candidate_revision`,
     [deliveredAt, deliveredAt, itemId, sessionId],
   );
   return result.rowsAffected === 1;
