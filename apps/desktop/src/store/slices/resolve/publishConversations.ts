@@ -59,7 +59,7 @@ const markDelivered = async ({ sessionId, thread }: MarkDeliveredParams): Promis
   const match = items.find(
     ({ item }) =>
       item.threadId === thread.threadId &&
-      item.approvalState === 'accepted' &&
+      (item.approvalState === 'accepted' || item.approvalState === 'wont_fix') &&
       item.approvedRevision === thread.revision,
   );
   if (match === undefined) {

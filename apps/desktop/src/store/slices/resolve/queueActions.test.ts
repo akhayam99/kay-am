@@ -7,9 +7,12 @@ import {
   upsertResolveThread,
   type Database,
 } from '@goodboy/db';
+import { approvedPublicationScope } from './approvedPublicationScope';
+import { deriveResolveQueueStatus } from './deriveResolveQueueStatus';
 import { makeTestDatabase } from '@goodboy/db/test-helpers';
 import type { ResolveQueueItem, ResolveThread, SessionId } from '@goodboy/types';
 import { createResolveSlice } from './index';
+import { EMPTY_REFUSAL_REPLY, REFUSAL_AFTER_INTEGRATION } from './refuseResolveQueueItem';
 import { resolveInitialState } from './state';
 import type { GetFn, SetFn } from './types';
 
@@ -121,6 +124,96 @@ describe('resolve queue actions', () => {
     await live.actions.deferResolveQueueItem({ sessionId, itemId: item.id });
     await live.actions.takeUpResolveQueueItem({ sessionId, itemId: item.id });
     expect((await listResolveQueueItems({ db, sessionId }))[0]?.item.approvalState).toBe('none');
+  });
+
+  it('refuses a comment only with a reply the reviewer can read', async () => {
+    const live = createHarness();
+    await expect(
+      live.actions.refuseResolveQueueItem({
+        sessionId,
+        itemId: item.id,
+        revision: 2,
+        reply: '   ',
+      }),
+    ).rejects.toThrow(EMPTY_REFUSAL_REPLY);
+    expect(EMPTY_REFUSAL_REPLY).toBe('Write the reply the reviewer will read before you refuse');
+    expect((await listResolveQueueItems({ db, sessionId }))[0]?.item.approvalState).toBe('none');
+    await live.actions.refuseResolveQueueItem({
+      sessionId,
+      itemId: item.id,
+      revision: 2,
+      reply: 'We are keeping this as it is',
+    });
+    expect((await listResolveQueueItems({ db, sessionId }))[0]?.item).toMatchObject({
+      approvalState: 'wont_fix',
+      approvedRevision: 2,
+    });
+    expect((await listResolveQueueItems({ db, sessionId }))[0]?.item.approvedReplyHash).not.toBe(
+      null,
+    );
+  });
+
+  it('will not refuse a comment whose fix is already on the branch', async () => {
+    const live = createHarness();
+    await db.execute("UPDATE resolve_queue_items SET integrated_sha = 'abc' WHERE id = ?", [
+      item.id,
+    ]);
+    await expect(
+      live.actions.refuseResolveQueueItem({
+        sessionId,
+        itemId: item.id,
+        revision: 2,
+        reply: 'We are keeping this as it is',
+      }),
+    ).rejects.toThrow(REFUSAL_AFTER_INTEGRATION);
+    expect(REFUSAL_AFTER_INTEGRATION).toBe('Fix already integrated');
+    expect((await listResolveQueueItems({ db, sessionId }))[0]?.item.approvalState).toBe('none');
+  });
+
+  it('drops a saved refusal out of publication once the comment changes', async () => {
+    const live = createHarness();
+    await live.actions.refuseResolveQueueItem({
+      sessionId,
+      itemId: item.id,
+      revision: 2,
+      reply: 'We are keeping this as it is',
+    });
+    expect([...(await approvedPublicationScope({ sessionId })).refusedThreadIds]).toEqual([
+      'thread',
+    ]);
+    await upsertResolveThread({
+      db,
+      row: { ...thread, replyDraft: 'Rewritten' },
+      expectedRevision: 2,
+    });
+    const scope = await approvedPublicationScope({ sessionId });
+    expect([...scope.refusedThreadIds]).toEqual([]);
+    expect([...scope.threadIds]).toEqual([]);
+    const entry = (await listResolveQueueItems({ db, sessionId }))[0];
+    expect(
+      deriveResolveQueueStatus({
+        item: entry?.item ?? item,
+        thread: entry?.thread ?? thread,
+        activeAttempt: null,
+        deliveryReceipts: [],
+      }),
+    ).toBe('changed_since_accepted');
+  });
+
+  it('takes up a refused item back into undecided', async () => {
+    const live = createHarness();
+    await live.actions.refuseResolveQueueItem({
+      sessionId,
+      itemId: item.id,
+      revision: 2,
+      reply: 'We are keeping this as it is',
+    });
+    await live.actions.takeUpResolveQueueItem({ sessionId, itemId: item.id });
+    expect((await listResolveQueueItems({ db, sessionId }))[0]?.item).toMatchObject({
+      approvalState: 'none',
+      approvedRevision: null,
+      approvedReplyHash: null,
+    });
   });
 
   it('reopens an item as a new generation', async () => {

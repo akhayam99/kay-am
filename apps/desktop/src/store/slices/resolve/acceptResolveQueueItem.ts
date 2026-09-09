@@ -9,6 +9,7 @@ import type { ResolveQueueItemWithThread } from '@goodboy/types';
 import { integrateWorktreeCandidate } from '../../../features/worktree/worktree';
 import { tauriDatabase } from '../../../shared/lib/db';
 import { withCandidateLock } from './candidateLock';
+import { hashResolveReply } from './hashResolveReply';
 import { loadResolveCandidatesInto } from './loadResolveCandidatesInto';
 import { loadResolveQueueItemsInto } from './loadResolveQueueItemsInto';
 import {
@@ -27,11 +28,8 @@ type Covered = {
 export const PARTIAL_ACCEPTANCE =
   'This change also answers comments you left for later. Accept them together, or take those back up first';
 export const STALE_APPROVAL = 'Approval revision is stale';
-
-const hashReply = async ({ reply }: { readonly reply: string }): Promise<string> => {
-  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(reply));
-  return Array.from(new Uint8Array(bytes), (value) => value.toString(16).padStart(2, '0')).join('');
-};
+export const PARTIAL_REFUSAL =
+  'This change also answers comments you said you will not fix. Take those back up first';
 
 export const acceptResolveQueueItem = async ({
   set,
@@ -46,7 +44,7 @@ export const acceptResolveQueueItem = async ({
   if (pending !== null) {
     throw new Error(UNCAPTURED_WORK_ON_BRANCH);
   }
-  const replyHash = await hashReply({ reply });
+  const replyHash = await hashResolveReply({ reply });
   const candidate = await getReadyResolveCandidateForItem({ db, queueItemId: itemId });
   if (candidate === null) {
     const accepted = await setResolveQueueItemApproval({
@@ -79,6 +77,9 @@ export const acceptResolveQueueItem = async ({
   if (covered.some(({ entry }) => entry?.item.approvalState === 'deferred')) {
     throw new Error(PARTIAL_ACCEPTANCE);
   }
+  if (covered.some(({ entry }) => entry?.item.approvalState === 'wont_fix')) {
+    throw new Error(PARTIAL_REFUSAL);
+  }
   if (
     covered.some(
       ({ itemRevision, entry }) =>
@@ -94,7 +95,7 @@ export const acceptResolveQueueItem = async ({
       replyHash:
         queueItemId === itemId
           ? replyHash
-          : await hashReply({ reply: entry?.thread.replyDraft ?? '' }),
+          : await hashResolveReply({ reply: entry?.thread.replyDraft ?? '' }),
     })),
   );
   const integratedSha = await withCandidateLock({

@@ -7,6 +7,8 @@ export const RESOLVE_QUEUE_STATUS_LABEL: Record<ResolveQueueStatus, string> = {
   ready_to_push: 'Ready to push',
   pushed: 'Pushed and posted',
   later: 'Later',
+  wont_fix: 'Will not fix',
+  wont_fix_sent: 'Will not fix, reply sent',
   changed_since_accepted: 'Changed since you accepted',
 };
 

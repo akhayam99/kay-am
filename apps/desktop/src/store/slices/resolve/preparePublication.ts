@@ -207,7 +207,11 @@ export const preparePublication = async ({
   const repo = getSessionRepo({ get, sessionId });
   const rows = await listResolveThreads({ db: tauriDatabase, sessionId });
   const scope = await approvedPublicationScope({ sessionId });
-  const selection = selectPublishableThreads({ rows, threadIds });
+  const selection = selectPublishableThreads({
+    rows,
+    ...(threadIds !== undefined && { threadIds }),
+    refusedThreadIds: scope.refusedThreadIds,
+  });
   const invalid = selection.publishable.filter((row) => !scope.threadIds.has(row.threadId));
   const publishable = selection.publishable.filter((row) => scope.threadIds.has(row.threadId));
   const invalidExclusions: ReadonlyArray<ResolvePublicationExclusion> = invalid.map((row) => ({
@@ -219,7 +223,8 @@ export const preparePublication = async ({
   const comments: ReadonlyArray<PrComment> = get().sessionGithub[sessionId]?.detail?.comments ?? [];
   const frozen: ReadonlyArray<FrozenReply> = await Promise.all(
     publishable.map(async (row) => {
-      const closure = closureOf({ row });
+      const isRefused = scope.refusedThreadIds.has(row.threadId);
+      const closure = isRefused ? { reply: row.replyDraft ?? '' } : closureOf({ row });
       const isNote = isLocalNoteThread({ row });
       return {
         row,
@@ -227,12 +232,13 @@ export const preparePublication = async ({
           closure === null || isNote
             ? null
             : buildResolutionReplyBody({ closure, prUrl: target.prUrl, isAttributed }),
-        closes: threadOutcome({ row }) !== null,
+        closes: !isRefused && threadOutcome({ row }) !== null,
         fingerprint: isNote ? null : await sourceFingerprint({ comments, threadId: row.threadId }),
       };
     }),
   );
-  const shas = fixShas({ rows: publishable });
+  const shippable = publishable.filter((row) => !scope.refusedThreadIds.has(row.threadId));
+  const shas = fixShas({ rows: shippable });
   const requiresPush = shas.length > 0;
   const git =
     requiresPush && repo !== null
@@ -273,7 +279,7 @@ export const preparePublication = async ({
           });
   const commits = outgoing.map((commit) => ({
     ...commit,
-    threadIds: publishable
+    threadIds: shippable
       .filter((row) => row.commitShas?.includes(commit.sha) === true)
       .map((row) => row.threadId),
   }));

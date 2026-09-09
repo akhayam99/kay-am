@@ -9,22 +9,26 @@ export const acceptedPublishCounts = ({
 }: {
   readonly entries: ReadonlyArray<ResolveQueueItemWithThread>;
 }): PublishCounts => {
-  const accepted = entries.filter(
+  const decided = entries.filter(
     ({ item, thread }) =>
-      item.approvalState === 'accepted' &&
+      (item.approvalState === 'accepted' || item.approvalState === 'wont_fix') &&
       item.deliveredAt === null &&
       item.approvedRevision === thread.revision,
   );
   const commits = new Set(
-    accepted.flatMap(({ item, thread }) => [
-      ...(thread.disposition === 'fix' ? (thread.commitShas ?? []) : []),
-      ...(item.integratedSha === null ? [] : [item.integratedSha]),
-    ]),
+    decided.flatMap(({ item, thread }) =>
+      item.approvalState === 'accepted'
+        ? [
+            ...(thread.disposition === 'fix' ? (thread.commitShas ?? []) : []),
+            ...(item.integratedSha === null ? [] : [item.integratedSha]),
+          ]
+        : [],
+    ),
   );
   return {
     commits: commits.size,
-    replies: accepted.filter((entry) => !isLocalNote({ entry })).length,
-    notes: accepted.filter((entry) => isLocalNote({ entry })).length,
+    replies: decided.filter((entry) => !isLocalNote({ entry })).length,
+    notes: decided.filter((entry) => isLocalNote({ entry })).length,
   };
 };
 

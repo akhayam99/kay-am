@@ -150,6 +150,31 @@ export const createResolveQueryMocks = () => {
         return true;
       },
     ),
+    refuseResolveQueueItem: vi.fn(
+      async ({ sessionId, itemId, revision, replyHash }: ApprovalParams) => {
+        const item = queueItems.get(itemId);
+        const thread = item === undefined ? undefined : threads.get(item.threadId);
+        if (
+          item === undefined ||
+          item.sessionId !== sessionId ||
+          item.supersededAt !== null ||
+          item.deliveredAt !== null ||
+          item.integratedSha !== null ||
+          item.candidateRevision !== revision ||
+          thread?.revision !== revision
+        ) {
+          return false;
+        }
+        queueItems.set(itemId, {
+          ...item,
+          approvalState: 'wont_fix',
+          approvedRevision: revision,
+          approvedReplyHash: replyHash,
+          deferredAt: null,
+        });
+        return true;
+      },
+    ),
     deferResolveQueueItem: vi.fn(async ({ sessionId, itemId }: QueueItemIdParams) => {
       const item = queueItems.get(itemId);
       if (
@@ -176,11 +201,18 @@ export const createResolveQueryMocks = () => {
         item === undefined ||
         item.sessionId !== sessionId ||
         item.supersededAt !== null ||
-        item.approvalState !== 'deferred'
+        item.deliveredAt !== null ||
+        (item.approvalState !== 'deferred' && item.approvalState !== 'wont_fix')
       ) {
         return false;
       }
-      queueItems.set(itemId, { ...item, approvalState: 'none', deferredAt: null });
+      queueItems.set(itemId, {
+        ...item,
+        approvalState: 'none',
+        approvedRevision: null,
+        approvedReplyHash: null,
+        deferredAt: null,
+      });
       return true;
     }),
     markResolveQueueItemDelivered: vi.fn(
@@ -190,7 +222,7 @@ export const createResolveQueryMocks = () => {
           item === undefined ||
           item.sessionId !== sessionId ||
           item.supersededAt !== null ||
-          item.approvalState !== 'accepted' ||
+          (item.approvalState !== 'accepted' && item.approvalState !== 'wont_fix') ||
           item.approvedRevision !== item.candidateRevision
         ) {
           return false;
