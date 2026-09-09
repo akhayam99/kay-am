@@ -1,4 +1,5 @@
 import type { SessionId } from '@goodboy/types';
+import { formatError } from '@goodboy/ui';
 
 type Params = {
   readonly sessionId: SessionId;
@@ -18,8 +19,12 @@ export const runMountRecoveryOnce = ({ sessionId, run }: Params): void => {
       settled.add(sessionId);
       running.delete(sessionId);
     },
-    () => {
+    (error: unknown) => {
       running.delete(sessionId);
+      console.error(
+        `[mounts] operation recovery failed for session ${sessionId}`,
+        formatError(error),
+      );
     },
   );
 };

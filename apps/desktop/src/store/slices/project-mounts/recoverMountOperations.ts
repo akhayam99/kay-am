@@ -9,6 +9,7 @@ import {
   succeedMountOperation,
 } from './mountOperations';
 import { applyMountViews, loadMountViews } from './mountViews';
+import { verifyMountViews } from './verifyMountViews';
 import type { GetFn, SessionKeyInput, SetFn } from './types';
 
 const readPath = ({ operation }: { readonly operation: MountOperation }): string | null => {
@@ -219,7 +220,7 @@ export const recoverMountOperations = (set: SetFn, get: GetFn) => {
       }
       await markMountOperationUncertain({ operation, errorCode: 'directory-occupied' });
     }
-    applyMountViews({ set, sessionId, views });
+    applyMountViews({ set, sessionId, views: await verifyMountViews({ get, sessionId, views }) });
     return settled;
   };
 };
