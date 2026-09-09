@@ -4,12 +4,16 @@ import { WorkspaceScene } from './scenes/WorkspaceScene';
 import { WorkflowScene } from './scenes/WorkflowScene';
 import { ShellScene } from './scenes/ShellScene';
 import { MountsScene } from './scenes/MountsScene';
+import { ResolveScene } from './scenes/ResolveScene';
+import { ResolveItemScene } from './scenes/ResolveItemScene';
 
 const SCENES = {
   workspace: WorkspaceScene,
   workflow: WorkflowScene,
   shell: ShellScene,
   mounts: MountsScene,
+  resolve: ResolveScene,
+  'resolve-item': ResolveItemScene,
 };
 
 export const MockScene = () => {
