@@ -41,6 +41,7 @@ import { useGithubConnection } from './features/integrations/github/useGithubCon
 import { useSessionSidebarVisibility } from './features/workspace/hooks/useSessionSidebarVisibility';
 import { MOCK_ENABLED } from './store/mock-data';
 import { MockScene } from './app/components/MockScene';
+import { shellArrangement } from './app/shellArrangement';
 
 const KEEP_ALIVE_CAP = 5;
 
@@ -260,6 +261,12 @@ export const App = () => {
     return merged.length > KEEP_ALIVE_CAP ? merged.slice(merged.length - KEEP_ALIVE_CAP) : merged;
   }, [keepAliveIds, currentSession?.id]);
 
+  const arrangement = shellArrangement({
+    hasWorkspace: currentWorkspace != null,
+    hasActiveSession,
+    isSidebarCollapsed: sessionSidebar.isCollapsed,
+  });
+
   const deferredRenderedIds = useDeferredValue(renderedSessionIds);
   const deferredActiveId = useDeferredValue(currentSession?.id ?? null);
 
@@ -290,9 +297,9 @@ export const App = () => {
       <NewSessionBridge />
       <ReleaseToast onOpenChangelog={openChangelog} />
       <AppShell
-        topBar={<AppTopBar onOpenSpend={openSpend} showWorkspaceIdentity={!hasActiveSession} />}
+        topBar={<AppTopBar onOpenSpend={openSpend} />}
         footer={
-          currentWorkspace ? (
+          arrangement.hasFooter ? (
             <AppFooter
               activeStudio={activeStudio}
               githubEnabled={githubConnection.isAuthenticated}
@@ -318,11 +325,11 @@ export const App = () => {
             />
           ) : undefined
         }
-        leftHidden={!hasActiveSession}
-        leftSidebarCollapsed={sessionSidebar.isCollapsed}
+        leftHidden={arrangement.leftHidden}
+        leftSidebarCollapsed={arrangement.leftSidebarCollapsed}
         leftSidebar={
-          currentSession ? (
-            sessionSidebar.isCollapsed ? (
+          currentSession && arrangement.leftSlot !== 'none' ? (
+            arrangement.leftSlot === 'rail' ? (
               <CollapsedRail onExpand={sessionSidebar.pin} />
             ) : (
               <SessionNavSidebar session={currentSession} onCollapse={sessionSidebar.toggle} />
@@ -330,7 +337,7 @@ export const App = () => {
           ) : undefined
         }
         leftOverlay={
-          currentSession && sessionSidebar.isCollapsed ? (
+          currentSession && arrangement.leftOverlaySlot === 'peek' ? (
             <SidebarPeekOverlay
               isPeeking={sessionSidebar.isPeeking}
               onEdgeEnter={() => sessionSidebar.requestPeek({ source: 'edge' })}

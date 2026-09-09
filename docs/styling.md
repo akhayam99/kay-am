@@ -90,9 +90,9 @@ column is one template declaration and nothing inside it has to know. Which
 columns exist, and what each is allowed to do, is
 [navigation.md](navigation.md)'s.
 
-The strip is rendered outside that grid; exactly one of its children carries
-`flex-1`, the crumb region, and every other child is `shrink-0`, which is what
-fixes the truncation order for the whole strip.
+The top bar is rendered outside the window grid. Its centred layout uses equal
+flexible outer columns around the brand. Page breadcrumbs remain in their owning
+pane and do not determine top-bar sizing.
 
 The overlay slots are grid children, not siblings above the grid. An overlay
 that must float without taking layout spans its row and is

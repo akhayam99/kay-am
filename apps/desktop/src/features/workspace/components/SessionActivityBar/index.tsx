@@ -162,34 +162,14 @@ export const SessionActivityBar = ({
 
   return (
     <div className="flex h-full min-h-0 w-full shrink-0 flex-col gap-2">
-      <div className="flex shrink-0 flex-col gap-2 px-2 py-2">
-        <div className="flex items-center justify-between gap-2 px-0.5">
-          <Eyebrow label="Sessions" />
-          <div className="flex items-center gap-0.5">
-            <ProjectFilter workspaceId={workspaceId} sessions={filterSessions} />
-            <CountToggle
-              label="archived"
-              count={archivedSessions.length}
-              icon={Archive}
-              isShown={isArchivedView}
-              onChange={(isShown) => {
-                if (isShown) {
-                  onArchivedTabOpen?.();
-                }
-                setTab(isShown ? 'archived' : 'active');
-              }}
-            />
-            <SessionViewMenu workspaceId={workspaceId} />
-          </div>
-        </div>
-
+      <div className="flex shrink-0 items-center justify-end gap-1 px-2 py-2">
         {!isArchivedView ? (
           <Button
             variant="secondary"
             size="sm"
             onClick={() => window.dispatchEvent(new CustomEvent('goodboy:new-session'))}
             aria-label="Create new session"
-            className="group relative w-full justify-center gap-1.5 px-2 text-xs"
+            className="group relative min-w-0 flex-1 justify-center gap-1.5 px-2 text-xs"
           >
             <Plus size={ICON_SIZE.row} aria-hidden />
             New
@@ -201,6 +181,23 @@ export const SessionActivityBar = ({
             </KbdPill>
           </Button>
         ) : null}
+
+        <div className="flex shrink-0 items-center gap-0.5">
+          <ProjectFilter workspaceId={workspaceId} sessions={filterSessions} />
+          <CountToggle
+            label="archived"
+            count={archivedSessions.length}
+            icon={Archive}
+            isShown={isArchivedView}
+            onChange={(isShown) => {
+              if (isShown) {
+                onArchivedTabOpen?.();
+              }
+              setTab(isShown ? 'archived' : 'active');
+            }}
+          />
+          <SessionViewMenu workspaceId={workspaceId} />
+        </div>
       </div>
 
       <ScrollArea className="min-h-0 flex-1">

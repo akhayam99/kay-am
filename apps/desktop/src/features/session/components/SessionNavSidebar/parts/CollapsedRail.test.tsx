@@ -43,28 +43,26 @@ describe('CollapsedRail', () => {
     window.removeEventListener('goodboy:new-session', spy);
   });
 
-  it('keeps the workspace switcher reachable from the rail badge', () => {
+  it('leaves the workspace switcher to the pinned top bar, holding no second copy', () => {
     render(<CollapsedRail onExpand={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /switch workspace/i }));
-
-    expect(screen.getByText('New workspace')).toBeDefined();
+    expect(screen.queryByRole('button', { name: /switch workspace/i })).toBeNull();
   });
 
-  it('answers the global switcher shortcut while collapsed', () => {
+  it('answers no switcher shortcut of its own, so one popover owns the chord', () => {
     render(<CollapsedRail onExpand={vi.fn()} />);
 
     act(() => {
       window.dispatchEvent(new CustomEvent('goodboy:open-workspace-switcher'));
     });
 
-    expect(screen.getByText('New workspace')).toBeDefined();
+    expect(screen.queryByText('New workspace')).toBeNull();
   });
 
   it('offers no lens navigation, per the session-list-only sidebar', () => {
     render(<CollapsedRail onExpand={vi.fn()} />);
 
     expect(screen.queryByRole('navigation')).toBeNull();
-    expect(screen.getAllByRole('button')).toHaveLength(4);
+    expect(screen.getAllByRole('button')).toHaveLength(3);
   });
 });

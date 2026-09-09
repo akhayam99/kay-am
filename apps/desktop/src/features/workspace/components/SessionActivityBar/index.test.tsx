@@ -113,9 +113,9 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('SessionActivityBar, baseline', () => {
-  it('renders the Sessions header and the New session button', () => {
+  it('leaves the Sessions label to the column header and seats its controls beside New', () => {
     renderBar([]);
-    expect(screen.getByText(/^Sessions$/)).toBeDefined();
+    expect(screen.queryByText(/^Sessions$/)).toBeNull();
     expect(screen.getByRole('button', { name: /create new session/i })).toBeDefined();
     expect(screen.getByTestId('project-filter')).toBeDefined();
     expect(screen.queryByRole('button', { name: /Archived/ })).toBeNull();

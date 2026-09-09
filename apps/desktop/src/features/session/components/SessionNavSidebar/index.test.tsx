@@ -57,22 +57,34 @@ describe('SessionNavSidebar', () => {
     expect(state.setCurrentSession).toHaveBeenCalledWith(null);
   });
 
-  it('carries workspace identity and the collapse control in the pinned header', () => {
+  it('labels the pinned header Sessions and leaves workspace identity to the top bar', () => {
     const onCollapse = vi.fn();
     render(<SessionNavSidebar session={session} onCollapse={onCollapse} />);
 
-    expect(screen.getByLabelText('Switch or open a workspace')).toBeTruthy();
-    expect(screen.getByLabelText('Preferences')).toBeTruthy();
+    expect(screen.getByText('Sessions')).toBeTruthy();
+    expect(screen.queryByLabelText(/switch workspace/i)).toBeNull();
+    expect(screen.queryByLabelText('Preferences')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: /hide session sidebar/i }));
     expect(onCollapse).toHaveBeenCalledOnce();
   });
 
-  it('drops the header in the peek panel, where collapsing makes no sense', () => {
+  it('carries the same label and only the pin control in the peek header', () => {
+    const onPin = vi.fn();
+    render(<SessionNavSidebar session={session} onCollapse={onPin} collapseAction="pin" />);
+
+    expect(screen.getByText('Sessions')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /hide session sidebar/i })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /pin session sidebar/i }));
+    expect(onPin).toHaveBeenCalledOnce();
+  });
+
+  it('drops the header entirely when nothing can collapse the column', () => {
     render(<SessionNavSidebar session={session} />);
 
-    expect(screen.queryByLabelText('Switch or open a workspace')).toBeNull();
-    expect(screen.queryByRole('button', { name: /hide session sidebar/i })).toBeNull();
+    expect(screen.queryByText('Sessions')).toBeNull();
+    expect(screen.queryByRole('button', { name: /session sidebar/i })).toBeNull();
   });
 
   it('closes the peek once a session is picked', () => {

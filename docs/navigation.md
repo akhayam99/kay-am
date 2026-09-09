@@ -19,10 +19,9 @@
   edits a record in place; anything that opens a destination belongs to the
   footer.
 - **One home per thing.** If a thing must exist in state A and can exist in
-  state B, it lives where it must and B gets no second copy. Worked example:
-  there is no sessions column on the board, so anything reachable from the
-  board cannot live in the sidebar; workspace identity lives in the top bar and
-  the sidebar renders no workspace name.
+  state B, it lives where it must and B gets no second copy. Workspace identity
+  is permanently pinned at the top bar's left, and the sidebar renders no
+  workspace name on either the board or inside a session.
 - **Pin the structure, flex the density.** A control's position is fixed so it
   can be learned. No control appears or disappears at a count threshold, though
   counts themselves may: a chip reading zero is noise, not structure. Two
@@ -156,16 +155,22 @@ parked beside it.
 
 ## Top bar
 
-Identity and state on the left, workspace-wide signals and set-once preferences
-on the right.
+Workspace identity stays on the left, the Goodboy brand is centred on the
+window, and workspace-wide signals and set-once preferences stay on the right.
+The bar is one three-column grid, `minmax(0,1fr) auto minmax(max-content,1fr)`,
+so the brand sits at the window midpoint whenever the signals fit their share
+and slides off it rather than being overlapped when they do not; the identity
+holds a bound and truncates with the full name in its tooltip, the wordmark
+drops below `brand-word` and the mascot below `brand-mark`, and no control ever
+moves into an overflow menu.
 
 - Workspace identity opens an anchored popover that switches and creates
   workspaces; ⌘O and the palette open that same popover, never a second one.
   Workspace settings has its own control next to identity: buried inside the
   switcher, a common per-workspace preference was easy to never discover.
-- **Identity is mounted once.** It sits in the top bar on the board and moves
-  into the sidebar header inside a session, so exactly one switcher is live at
-  a time and the shortcut resolves to a single popover rather than racing two.
+- **Identity is pinned and mounted once.** Workspace identity stays at the top
+  bar's left on the board, inside sessions, and under studios. Exactly one
+  switcher is live, and ⌘O and the palette open its single anchored popover.
 - Theme is the one set-once preference kept here, flipped often enough to earn
   the slot. The guide and pair-device live in the settings studio and palette.
 - **The report control is the one carve-out from "the top bar never edits".**

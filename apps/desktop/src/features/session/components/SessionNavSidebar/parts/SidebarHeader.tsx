@@ -1,7 +1,6 @@
 import { PanelLeftClose, Pin } from 'lucide-react';
-import { IconButton, cn } from '@goodboy/ui';
+import { Eyebrow, IconButton, cn } from '@goodboy/ui';
 import { PANE_RHYTHM } from '@goodboy/ui';
-import { WorkspaceIdentityRow } from '../../../../workspace/components/WorkspaceIdentityRow';
 import { shortcutGlyphs } from '../../../../../shared/keyboard/registry';
 import { ICON_SIZE } from '../../../../../shared/components/conceptIcons';
 
@@ -17,9 +16,7 @@ export const SidebarHeader = ({ onCollapse, action = 'collapse' }: Props) => {
       : `Hide session sidebar (${shortcutGlyphs('column.toggle')})`;
   return (
     <div className={cn('flex items-center gap-1', PANE_RHYTHM.navRail.row)}>
-      <div className="min-w-0 flex-1">
-        {action === 'collapse' ? <WorkspaceIdentityRow /> : null}
-      </div>
+      <Eyebrow label="Sessions" className="min-w-0 flex-1 truncate" />
       <IconButton
         variant="ghost"
         icon={action === 'pin' ? Pin : PanelLeftClose}
