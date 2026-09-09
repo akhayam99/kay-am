@@ -57,6 +57,7 @@ const EMPTY_ATTEMPTS: ReadonlyArray<ResolveAttempt> = [];
 const EMPTY_PUBLICATIONS: ReadonlyArray<ResolvePublication> = [];
 const EMPTY_CHECKS: ReadonlyArray<PrCheckRun> = [];
 const SKELETON_ROWS = [0, 1, 2];
+const DETAIL_WIDTH = 520;
 
 const scrollableAncestor = (node: HTMLElement | null): HTMLElement | null => {
   let current = node?.parentElement ?? null;
@@ -298,6 +299,7 @@ export const ResolveQueueHome = ({ session }: Props) => {
 
   return (
     <InspectorSplit
+      defaultWidth={DETAIL_WIDTH}
       open={selectedRow !== null}
       panel={
         selectedRow === null ? null : (

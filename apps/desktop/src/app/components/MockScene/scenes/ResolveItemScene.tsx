@@ -3,13 +3,11 @@ import { STORAGE_KEYS } from '../../../../shared/lib/storage-keys';
 import { ResolveQueueHome } from '../../../../features/resolve/components/ResolveQueueHome';
 import { EXPANDED_THREAD_ID, SESSION, seedResolveScene } from './resolveSeed';
 
-const DETAIL_WIDTH = 560;
-
 export const ResolveItemScene = () => {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.inspectorPanelWidth, String(DETAIL_WIDTH));
+    localStorage.removeItem(STORAGE_KEYS.inspectorPanelWidth);
     seedResolveScene({ expandedThreadId: EXPANDED_THREAD_ID });
     setIsReady(true);
   }, []);

@@ -9,7 +9,7 @@ import {
   RESOLVE_QUEUE_ACTION_LABEL,
   RESOLVE_QUEUE_STATUS_LABEL,
 } from '../../resolveQueueCopy';
-import { RESOLVE_ITEM_LABEL, shortSha } from '../../resolveItemCopy';
+import { shortSha } from '../../resolveItemCopy';
 import type { ResolveQueueRow as QueueRow } from '../../buildResolveQueueRows';
 import { BADGE_TONE_BY_STATUS } from './statusTone';
 
@@ -84,11 +84,11 @@ export const ResolveQueueRow = ({
         onClick={onOpen}
         onKeyDown={onKeyDown}
         className={cn(
-          'group/resolve-row grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto] gap-2 rounded-md px-3 py-2 text-left text-muted-foreground motion-safe:transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] data-[selected=true]:bg-muted data-[selected=true]:font-medium data-[selected=true]:text-foreground',
+          'group/resolve-row grid cursor-pointer grid-cols-[minmax(0,1fr)_auto_auto] grid-rows-[auto_auto] gap-x-4 gap-y-2 rounded-md px-3 py-2 text-left text-muted-foreground motion-safe:transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] data-[selected=true]:bg-muted data-[selected=true]:font-medium data-[selected=true]:text-foreground',
           status === 'working' && 'spin-border spin-border-info',
         )}
       >
-        <div className="col-start-1 row-span-2 flex min-w-0 flex-col gap-2">
+        <div className="col-start-1 row-start-1 min-w-0">
           {body === null ? (
             <p className="text-sm font-medium leading-5 text-muted-foreground">
               {RESOLVE_COMMENT_UNAVAILABLE}
@@ -99,61 +99,22 @@ export const ResolveQueueRow = ({
               onKeyDown={(event) => event.stopPropagation()}
               className="min-w-0 text-sm font-medium leading-5 text-foreground"
             >
-              <ClampedProse text={body} lines={2} className="block text-foreground" />
+              <ClampedProse text={body} lines={2} className="text-foreground" />
             </div>
           )}
-          <div className="flex min-w-0 items-center gap-2">
-            <Chip
-              size="xs"
-              width="lg"
-              bordered={false}
-              tone={BADGE_TONE_BY_STATUS[status]}
-              label={RESOLVE_QUEUE_STATUS_LABEL[status]}
-            />
-            {support !== null && (
-              <span className="min-w-0 truncate text-2xs text-muted-foreground">{support}</span>
-            )}
-          </div>
-          <span className="flex min-w-0 items-center gap-2 text-3xs text-muted-foreground">
-            {reviewerNote?.author != null && (
-              <span className="shrink-0 truncate">{reviewerNote.author}</span>
-            )}
-            {reviewerNote?.location != null && (
-              <span className="min-w-0 truncate font-mono">{reviewerNote.location}</span>
-            )}
-            <span className="ml-auto flex shrink-0 items-center gap-2">
-              {integratedSha === null ? (
-                <span>{RESOLVE_ITEM_LABEL.noFixingCommit}</span>
-              ) : (
-                <Tooltip content={integratedSha} side="top">
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onOpenCommit({ sha: integratedSha });
-                    }}
-                    className="rounded font-mono tabular-nums underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]"
-                  >
-                    {shortSha({ sha: integratedSha })}
-                  </button>
-                </Tooltip>
-              )}
-              {postedAtMs !== null && (
-                <Tooltip
-                  content={formatAbsoluteDateTime({ iso: new Date(postedAtMs).toISOString() })}
-                  side="top"
-                >
-                  <span className="tabular-nums">
-                    {formatRelativeAge({ fromIso: new Date(postedAtMs).toISOString() })}
-                  </span>
-                </Tooltip>
-              )}
-            </span>
-          </span>
+        </div>
+        <div className="col-start-2 row-start-1 self-start">
+          <Chip
+            size="xs"
+            width="lg"
+            bordered={isSelected}
+            tone={BADGE_TONE_BY_STATUS[status]}
+            label={RESOLVE_QUEUE_STATUS_LABEL[status]}
+          />
         </div>
         <CardActionSlot
           label={RESOLVE_QUEUE_ACTION_LABEL.openComment}
-          className="col-start-2 row-start-1 self-start"
+          className="col-start-3 row-start-1 self-start"
         >
           <CardAction
             icon={ChevronRight}
@@ -161,9 +122,46 @@ export const ResolveQueueRow = ({
             onClick={onOpen}
           />
         </CardActionSlot>
+        <span className="col-start-1 row-start-2 flex min-w-0 items-center gap-2 text-3xs text-muted-foreground">
+          {reviewerNote?.author != null && (
+            <span className="shrink-0 truncate">{reviewerNote.author}</span>
+          )}
+          {reviewerNote?.location != null && (
+            <span className="min-w-0 truncate font-mono">{reviewerNote.location}</span>
+          )}
+          <span className="ml-auto flex shrink-0 items-center gap-2">
+            {integratedSha !== null && (
+              <Tooltip content={integratedSha} side="top">
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpenCommit({ sha: integratedSha });
+                  }}
+                  className="rounded font-mono tabular-nums underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]"
+                >
+                  {shortSha({ sha: integratedSha })}
+                </button>
+              </Tooltip>
+            )}
+            {postedAtMs !== null && (
+              <Tooltip
+                content={formatAbsoluteDateTime({ iso: new Date(postedAtMs).toISOString() })}
+                side="top"
+              >
+                <span className="tabular-nums">
+                  {formatRelativeAge({ fromIso: new Date(postedAtMs).toISOString() })}
+                </span>
+              </Tooltip>
+            )}
+          </span>
+        </span>
+        <span className="col-start-2 row-start-2 self-start text-right text-2xs text-muted-foreground">
+          {support}
+        </span>
         <CardActionSlot
           label="Comment lifecycle actions"
-          className="col-start-2 row-start-2 self-end"
+          className="col-start-3 row-start-2 self-end"
         >
           {status === 'later' && (
             <CardAction
