@@ -10,30 +10,6 @@ export const ResolveScene = () => {
     setIsReady(true);
   }, []);
 
-  useEffect(() => {
-    if (!isReady) {
-      return;
-    }
-    const expandFooter = () => {
-      const toggle = [
-        ...document.querySelectorAll<HTMLButtonElement>('button[aria-expanded]'),
-      ].find((button) => button.textContent?.includes('Pushed and posted') === true);
-      if (toggle === undefined) {
-        return false;
-      }
-      if (toggle.getAttribute('aria-expanded') !== 'true') {
-        toggle.click();
-      }
-      return true;
-    };
-    const interval = window.setInterval(() => {
-      if (expandFooter()) {
-        window.clearInterval(interval);
-      }
-    }, 150);
-    return () => window.clearInterval(interval);
-  }, [isReady]);
-
   if (!isReady) {
     return null;
   }

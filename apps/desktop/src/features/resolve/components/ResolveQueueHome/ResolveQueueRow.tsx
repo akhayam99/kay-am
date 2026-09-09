@@ -99,7 +99,7 @@ export const ResolveQueueRow = ({
               onKeyDown={(event) => event.stopPropagation()}
               className="min-w-0 text-sm font-medium leading-5 text-foreground"
             >
-              <ClampedProse text={body} lines={2} />
+              <ClampedProse text={body} lines={2} className="block text-foreground" />
             </div>
           )}
           <div className="flex min-w-0 items-center gap-2">

@@ -163,6 +163,7 @@ type ItemSeed = {
   readonly deliveredAt: number | null;
   readonly candidateRevision: number;
   readonly createdMinutesAgo: number;
+  readonly integratedSha?: string | null;
 };
 
 const buildItem = (seed: ItemSeed): ResolveQueueItem => ({
@@ -175,7 +176,7 @@ const buildItem = (seed: ItemSeed): ResolveQueueItem => ({
   approvalState: seed.approvalState,
   approvedRevision: seed.approvedRevision,
   approvedReplyHash: null,
-  integratedSha: null,
+  integratedSha: seed.integratedSha ?? null,
   deferredAt: seed.deferredAt,
   deliveredAt: seed.deliveredAt,
   supersededAt: null,
@@ -313,6 +314,7 @@ const ITEM_LOG_REDACT = buildItem({
   deliveredAt: null,
   candidateRevision: 1,
   createdMinutesAgo: 150,
+  integratedSha: '4f21c8b9a7d3e6015482ba9c7d3e6f0158249bcd',
 });
 const ITEM_TIMEOUT_CONFIG = buildItem({
   id: ITEM6_ID,
@@ -323,6 +325,7 @@ const ITEM_TIMEOUT_CONFIG = buildItem({
   deliveredAt: msAgo({ minutes: 195 }),
   candidateRevision: 1,
   createdMinutesAgo: 210,
+  integratedSha: '9ba3f70c25e18d4a6b0f39c7e21548d0a6b3f9c1',
 });
 const ITEM_FLAKY_TEST = buildItem({
   id: ITEM7_ID,
@@ -477,8 +480,8 @@ const CANDIDATE_RETRY: ResolveCandidate = {
   id: CANDIDATE_RETRY_ID,
   sessionId: SESSION_ID,
   revision: 1,
-  baseSha: 'sha-base-retry001',
-  candidateSha: 'sha-cand-retry001',
+  baseSha: 'c81f4a20d95e73b6f10c8a4d29e75b3f60c19d84',
+  candidateSha: 'e37b92c05a1f8d4e6b27c90a3f5d81e402b7c96a',
   worktreePath: '/mock/cascadia/billing-api-webhook-retry',
   state: 'ready',
   integratedSha: null,

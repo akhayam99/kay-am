@@ -205,7 +205,7 @@ export const ResolveItemView = ({
                     <button
                       type="button"
                       onClick={() => onSelectRelated(covered.thread.threadId)}
-                      className="min-w-0 truncate rounded text-left text-xs leading-4 text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]"
+                      className="block w-full truncate rounded text-left text-xs leading-4 text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]"
                     >
                       {covered.reviewerNote?.body ?? RESOLVE_COMMENT_UNAVAILABLE}
                     </button>
