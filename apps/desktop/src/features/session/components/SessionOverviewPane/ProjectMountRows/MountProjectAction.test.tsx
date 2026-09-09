@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import type { Project, SessionId, WorkspaceId } from '@goodboy/types';
+import type { SessionId, WorkspaceId } from '@goodboy/types';
 
 const { store } = vi.hoisted(() => ({
   store: {
@@ -25,14 +25,13 @@ const typedString = <Value extends string>({ value }: { readonly value: string }
 const SESSION_ID = typedString<SessionId>({ value: 'session-1' });
 const WORKSPACE_ID = typedString<WorkspaceId>({ value: 'workspace-1' });
 
-const project = ({ id, name }: { readonly id: string; readonly name: string }): Project =>
-  ({
-    id: typedString({ value: id }),
-    workspaceId: WORKSPACE_ID,
-    name,
-    kind: 'repo',
-    rootPath: `/repo/${id}`,
-  }) as Project;
+const project = ({ id, name }: { readonly id: string; readonly name: string }) => ({
+  id,
+  workspaceId: WORKSPACE_ID,
+  name,
+  kind: 'repo',
+  rootPath: `/repo/${id}`,
+});
 
 const openPicker = () => {
   fireEvent.click(screen.getByRole('button', { name: 'Mount project' }));
