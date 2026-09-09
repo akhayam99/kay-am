@@ -65,8 +65,8 @@ export const InboxToolbar = ({
         count={unreadCount}
         isShown={isUnreadOnly}
         icon={Mail}
-        itemsLabel="notifications"
         onChange={onUnreadOnlyChange}
+        isFilter
       />
       {unreadCount > 0 && (
         <button

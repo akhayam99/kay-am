@@ -3,6 +3,7 @@ import { IconButton, cn } from '@goodboy/ui';
 import { PANE_RHYTHM } from '@goodboy/ui';
 import { WorkspaceIdentityRow } from '../../../../workspace/components/WorkspaceIdentityRow';
 import { shortcutGlyphs } from '../../../../../shared/keyboard/registry';
+import { ICON_SIZE } from '../../../../../shared/components/conceptIcons';
 
 type Props = {
   readonly onCollapse: () => void;
@@ -20,10 +21,12 @@ export const SidebarHeader = ({ onCollapse, action = 'collapse' }: Props) => {
         {action === 'collapse' ? <WorkspaceIdentityRow /> : null}
       </div>
       <IconButton
+        variant="ghost"
         icon={action === 'pin' ? Pin : PanelLeftClose}
+        iconSize={ICON_SIZE.row}
         label={label}
         onClick={onCollapse}
-        className="shrink-0 border-transparent"
+        className="shrink-0"
       />
     </div>
   );

@@ -373,35 +373,68 @@ export const deleteWorktreesForSession = async (
   }
 };
 
-type DeleteSessionWorktreeForProjectParams = {
+const RELEASE_MOUNT_SQL = `UPDATE session_worktrees
+   SET last_worktree_path = COALESCE(worktree_path, last_worktree_path), worktree_path = NULL,
+       is_attached = 0, disk_state = 'removed', revision = revision + 1, updated_at = ?`;
+
+type MarkSessionMountRemovedParams = {
   readonly db: Database;
   readonly sessionId: SessionId;
-  readonly projectId: ProjectId;
+  readonly mountId: MountId;
 };
 
-export const deleteSessionWorktreeForProject = async ({
+export const markSessionMountRemoved = async ({
   db,
   sessionId,
-  projectId,
-}: DeleteSessionWorktreeForProjectParams): Promise<void> => {
+  mountId,
+}: MarkSessionMountRemovedParams): Promise<boolean> => {
+  const now = Date.now();
+  await db.exec('BEGIN IMMEDIATE');
+  try {
+    await db.execute(
+      'UPDATE sessions SET active_mount_id = NULL WHERE id = ? AND active_mount_id = ?',
+      [sessionId, mountId],
+    );
+    const result = await db.execute(`${RELEASE_MOUNT_SQL} WHERE session_id = ? AND id = ?`, [
+      now,
+      sessionId,
+      mountId,
+    ]);
+    await db.exec('COMMIT');
+    return result.rowsAffected > 0;
+  } catch (error) {
+    await db.exec('ROLLBACK');
+    throw error;
+  }
+};
+
+type MarkSessionMountRemovedByPathParams = {
+  readonly db: Database;
+  readonly sessionId: SessionId;
+  readonly worktreePath: string;
+};
+
+export const markSessionMountRemovedByPath = async ({
+  db,
+  sessionId,
+  worktreePath,
+}: MarkSessionMountRemovedByPathParams): Promise<boolean> => {
   const now = Date.now();
   await db.exec('BEGIN IMMEDIATE');
   try {
     await db.execute(
       `UPDATE sessions SET active_mount_id = NULL
        WHERE id = ? AND active_mount_id IN (
-         SELECT id FROM session_worktrees WHERE session_id = ? AND project_id = ?
+         SELECT id FROM session_worktrees WHERE session_id = ? AND worktree_path = ?
        )`,
-      [sessionId, sessionId, projectId],
+      [sessionId, sessionId, worktreePath],
     );
-    await db.execute(
-      `UPDATE session_worktrees
-       SET last_worktree_path = COALESCE(worktree_path, last_worktree_path), worktree_path = NULL,
-           is_attached = 0, disk_state = 'removed', revision = revision + 1, updated_at = ?
-       WHERE session_id = ? AND project_id = ?`,
-      [now, sessionId, projectId],
+    const result = await db.execute(
+      `${RELEASE_MOUNT_SQL} WHERE session_id = ? AND worktree_path = ?`,
+      [now, sessionId, worktreePath],
     );
     await db.exec('COMMIT');
+    return result.rowsAffected > 0;
   } catch (error) {
     await db.exec('ROLLBACK');
     throw error;

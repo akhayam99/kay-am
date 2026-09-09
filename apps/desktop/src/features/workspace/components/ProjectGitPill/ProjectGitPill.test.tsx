@@ -63,9 +63,9 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('ProjectGitPill', () => {
-  it('shows the total actionable count when behind and dirty', () => {
+  it('names what the count counts instead of showing a bare number', () => {
     renderPill({ status: statusOf({ behind: 2, changed: 3, unmerged: 1 }) });
-    expect(screen.getByTestId('project-git-count').textContent).toBe('6');
+    expect(screen.getByTestId('project-git-count').textContent).toBe('4 uncommitted');
   });
 
   it('shows no badge when the checkout is clean', () => {
@@ -130,7 +130,7 @@ describe('ProjectGitPills', () => {
     status,
   });
 
-  it('renders one aggregate trigger with the summed actionable count', () => {
+  it('renders one aggregate trigger naming the summed uncommitted files', () => {
     render(
       <ProjectGitPills
         entries={[
@@ -141,7 +141,7 @@ describe('ProjectGitPills', () => {
       />,
     );
     expect(screen.getByRole('button', { name: '3 repository git statuses' })).toBeDefined();
-    expect(screen.getByTestId('project-git-summary-count').textContent).toBe('6');
+    expect(screen.getByTestId('project-git-summary-count').textContent).toBe('4 uncommitted');
   });
 
   it('shows the aggregate warning instead of the count', () => {

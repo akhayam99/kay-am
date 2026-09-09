@@ -13,7 +13,7 @@ describe('Button', () => {
 
     expect(button.getAttribute('aria-busy')).toBe('true');
     expect(container.querySelector('svg')).toBeNull();
-    expect(container.querySelector('.motion-safe\\:animate-pulse')).not.toBeNull();
+    expect(container.querySelector('.motion-safe\\:animate-soft-pulse')).not.toBeNull();
   });
 
   it('keeps the busy label instead of the children when given one', () => {

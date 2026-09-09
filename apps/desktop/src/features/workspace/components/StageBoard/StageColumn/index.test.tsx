@@ -66,11 +66,48 @@ const renderColumn = (
 afterEach(cleanup);
 
 describe('StageColumn', () => {
-  it('uses the quiet empty state for an empty column', () => {
+  it('renders only the muted label for an empty column', () => {
     const { container } = renderColumn([]);
-    expect(screen.getByText('nothing building')).toBeDefined();
-    expect(container.querySelector('.size-12')).toBeNull();
-    expect(container.querySelector('.text-foreground')).toBeNull();
+    expect(screen.getByText('building').className).toContain('text-muted-foreground/60');
+    expect(screen.queryByText('nothing building')).toBeNull();
+    expect(container.querySelector('.tabular-nums')).toBeNull();
+  });
+
+  it('renders the count and the stage tint once the column has cards', () => {
+    renderColumn([makeSession('s-1', 'one')]);
+    expect(screen.getByText('1')).toBeDefined();
+    expect(screen.getByText('building').className).not.toContain('text-muted-foreground/60');
+
+    cleanup();
+    renderColumn([makeSession('s-1', 'one')], makeSelection(), {
+      kind: 'stage',
+      stage: 'running',
+    });
+    expect(screen.getByText('running').className).toContain('text-info');
+  });
+
+  it('starts collapsed for done and archived, open otherwise', () => {
+    renderColumn([makeSession('s-1', 'one')], makeSelection(), { kind: 'stage', stage: 'done' });
+    expect(screen.getByRole('button', { name: /done/ }).getAttribute('aria-expanded')).toBe(
+      'false',
+    );
+    expect(screen.queryByRole('button', { name: 'card one' })).toBeNull();
+
+    cleanup();
+    renderColumn([makeSession('s-1', 'one')], makeSelection(), { kind: 'archived' });
+    expect(screen.getByRole('button', { name: /archived/ }).getAttribute('aria-expanded')).toBe(
+      'false',
+    );
+    expect(screen.queryByRole('button', { name: 'card one' })).toBeNull();
+
+    cleanup();
+    renderColumn([makeSession('s-1', 'one')]);
+    expect(screen.getByRole('button', { name: 'card one' })).toBeDefined();
+  });
+
+  it('renders no native title on the collapse control', () => {
+    renderColumn([makeSession('s-1', 'one')], makeSelection(), { kind: 'stage', stage: 'done' });
+    expect(screen.getByRole('button', { name: /done/ }).hasAttribute('title')).toBe(false);
   });
 
   it('marks the cards the board selection owns', () => {
@@ -99,9 +136,11 @@ describe('StageColumn', () => {
   it('clears the archived selection when the archived column collapses', () => {
     const clear = vi.fn();
     renderColumn([makeSession('s-1', 'one')], makeSelection({ clear }), { kind: 'archived' });
-    clear.mockClear();
+    const header = screen.getByRole('button', { name: /archived/ });
 
-    fireEvent.click(screen.getByTitle('collapse archived'));
+    fireEvent.click(header);
+    clear.mockClear();
+    fireEvent.click(header);
 
     expect(clear).toHaveBeenCalled();
   });
@@ -112,9 +151,11 @@ describe('StageColumn', () => {
       kind: 'stage',
       stage: 'done',
     });
-    clear.mockClear();
+    const header = screen.getByRole('button', { name: /done/ });
 
-    fireEvent.click(screen.getByTitle('collapse done'));
+    fireEvent.click(header);
+    clear.mockClear();
+    fireEvent.click(header);
 
     expect(clear).not.toHaveBeenCalled();
   });

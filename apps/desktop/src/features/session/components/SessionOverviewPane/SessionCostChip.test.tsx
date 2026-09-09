@@ -80,9 +80,21 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('SessionCostChip', () => {
-  it('shows $0 when there is no telemetry', () => {
+  it('stays silent while the session has spent nothing and has no cap', () => {
     render(<SessionCostChip sessionId={SID} />);
-    expect(screen.getByRole('button').textContent).toBe('$0');
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('states a cap even before the session has spent anything', () => {
+    store.sessionBudgets = {
+      [SID]: {
+        sessionId: SID,
+        softCapUsd: 5,
+        updatedAt: '2026-07-27T10:00:00.000Z',
+      } as SessionBudget,
+    };
+    render(<SessionCostChip sessionId={SID} />);
+    expect(screen.getByRole('button').textContent).toBe('$0 / $5.00');
   });
 
   it('shows the spend alone when no cap is known', () => {
@@ -177,6 +189,7 @@ describe('SessionCostChip', () => {
   });
 
   it('expands the session budget inline without dispatching the impact studio event', () => {
+    state.sessionCost = 1.75;
     const handler = vi.fn();
     window.addEventListener('goodboy:open-impact-studio', handler);
     render(<SessionCostChip sessionId={SID} />);
@@ -190,6 +203,7 @@ describe('SessionCostChip', () => {
   });
 
   it('opens the impact studio at the same session scope from the popover', () => {
+    state.sessionCost = 1.75;
     const handler = vi.fn();
     window.addEventListener('goodboy:open-impact-studio', handler);
     render(<SessionCostChip sessionId={SID} />);
@@ -207,6 +221,7 @@ describe('SessionCostChip', () => {
   });
 
   it('moves focus into the dialog and restores it after Escape', () => {
+    state.sessionCost = 1.75;
     render(<SessionCostChip sessionId={SID} />);
     const trigger = screen.getByRole('button');
     trigger.focus();

@@ -62,7 +62,7 @@ export const StatusDot = ({
         'inline-block shrink-0 rounded-full',
         dim,
         dot,
-        pulsing ? 'motion-safe:animate-pulse' : '',
+        pulsing ? 'motion-safe:animate-soft-pulse' : '',
         className,
       )}
       {...ariaProps}

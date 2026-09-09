@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { ArrowRight, Link2 } from 'lucide-react';
+import { Link2 } from 'lucide-react';
 import { cn, formatError, Skeleton } from '@goodboy/ui';
 import type { IsoDateTime, Session } from '@goodboy/types';
-import type { LucideIcon } from 'lucide-react';
 import { useAppStore, useSessionSlots } from '../../../../store';
 import { useToast } from '../../../../app/components/Toast';
 import { CONCEPT_ICONS, ICON_SIZE } from '../../../../shared/components/conceptIcons';
@@ -13,37 +12,16 @@ import {
   TrackerStudioLinks,
 } from '../../../integrations/components/TrackerStudioLinks';
 import { CreateAgentPopover } from '../CreateAgentPopover';
+import { KickoffTile } from './KickoffTile';
 import { useKickoffIssues } from './useKickoffIssues';
-
-const TILE_CLASS =
-  'group flex w-full items-center gap-2.5 rounded-lg border border-border-soft bg-elevated px-3 py-2.5 text-left shadow-sm transition-colors hover:border-border';
-
-type TileProps = {
-  readonly icon: LucideIcon;
-  readonly iconClassName: string;
-  readonly title: string;
-  readonly description: string;
-  readonly onClick: () => void;
-};
-
-const KickoffTile = ({ icon: Icon, iconClassName, title, description, onClick }: TileProps) => (
-  <button type="button" onClick={onClick} className={TILE_CLASS}>
-    <Icon size={ICON_SIZE.hero} aria-hidden className={cn('shrink-0', iconClassName)} />
-    <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
-      <span className="text-sm font-medium text-foreground">{title}</span>
-      <span className="truncate text-2xs text-muted-foreground">{description}</span>
-    </span>
-    <ArrowRight
-      size={ICON_SIZE.control}
-      aria-hidden
-      className="shrink-0 text-muted-foreground/30 motion-safe:transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground"
-    />
-  </button>
-);
 
 type Props = {
   readonly session: Session;
   readonly onOpenWorkflowBuilder: () => void;
+};
+
+type PickIssueParams = {
+  readonly candidate: IssueCandidate;
 };
 
 export const SessionKickoff = ({ session, onOpenWorkflowBuilder }: Props) => {
@@ -55,7 +33,7 @@ export const SessionKickoff = ({ session, onOpenWorkflowBuilder }: Props) => {
   const { showToast } = useToast();
   const [linkingKey, setLinkingKey] = useState<string | null>(null);
 
-  const pickIssue = async (candidate: IssueCandidate) => {
+  const pickIssue = async ({ candidate }: PickIssueParams) => {
     const key = `${candidate.provider}:${candidate.externalId}`;
     setLinkingKey(key);
     try {
@@ -120,7 +98,7 @@ export const SessionKickoff = ({ session, onOpenWorkflowBuilder }: Props) => {
                   key={key}
                   type="button"
                   disabled={linkingKey != null}
-                  onClick={() => void pickIssue(row)}
+                  onClick={() => void pickIssue({ candidate: row })}
                   className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left motion-safe:transition-colors hover:bg-muted/60 disabled:opacity-60"
                 >
                   <IntegrationGlyph provider={row.provider} size="xs" />
@@ -156,10 +134,10 @@ export const SessionKickoff = ({ session, onOpenWorkflowBuilder }: Props) => {
         ) : null}
         {!issues.hasSources || (issues.isLoaded && issues.rows.length === 0) ? (
           <div className="flex items-center gap-2 px-2 py-1.5">
-            <p className="text-xs text-muted-foreground">
+            <p className="min-w-0 flex-1 text-xs text-muted-foreground">
               {issues.hasSources ? 'No open issues detected' : 'No tracker connected yet'}
             </p>
-            <div className="ml-auto">
+            <div className="shrink-0">
               <TrackerStudioLinks links={emptyStateLinks} connected={issues.connected} />
             </div>
           </div>

@@ -316,111 +316,107 @@ export const TimelinePane = ({ session, runs, actions, kickoff }: Props) => {
     ? suggestions.filter((suggestion) => suggestion.kind !== 'plan-ready')
     : [];
   const isLoading = (!areEventsLoaded || !areAgentsLoaded) && model.entries.length === 0;
+  const emptyHint =
+    areEventsLoaded && areAgentsLoaded && model.entries.length === 0
+      ? 'Nothing yet. Agents, workflows and session facts land here as they happen.'
+      : undefined;
 
   if (model.entries.length === 0 && kickoff != null && areEventsLoaded && areAgentsLoaded) {
     return <>{kickoff}</>;
   }
 
   return (
-    <>
-      {actions}
-      <section aria-label="Activity" className="flex flex-col gap-2.5">
-        <SectionHeader
-          label="Activity"
-          className="px-0.5"
-          action={
+    <section aria-label="Activity" className="flex flex-col gap-2">
+      <SectionHeader
+        label="Activity"
+        hint={emptyHint}
+        className="px-0.5"
+        action={
+          <div className="flex items-center gap-1">
             <ActivityFilterButton
               filter={activity.filter}
               hiddenCount={activity.hiddenCount}
               onToggle={activity.setToggle}
               onAll={activity.setAll}
             />
-          }
-        />
-        {isLoading ? (
-          <TimelineSkeleton />
-        ) : model.entries.length === 0 ? (
-          <p className="px-0.5 py-2 text-xs text-muted-foreground">
-            Nothing yet. Agents, workflows, and session facts land here as they happen.
-          </p>
-        ) : visibleEntries.length === 0 ? (
-          <p className="px-0.5 py-2 text-xs text-muted-foreground">
-            Everything is hidden by the activity filter. Show a category to bring it back.
-          </p>
-        ) : (
-          <div className="flex flex-col">
-            {visibleSuggestions.map((suggestion) => (
-              <TimelineSuggestionRow
-                key={suggestion.id}
-                suggestion={suggestion}
-                railWidth={rail.width}
-                actions={suggestionActions({ suggestion })}
-              />
-            ))}
-            {stream.items.map((item, index) => {
-              const railRow = rail.rows[index];
-              if (railRow === undefined) {
-                return null;
-              }
-              if (item.kind === 'now') {
-                return (
-                  <TimelineNowRule
-                    key={item.id}
-                    item={item}
-                    rail={railRow}
-                    railWidth={rail.width}
-                    action={
-                      hasUnreadAgents ? (
-                        <button
-                          type="button"
-                          onClick={() => void markAllAgentsSeen(sessionId)}
-                          className="inline-flex h-6 items-center gap-1 rounded-full bg-primary/10 px-2.5 text-2xs font-medium text-primary motion-safe:transition-colors hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-focus-ring)]"
-                        >
-                          <CheckCheck size={ICON_SIZE.row} aria-hidden />
-                          Mark all seen
-                        </button>
-                      ) : undefined
-                    }
-                  />
-                );
-              }
-              if (item.kind === 'day') {
-                return (
-                  <TimelineDayRule
-                    key={item.id}
-                    item={item}
-                    rail={railRow}
-                    railWidth={rail.width}
-                  />
-                );
-              }
-              if (item.kind === 'cluster') {
-                return (
-                  <TimelinePendingCluster
-                    key={item.id}
-                    item={item}
-                    rail={railRow}
-                    railWidth={rail.width}
-                  />
-                );
-              }
-              const target = openTargetFor({ entry: item.entry });
+            {actions}
+          </div>
+        }
+      />
+      {isLoading ? (
+        <TimelineSkeleton />
+      ) : model.entries.length === 0 ? null : visibleEntries.length === 0 ? (
+        <p className="px-0.5 py-2 text-xs text-muted-foreground">
+          Everything is hidden by the activity filter. Show a category to bring it back.
+        </p>
+      ) : (
+        <div className="flex flex-col">
+          {visibleSuggestions.map((suggestion) => (
+            <TimelineSuggestionRow
+              key={suggestion.id}
+              suggestion={suggestion}
+              railWidth={rail.width}
+              actions={suggestionActions({ suggestion })}
+            />
+          ))}
+          {stream.items.map((item, index) => {
+            const railRow = rail.rows[index];
+            if (railRow === undefined) {
+              return null;
+            }
+            if (item.kind === 'now') {
               return (
-                <TimelineStreamRow
+                <TimelineNowRule
                   key={item.id}
                   item={item}
                   rail={railRow}
                   railWidth={rail.width}
-                  sessionId={sessionId}
-                  openTarget={target}
-                  action={actionFor({ item })}
-                  diffStat={diffStatFor({ item })}
+                  action={
+                    hasUnreadAgents ? (
+                      <button
+                        type="button"
+                        onClick={() => void markAllAgentsSeen(sessionId)}
+                        className="inline-flex h-6 items-center gap-1 rounded-full bg-primary/10 px-2.5 text-2xs font-medium text-primary motion-safe:transition-colors hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-focus-ring)]"
+                      >
+                        <CheckCheck size={ICON_SIZE.row} aria-hidden />
+                        Mark all seen
+                      </button>
+                    ) : undefined
+                  }
                 />
               );
-            })}
-          </div>
-        )}
-      </section>
-    </>
+            }
+            if (item.kind === 'day') {
+              return (
+                <TimelineDayRule key={item.id} item={item} rail={railRow} railWidth={rail.width} />
+              );
+            }
+            if (item.kind === 'cluster') {
+              return (
+                <TimelinePendingCluster
+                  key={item.id}
+                  item={item}
+                  rail={railRow}
+                  railWidth={rail.width}
+                />
+              );
+            }
+            const target = openTargetFor({ entry: item.entry });
+            return (
+              <TimelineStreamRow
+                key={item.id}
+                item={item}
+                rail={railRow}
+                railWidth={rail.width}
+                sessionId={sessionId}
+                openTarget={target}
+                action={actionFor({ item })}
+                diffStat={diffStatFor({ item })}
+              />
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 };

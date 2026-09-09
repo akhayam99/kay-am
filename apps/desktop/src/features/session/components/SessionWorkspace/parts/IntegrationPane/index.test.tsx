@@ -374,7 +374,7 @@ describe('IntegrationPane', () => {
 
     render(<IntegrationPane sessionId={SESSION_ID} workspaceId={WORKSPACE_ID} provider="linear" />);
 
-    const toggle = screen.getByRole('button', { name: 'Completed (2)' });
+    const toggle = screen.getByRole('button', { name: 'Show completed (2)' });
     expect(screen.queryByText('ak/shipped')).toBeNull();
 
     fireEvent.click(toggle);

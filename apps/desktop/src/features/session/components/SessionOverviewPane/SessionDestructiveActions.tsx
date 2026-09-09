@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Session, SessionId } from '@goodboy/types';
-import { cn, formatError, Tooltip } from '@goodboy/ui';
+import { cn, formatError, IconButton, tintClasses } from '@goodboy/ui';
 import { useAppStore } from '../../../../store';
 import { useToast } from '../../../../app/components/Toast';
 import { shortcutGlyphs } from '../../../../shared/keyboard/registry';
@@ -10,9 +10,6 @@ import { DeleteSessionConfirm } from '../DeleteSessionConfirm';
 type Props = {
   readonly session: Session;
 };
-
-const ICON_BUTTON =
-  'inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground motion-safe:transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)]';
 
 type HintParams = {
   readonly label: string;
@@ -28,7 +25,7 @@ export const SessionDestructiveActions = ({ session }: Props) => {
   const unarchiveTask = useAppStore((s) => s.unarchiveTask);
   const { showToast } = useToast();
   const [isDeleteArmed, setIsDeleteArmed] = useState(false);
-  const archived = session.archivedAt != null;
+  const isArchived = session.archivedAt != null;
 
   useEffect(() => {
     if (!isDeleteArmed) {
@@ -56,8 +53,8 @@ export const SessionDestructiveActions = ({ session }: Props) => {
     });
   };
 
-  const archiveLabel = archived ? 'Unarchive session' : 'Archive session';
-  const archiveTooltip = archived
+  const archiveLabel = isArchived ? 'Unarchive session' : 'Archive session';
+  const archiveTooltip = isArchived
     ? archiveLabel
     : withHint({ label: archiveLabel, hint: shortcutGlyphs('session.archive') });
   const deleteTooltip = withHint({
@@ -67,32 +64,31 @@ export const SessionDestructiveActions = ({ session }: Props) => {
 
   return (
     <>
-      <Tooltip content={archiveTooltip}>
-        <button
-          type="button"
-          aria-label={archiveLabel}
-          onClick={archived ? doUnarchive : doArchive}
-          className={ICON_BUTTON}
-        >
-          {archived ? (
-            <CONCEPT_ICONS.restore size={ICON_SIZE.row} aria-hidden />
-          ) : (
-            <CONCEPT_ICONS.archive size={ICON_SIZE.row} aria-hidden />
-          )}
-        </button>
-      </Tooltip>
+      <IconButton
+        variant="ghost"
+        icon={isArchived ? CONCEPT_ICONS.restore : CONCEPT_ICONS.archive}
+        iconSize={ICON_SIZE.row}
+        label={archiveLabel}
+        tooltip={archiveTooltip}
+        onClick={isArchived ? doUnarchive : doArchive}
+        className="size-6 shrink-0"
+      />
       <span className="relative flex shrink-0 items-center">
-        <Tooltip content={deleteTooltip}>
-          <button
-            type="button"
-            aria-label="Delete session"
-            aria-expanded={isDeleteArmed}
-            onClick={() => setIsDeleteArmed((armed) => !armed)}
-            className={cn(ICON_BUTTON, 'text-danger/70 hover:bg-danger/10 hover:text-danger')}
-          >
-            <CONCEPT_ICONS.delete size={ICON_SIZE.row} aria-hidden />
-          </button>
-        </Tooltip>
+        <IconButton
+          variant="ghost"
+          tone={isDeleteArmed ? 'danger' : 'neutral'}
+          icon={CONCEPT_ICONS.delete}
+          iconSize={ICON_SIZE.row}
+          label="Delete session"
+          tooltip={deleteTooltip}
+          aria-expanded={isDeleteArmed}
+          onClick={() => setIsDeleteArmed((armed) => !armed)}
+          className={cn(
+            'size-6 shrink-0',
+            tintClasses('danger').hoverText,
+            tintClasses('danger').hoverBgSoft,
+          )}
+        />
         {isDeleteArmed ? (
           <DeleteSessionConfirm
             session={session}

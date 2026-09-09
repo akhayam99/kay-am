@@ -135,7 +135,7 @@ describe('mount recovery persistence', () => {
     expect(group).toMatchObject({
       rows: [{ mountId: 'mount-3' }, { mountId: 'mount-4' }],
       completedRows: [{ mountId: 'mount-1' }, { mountId: 'mount-2' }],
-      seriesProgress: '2 merged · 4 of 6 created',
+      seriesName: 'ENG-3240 split',
     });
   });
 

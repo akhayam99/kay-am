@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { Plus } from 'lucide-react';
-import { Button, cn, Divider, EmptyState, Eyebrow, Skeleton } from '@goodboy/ui';
+import {
+  Button,
+  cn,
+  Divider,
+  EmptyState,
+  Eyebrow,
+  ScrollFade,
+  Skeleton,
+  Tooltip,
+} from '@goodboy/ui';
 import type { Session, SessionId, SessionStage, WorkspaceId } from '@goodboy/types';
 import {
   EMPTY_ARRAY,
@@ -56,7 +65,7 @@ const BoardSkeleton = () => (
         <Skeleton className="h-4 w-24 rounded-full" />
         <div className={cn('flex flex-col', PANE_RHYTHM.board.cardGap)}>
           {Array.from({ length: cards }).map((_, i) => (
-            <Skeleton key={i} className="h-[8.25rem] w-full rounded-lg" />
+            <Skeleton key={i} className="h-28 w-full rounded-lg" />
           ))}
         </div>
       </div>
@@ -141,64 +150,54 @@ export const StageBoard = ({ workspaceId, sessions }: Props) => {
         ? 'The project folder is unreachable'
         : 'This project needs a git repository with one commit first';
 
+  const newSessionButton = (
+    <Button
+      size="sm"
+      onClick={() => window.dispatchEvent(new CustomEvent('goodboy:new-session'))}
+      disabled={!hasUsableProject}
+    >
+      <Plus size={ICON_SIZE.control} aria-hidden />
+      New session
+    </Button>
+  );
+
   return (
-    <div className={cn('flex h-full w-full flex-col gap-5', PANE_RHYTHM.board.pad)}>
+    <div className={cn('flex h-full w-full', PANE_RHYTHM.stack, PANE_RHYTHM.board.pad)}>
       {pending || !empty || hasProjects ? (
         <>
           <div className="flex shrink-0 items-center justify-between gap-4">
             <span className="flex min-w-0 items-baseline gap-2">
               <Eyebrow label="Stage board" />
-              <span className="text-2xs tabular-nums text-muted-foreground/60">
-                {activeSessions.length}
-              </span>
-              {activeSessions.length > 1 && (
-                <span className="hidden text-3xs text-muted-foreground/50 sm:inline">
-                  ⌥click to select · drag to lasso
+              {activeSessions.length > 0 && (
+                <span className="text-2xs tabular-nums text-muted-foreground/60">
+                  {activeSessions.length}
                 </span>
               )}
             </span>
-            <span className="flex shrink-0 items-center gap-1.5">
+            <span className="flex shrink-0 items-center gap-2">
               <ProjectGitPills entries={projectGitStatuses} />
               <ProjectFilter workspaceId={workspaceId} sessions={filterSessions} />
-              <button
-                type="button"
-                onClick={() =>
-                  window.dispatchEvent(
-                    new CustomEvent('goodboy:open-settings', {
-                      detail: { scope: 'workspace', section: 'projects' },
-                    }),
-                  )
-                }
-                title="Manage the projects linked to this workspace"
-                className="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground/70 transition-colors hover:bg-foreground/5 hover:text-foreground"
-              >
-                + Add project
-              </button>
-              <Button
-                size="sm"
-                onClick={() => window.dispatchEvent(new CustomEvent('goodboy:new-session'))}
-                disabled={!hasUsableProject}
-                title={hasUsableProject ? undefined : blockedReason}
-              >
-                <Plus size={ICON_SIZE.control} aria-hidden />
-                New session
-              </Button>
+              {hasUsableProject ? (
+                newSessionButton
+              ) : (
+                <Tooltip content={blockedReason} side="bottom">
+                  {newSessionButton}
+                </Tooltip>
+              )}
             </span>
           </div>
           <Divider />
         </>
       ) : null}
 
-      <div className="mx-auto w-full max-w-md shrink-0 empty:hidden"></div>
-
       {pending && <BoardSkeleton />}
 
       {!pending && empty && !hasProjects && workspace !== null && (
-        <div className="flex flex-1 items-center justify-center overflow-y-auto">
+        <ScrollFade className="min-h-0 flex-1" viewportClassName="flex items-center justify-center">
           <div className="w-full max-w-xl py-6">
             <ProjectsStep workspace={workspace} />
           </div>
-        </div>
+        </ScrollFade>
       )}
 
       {!pending && hasProjects && empty && hasUsableProject && (
@@ -224,12 +223,12 @@ export const StageBoard = ({ workspaceId, sessions }: Props) => {
       )}
 
       {!pending && !empty && (
-        <div className="flex min-h-0 flex-1 overflow-x-auto">
+        <ScrollFade orientation="horizontal" fadeSize="w-8" className="min-h-0 flex-1">
           <div
             ref={columnsRef}
             onPointerDown={lasso.onPointerDown}
             className={cn(
-              'relative mx-auto flex min-h-0 w-fit max-w-full',
+              'relative mx-auto flex h-full min-h-0 w-fit max-w-full',
               PANE_RHYTHM.board.colGap,
             )}
           >
@@ -268,7 +267,7 @@ export const StageBoard = ({ workspaceId, sessions }: Props) => {
               />
             )}
           </div>
-        </div>
+        </ScrollFade>
       )}
 
       {selection.selectedSessions.length > 0 && (

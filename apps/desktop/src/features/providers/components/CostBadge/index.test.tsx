@@ -7,10 +7,10 @@ import { CostBadge } from './index';
 afterEach(cleanup);
 
 describe('CostBadge', () => {
-  it('renders a split dollars/cents formatted value', () => {
-    render(<CostBadge value={1.23} />);
-    expect(screen.getByText('$1')).toBeDefined();
-    expect(screen.getByText('.23')).toBeDefined();
+  it('renders the formatted value once', () => {
+    const { container } = render(<CostBadge value={1.23} />);
+    expect(screen.getByText('$1.23')).toBeDefined();
+    expect(container.querySelectorAll('span')).toHaveLength(1);
   });
 
   it('renders zero as $0', () => {

@@ -1,4 +1,5 @@
 import type { MountId, MountRecoveryCode } from '@goodboy/types';
+import { formatError } from '@goodboy/ui';
 
 export type MountError = Error & {
   readonly code: MountRecoveryCode;
@@ -18,3 +19,27 @@ export const mountError = ({ code, message, mountId }: Params): MountError =>
     mountId: mountId ?? null,
     recoverable: true as const,
   });
+
+export const worktreeErrorKind = ({ error }: { readonly error: unknown }): string | null => {
+  if (error === null || typeof error !== 'object') {
+    return null;
+  }
+  const kind = (error as { readonly kind?: unknown }).kind;
+  return typeof kind === 'string' ? kind : null;
+};
+
+type BranchInUseParams = {
+  readonly error: unknown;
+  readonly mountId?: MountId;
+};
+
+export const branchInUseError = ({ error, mountId }: BranchInUseParams): MountError | null => {
+  if (worktreeErrorKind({ error }) !== 'branch_in_use') {
+    return null;
+  }
+  return mountError({
+    code: 'branch-taken',
+    message: formatError(error),
+    ...(mountId !== undefined ? { mountId } : {}),
+  });
+};

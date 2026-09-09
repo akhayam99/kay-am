@@ -37,8 +37,8 @@ export const RESOLVE_RUN_IN_PROGRESS = 'Resolve run in progress';
 export const RESOLVE_COMMENT_UNAVAILABLE = 'Comment unavailable';
 
 export const RESOLVE_HISTORY_LABEL = {
-  later: 'Later',
-  completed: 'Completed',
+  later: 'later',
+  completed: 'completed',
 } as const;
 
 export const RESOLVE_DELIVERY_SUPPORT = {

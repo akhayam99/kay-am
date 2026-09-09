@@ -16,7 +16,7 @@ import type { BoardNavigation } from '../useBoardNavigation';
 type MockDynamicAction = {
   readonly key: string;
   readonly icon: LucideIcon;
-  readonly tone: 'primary' | 'warning';
+  readonly tone: 'primary' | 'warning' | 'danger';
   readonly label: string;
   readonly onClick: () => void;
 };
@@ -147,21 +147,27 @@ describe('StageBoardCard layout', () => {
     render(<StageBoardCard session={session} nav={nav} />);
     const card = screen.getAllByRole('button')[0];
     const title = screen.getByText(session.goal);
-    const footer =
-      title.closest('[data-tooltip]')?.parentElement?.nextElementSibling?.nextElementSibling;
-    expect(card?.className).toContain('h-[8.25rem]');
+    const metaRow = card?.children[2];
+    expect(card?.className).toContain('h-28');
+    expect(card?.className).toContain('gap-y-1');
+    expect(card?.className).not.toContain('h-[8.25rem]');
+    expect(card?.className).not.toContain('shadow-sm');
     expect(title.className).toContain('line-clamp-2');
     expect(title.className).toContain('min-h-10');
-    expect(footer?.className).toContain('flex-nowrap');
-    expect(footer?.className).toContain('min-h-5');
+    expect(title.className).toContain('leading-5');
+    expect(metaRow?.className).toContain('col-span-2');
+    expect(metaRow?.className).toContain('col-start-1');
+    expect(metaRow?.className).toContain('row-start-2');
+    expect(metaRow?.className).toContain('h-5');
+    expect(metaRow?.className).not.toContain('self-center');
   });
 
-  it('shows the reason under the goal and in the title tooltip without a status dot', () => {
+  it('shows the reason under the goal without a title tooltip or status dot', () => {
     render(<StageBoardCard session={session} nav={nav} />);
-    const tooltip = screen.getByText(session.goal).closest('[data-tooltip]');
-    expect(tooltip?.getAttribute('data-tooltip')).toBe(`${session.goal} · no PR yet`);
+    expect(screen.getByText(session.goal).closest('[data-tooltip]')).toBeNull();
     expect(screen.queryByTestId('status-dot')).toBeNull();
     expect(screen.getByText('no PR yet').className).toContain('truncate');
+    expect(screen.getByText('no PR yet').parentElement?.children.length).toBe(2);
   });
 
   it('renders a backticked goal as inline code and keeps the tooltip plain', () => {
@@ -170,14 +176,13 @@ describe('StageBoardCard layout', () => {
     const title = screen.getByText(/run/);
     expect(title.querySelector('code')?.textContent).toBe('/explore');
     expect(title.textContent).not.toContain('`');
-    expect(title.closest('[data-tooltip]')?.getAttribute('data-tooltip')).toBe(
-      'run /explore first · no PR yet',
-    );
+    expect(title.closest('[data-tooltip]')).toBeNull();
   });
 
   it('points at the session with a trailing chevron', () => {
     render(<StageBoardCard session={session} nav={nav} />);
     expect(document.querySelector('.lucide-chevron-right')).not.toBeNull();
+    expect(document.querySelector('.lucide-chevron-right')?.closest('[role="group"]')).toBeNull();
   });
 
   it('renders the last update age when the session carries a timestamp', () => {
@@ -349,18 +354,87 @@ describe('StageBoardCard actions visibility', () => {
     const nonAttention = screen.getByLabelText('run next step');
     expect(attention.className.includes(' bg-warning/5')).toBe(true);
     expect(attention.className).toContain('text-warning');
+    expect(attention.className).not.toContain('opacity-0');
     expect(nonAttention.className).not.toContain('bg-warning/5');
     expect(nonAttention.className.includes(' bg-primary/5')).toBe(false);
+    expect(nonAttention.className).toContain('opacity-0');
+    expect(nonAttention.className).toContain('group-hover/session-card:opacity-100');
   });
 
-  it('separates delete from archive with a divider in the lifecycle group', () => {
+  it('highlights a danger action', () => {
+    useDynamicActionsMock.mockReturnValue([
+      {
+        key: 'blocked',
+        icon: HelpCircle,
+        tone: 'danger',
+        label: 'Confirm skip and continue',
+        onClick: vi.fn(),
+      },
+    ]);
+    render(<StageBoardCard session={session} nav={nav} />);
+    const action = screen.getByLabelText('Confirm skip and continue');
+    expect(action.className).toContain('bg-danger/5');
+    expect(action.className).toContain('text-danger');
+  });
+
+  it('reveals editor and terminal on hover instead of showing them at rest', () => {
+    render(<StageBoardCard session={session} nav={nav} />);
+    for (const label of ['Open in editor', 'Open terminal']) {
+      const control = screen.getByLabelText(label);
+      expect(control.className).toContain('opacity-0');
+      expect(control.className).toContain('group-hover/session-card:opacity-100');
+      expect(control.className).toContain('group-focus-within/session-card:opacity-100');
+      expect(control.className).not.toContain('agent-card');
+    }
+  });
+
+  it('renders the revealed extras before the visible action', () => {
+    useDynamicActionsMock.mockReturnValue([
+      {
+        key: 'questions',
+        icon: HelpCircle,
+        tone: 'warning',
+        label: '1 open question',
+        onClick: vi.fn(),
+      },
+      {
+        key: 'run',
+        icon: Play,
+        tone: 'primary',
+        label: 'run next step',
+        onClick: vi.fn(),
+      },
+    ]);
+    render(<StageBoardCard session={session} nav={nav} />);
+    const group = screen.getByRole('group', { name: 'Session quick actions' });
+    expect(Array.from(group.children)).toEqual([
+      screen.getByLabelText('run next step').parentElement,
+      screen.getByLabelText('Open in editor').parentElement,
+      screen.getByLabelText('Open terminal').parentElement,
+      screen.getByLabelText('1 open question').parentElement,
+    ]);
+  });
+
+  it('reveals archive and delete with no divider', () => {
     render(<StageBoardCard session={session} nav={nav} />);
     const group = screen.getByRole('group', { name: 'Session lifecycle actions' });
-    const archive = screen.getByLabelText('Archive').parentElement;
-    const del = screen.getByLabelText('Delete').parentElement;
-    const divider = group.querySelector('[role="separator"]');
-    expect(divider).not.toBeNull();
-    expect(Array.from(group.children)).toEqual([archive, divider, del]);
+    const archive = screen.getByLabelText('Archive');
+    const del = screen.getByLabelText('Delete');
+    expect(group.querySelector('[role="separator"]')).toBeNull();
+    expect(Array.from(group.children)).toEqual([archive.parentElement, del.parentElement]);
+    expect(archive.className).toContain('opacity-0');
+    expect(del.className).toContain('opacity-0');
+  });
+
+  it('shows restore as the one visible action on an archived card', () => {
+    render(<StageBoardCard session={session} nav={nav} archived />);
+    const restore = screen.getByLabelText('Restore');
+    expect(restore.className).not.toContain('opacity-0');
+    const group = screen.getByRole('group', { name: 'Session quick actions' });
+    expect(group.contains(restore)).toBe(true);
+    expect(screen.queryByLabelText('Archive')).toBeNull();
+    expect(screen.queryByLabelText('Open in editor')).toBeNull();
+    expect(screen.getByLabelText('Delete').className).toContain('opacity-0');
   });
 });
 
@@ -420,21 +494,82 @@ describe('StageBoardCard footer', () => {
     const agents = screen.getByLabelText('2 agents');
     const task = screen.getByLabelText('GB-123 from Linear');
     const cost = document.querySelector('[title="Session spend: $1.25 (excludes summarizer)"]');
-    const auto = screen.getByText('Autorun');
-    const footer = agents.closest('[data-tooltip]')?.parentElement;
+    const auto = screen.getByLabelText('Autorun');
+    const metaRow = agents.closest('[data-tooltip]')?.parentElement?.parentElement;
+    const left = metaRow?.firstElementChild;
+    const right = metaRow?.lastElementChild;
     expect(agents.querySelector('.lucide-bot')).not.toBeNull();
     expect(screen.queryByText('GB-123')).toBeNull();
     expect(cost).not.toBeNull();
     expect(auto).toBeDefined();
     expect(auto.className).toContain('text-primary');
     expect(auto.className).not.toContain('text-danger');
-    expect(Array.from(footer?.children ?? []).slice(0, 4)).toEqual([
+    expect(auto.className).not.toContain('ring-1');
+    expect(screen.queryByText('Autorun')).toBeNull();
+    expect(auto.closest('[data-tooltip]')?.getAttribute('data-tooltip')).toBe('Autorun');
+    expect(Array.from(left?.children ?? [])).toEqual([
       agents.closest('[data-tooltip]'),
+      auto.closest('[data-tooltip]'),
       task,
-      cost,
-      auto,
     ]);
-    expect(footer?.lastElementChild?.classList.contains('lucide-chevron-right')).toBe(true);
+    expect(right?.firstElementChild).toBe(cost);
+    expect(right?.children.length).toBe(1);
+    expect(right?.className).toContain('group-hover/session-card:opacity-0');
+    expect(right?.className).toContain('group-focus-within/session-card:opacity-0');
+    expect(metaRow?.querySelector('.lucide-chevron-right')).toBeNull();
+  });
+
+  it('holds the project slot at one width and truncates the name inside it', () => {
+    state.projects = [{}, {}];
+    state.sessionProjectMounts = {
+      [SESSION_ID]: [{ projectId: 'project-1', mountName: 'gateway' }],
+    };
+    render(<StageBoardCard session={session} nav={nav} />);
+    const chipLabel = screen.getByText('gateway');
+    const slot = chipLabel.closest('.w-24');
+    expect(chipLabel.className).toContain('truncate');
+    expect(slot?.className).toContain('w-24');
+    expect(slot?.className).toContain('shrink-0');
+    expect(slot?.closest('[data-tooltip]')?.getAttribute('data-tooltip')).toBe('gateway');
+  });
+
+  it('collapses several projects into one count naming them', () => {
+    state.projects = [{}, {}];
+    state.sessionProjectMounts = {
+      [SESSION_ID]: [
+        { projectId: 'project-1', mountName: 'core-api' },
+        { projectId: 'project-2', mountName: 'web-console' },
+      ],
+    };
+    render(<StageBoardCard session={session} nav={nav} />);
+    expect(screen.queryByText('core-api')).toBeNull();
+    expect(screen.getByLabelText('2 projects: core-api, web-console')).toBeDefined();
+    const chip = screen.getByLabelText('2 projects: core-api, web-console');
+    expect(chip.textContent).toBe('2 projects');
+    expect(chip.className).not.toContain('w-24');
+    expect(chip.closest('[data-tooltip]')?.getAttribute('data-tooltip')).toBe(
+      'core-api, web-console',
+    );
+  });
+
+  it('keeps the lifecycle slot bottom right over the trailing metadata', () => {
+    render(<StageBoardCard session={session} nav={nav} />);
+    const card = screen.getAllByRole('button')[0];
+    const group = screen.getByRole('group', { name: 'Session lifecycle actions' });
+    expect(group.className).toContain('col-start-2');
+    expect(group.className).toContain('row-start-2');
+    expect(group.className).toContain('justify-self-end');
+    expect(group.className).toContain('h-5');
+    expect(card?.lastElementChild).toBe(group);
+  });
+
+  it('keeps cost and age at the metadata grade', () => {
+    hooks.cost = 1.25;
+    const updated = { ...session, updatedAt: new Date(Date.now() - 7_200_000).toISOString() };
+    render(<StageBoardCard session={updated as unknown as Session} nav={nav} />);
+    const cost = document.querySelector('[title="Session spend: $1.25 (excludes summarizer)"]');
+    expect(cost?.className).toContain('text-3xs');
+    expect(screen.getByText('2h ago').className).toContain('text-3xs');
   });
 
   it('singularizes the agent count label at one agent', () => {

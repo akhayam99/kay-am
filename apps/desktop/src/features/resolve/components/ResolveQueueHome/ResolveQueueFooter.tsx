@@ -24,7 +24,6 @@ export const ResolveQueueFooter = ({ completed, later, renderRow }: Props) => {
           count={later.length}
           isShown={isLaterShown}
           icon={CalendarClock}
-          itemsLabel="comments"
           onChange={setIsLaterShown}
         />
         <CountToggle
@@ -32,7 +31,6 @@ export const ResolveQueueFooter = ({ completed, later, renderRow }: Props) => {
           count={completed.length}
           isShown={isCompletedShown}
           icon={CheckCheck}
-          itemsLabel="comments"
           onChange={setIsCompletedShown}
         />
       </div>

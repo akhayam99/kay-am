@@ -1,6 +1,6 @@
 import type { MountCleanupDecision, MountDiskState, MountId, SessionId } from '@goodboy/types';
 import { formatError } from '@goodboy/ui';
-import { removeWorktreeChecked, worktreeWriterStatus } from '../../../features/worktree/worktree';
+import { removeWorktreeChecked } from '../../../features/worktree/worktree';
 import type { AppState } from '../../types';
 import type { CleanupTarget, GetFn } from './types';
 
@@ -69,10 +69,6 @@ export const cleanupMountDirectory = async ({
   });
   if (blockers.length > 0) {
     return kept(blockers.join(', '));
-  }
-  const lease = await worktreeWriterStatus({ path });
-  if (lease.isGranted && !lease.hasExited) {
-    return kept('a writer lease still holds the worktree');
   }
   try {
     const result = await removeWorktreeChecked({ repoPath: target.repoRoot, worktreePath: path });

@@ -68,7 +68,7 @@ export const ProjectBranchChip = ({ sessionId, projectId, mountId, branch, canSw
           )}
         >
           {copied ? <Check size={11} aria-hidden /> : <GitBranch size={11} aria-hidden />}
-          <span title={branch} className="flex min-w-0 max-w-52 items-center font-mono">
+          <span title={branch} className="flex min-w-0 items-center font-mono">
             <span className="truncate">{head}</span>
             {tail === '' ? null : <span className="shrink-0">{tail}</span>}
           </span>

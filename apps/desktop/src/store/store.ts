@@ -441,7 +441,6 @@ type AppActions = {
   attachMount(input: AttachMountInput): Promise<SessionMountView>;
   unmountMount(input: UnmountMountInput): Promise<UnmountMountResult>;
   inspectMount(input: MountKeyInput): Promise<InspectMountResult>;
-  recoverMountOperations(input: SessionKeyInput): Promise<number>;
   resolveMountBranchMismatch(input: ResolveMountBranchInput): Promise<SessionMountView>;
   setSessionActiveMount(input: MountKeyInput): Promise<void>;
   openMountRequest(input: OpenMountRequestInput): Promise<void>;

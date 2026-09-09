@@ -7,6 +7,7 @@ type Params = {
 
 type Presentation = {
   readonly actionableCount: number;
+  readonly uncommittedCount: number;
   readonly branch: string;
   readonly isWarning: boolean;
 };
@@ -51,16 +52,19 @@ export const projectGitPresentationOf = ({ status }: Params): Presentation => {
   if (!isReady) {
     return {
       actionableCount: 0,
+      uncommittedCount: 0,
       branch,
       isWarning: status != null,
     };
   }
-  const actionableCount =
-    (distanceBehind({ distance: status.upstreamDistance }) ?? 0) +
+  const uncommittedCount =
     (changedCount({ workingTree: status.workingTree }) ?? 0) +
     (unmergedCount({ workingTree: status.workingTree }) ?? 0);
+  const actionableCount =
+    (distanceBehind({ distance: status.upstreamDistance }) ?? 0) + uncommittedCount;
   return {
     actionableCount,
+    uncommittedCount,
     branch,
     isWarning: hasReadFailure({ status }),
   };

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AnchoredPopover, Button, Tooltip, formatError, useDropdown } from '@goodboy/ui';
+import { AnchoredPopover, Button, IconButton, cn, formatError, useDropdown } from '@goodboy/ui';
 import type { MountId, ProjectId, SessionId, WorktreeStatus, WorkspaceId } from '@goodboy/types';
 import { useToast } from '../../../../../app/components/Toast';
 import { useAppStore } from '../../../../../store';
@@ -13,7 +13,7 @@ type Props = {
   readonly projectName: string;
   readonly worktreePath: string;
   readonly worktreeStatus: WorktreeStatus | null;
-  readonly triggerClassName: string;
+  readonly triggerClassName?: string;
   readonly mountId?: MountId;
   readonly branch?: string;
   readonly menuLabel?: string;
@@ -100,26 +100,25 @@ export const ProjectDetachMenu = ({
       dropdown={dropdown}
       role="menu"
       ariaLabel={label}
+      anchorClassName="shrink-0"
       trigger={
-        <Tooltip content={label} anchorClassName="shrink-0">
-          <button
-            type="button"
-            onClick={() => {
-              if (dropdown.open) {
-                dropdown.close();
-                setConfirming(null);
-                return;
-              }
-              dropdown.toggle();
-            }}
-            aria-label={label}
-            aria-haspopup="menu"
-            aria-expanded={dropdown.open}
-            className={triggerClassName}
-          >
-            <CONCEPT_ICONS.more size={ICON_SIZE.control} aria-hidden />
-          </button>
-        </Tooltip>
+        <IconButton
+          variant="ghost"
+          icon={CONCEPT_ICONS.more}
+          iconSize={ICON_SIZE.row}
+          label={label}
+          onClick={() => {
+            if (dropdown.open) {
+              dropdown.close();
+              setConfirming(null);
+              return;
+            }
+            dropdown.toggle();
+          }}
+          aria-haspopup="menu"
+          aria-expanded={dropdown.open}
+          className={cn('size-7', triggerClassName, dropdown.open && 'opacity-100')}
+        />
       }
     >
       {confirming === 'unmount' ? (
@@ -177,7 +176,7 @@ export const ProjectDetachMenu = ({
               type="button"
               role="menuitem"
               onClick={() => setConfirming('unmount')}
-              className="flex w-full items-center px-2.5 py-1.5 text-left transition-colors hover:bg-muted/40"
+              className="flex w-full items-center px-2.5 py-1.5 text-left motion-safe:transition-colors hover:bg-muted/40"
             >
               Unmount branch
             </button>
@@ -187,7 +186,7 @@ export const ProjectDetachMenu = ({
               type="button"
               role="menuitem"
               onClick={() => setConfirming('detach')}
-              className="flex w-full items-center px-2.5 py-1.5 text-left text-danger/90 transition-colors hover:bg-danger/10 hover:text-danger"
+              className="flex w-full items-center px-2.5 py-1.5 text-left text-danger/90 motion-safe:transition-colors hover:bg-danger/10 hover:text-danger"
             >
               Detach project
             </button>
