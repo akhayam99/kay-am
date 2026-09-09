@@ -177,7 +177,8 @@ describe('AppTopBar', () => {
     const bar = container.querySelector('[data-tauri-drag-region]');
     const children = Array.from(bar?.children ?? []);
 
-    expect(bar?.className).toContain('grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]');
+    expect(bar?.className).toContain('grid-cols-[minmax(0,1fr)_auto_minmax(max-content,1fr)]');
+    expect(children[2]?.className).not.toContain('min-w-0');
     expect(children.length).toBe(3);
     expect(children[0]?.contains(screen.getByLabelText('Switch workspace: Test WS'))).toBe(true);
     expect(children[1]).toBe(screen.getByRole('img', { name: 'Goodboy' }));

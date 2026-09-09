@@ -24,7 +24,7 @@ import type {
 import { StageBoard } from '../../../../features/workspace/components/StageBoard';
 import { useAppStore, useSessions } from '../../../../store';
 
-const WORKSPACE_ID = 'mock-board-workspace-cascade' as WorkspaceId;
+export const WORKSPACE_ID = 'mock-board-workspace-cascade' as WorkspaceId;
 const CORE_ID = 'mock-board-project-core-api' as ProjectId;
 const CONSOLE_ID = 'mock-board-project-web-console' as ProjectId;
 const LONG_ID = 'mock-board-project-reporting-warehouse' as ProjectId;
@@ -456,191 +456,195 @@ const OPEN_QUESTION: OpenQuestion = {
   createdAt: isoAgo(5 * HOUR + 10 * MINUTE),
 };
 
+export const seedBoardScene = (): void => {
+  useAppStore.setState({
+    workspaces: [WORKSPACE],
+    currentWorkspaceId: WORKSPACE_ID,
+    currentSessionId: null,
+    projects: PROJECTS,
+    sessions: SESSIONS,
+    archivedSessions: { [WORKSPACE_ID]: ARCHIVED_SESSIONS },
+    boardReady: true,
+    projectGitStatus: GIT_STATUSES,
+    sessionProjectMounts: {
+      [BUILDING_RATE_LIMIT]: [CORE_MOUNT],
+      [BUILDING_ONBOARDING]: [CONSOLE_MOUNT],
+      [RUNNING_CHECKOUT_RETRY]: [CORE_MOUNT, CONSOLE_MOUNT],
+      [ATTENTION_BACKOFF]: [CONSOLE_MOUNT],
+      [ATTENTION_ERROR]: [LONG_MOUNT],
+      [REVIEW_PAGINATION]: [CONSOLE_MOUNT],
+      [REVIEW_RECONCILIATION]: [LONG_MOUNT],
+      [DONE_LOCKFILE]: [CORE_MOUNT],
+      [DONE_CRON]: [CONSOLE_MOUNT],
+      [ARCHIVED_MACROS]: [CORE_MOUNT],
+      [ARCHIVED_FLAKY_TEST]: [LONG_MOUNT],
+    },
+    sessionGithub: {
+      [BUILDING_RATE_LIMIT]: githubEntry(null),
+      [BUILDING_ONBOARDING]: githubEntry(null),
+      [RUNNING_CHECKOUT_RETRY]: githubEntry(null),
+      [ATTENTION_BACKOFF]: githubEntry(null),
+      [ATTENTION_ERROR]: githubEntry(null),
+      [REVIEW_PAGINATION]: githubEntry(
+        pullRequest({
+          number: 231,
+          title: 'Add pagination to the admin sessions table',
+          headBranch: 'feat/admin-sessions-pagination',
+          state: 'open',
+          checks: 'success',
+        }),
+      ),
+      [REVIEW_RECONCILIATION]: githubEntry(
+        pullRequest({
+          number: 244,
+          title: 'Reconcile the settlement export against the ledger snapshot',
+          headBranch: LONG_MOUNT.branch,
+          state: 'open',
+          isDraft: true,
+          checks: 'pending',
+        }),
+      ),
+      [DONE_LOCKFILE]: githubEntry(
+        pullRequest({
+          number: 198,
+          title: 'Bump the lockfile after the security patch',
+          headBranch: 'chore/lockfile-security-bump',
+          state: 'merged',
+        }),
+      ),
+      [DONE_CRON]: githubEntry(
+        pullRequest({
+          number: 205,
+          title: 'Retire the legacy export cron job',
+          headBranch: 'chore/retire-export-cron',
+          state: 'closed',
+        }),
+      ),
+    },
+    sessionOpenQuestions: { [ATTENTION_BACKOFF]: [OPEN_QUESTION] },
+    sessionPhaseRuns: {
+      [RUNNING_CHECKOUT_RETRY]: [
+        agent({
+          id: 'mock-board-agent-retry-scout' as AgentId,
+          sessionId: RUNNING_CHECKOUT_RETRY,
+          ordinal: 0,
+          name: 'Trace the checkout retry path',
+          kind: 'scout',
+          status: 'completed',
+        }),
+        agent({
+          id: 'mock-board-agent-retry-implementer' as AgentId,
+          sessionId: RUNNING_CHECKOUT_RETRY,
+          ordinal: 1,
+          name: 'Dedupe webhook events in the retry queue',
+          kind: 'implementer',
+          status: 'running',
+          runId: RUNNING_PROVIDER_RUN_ID,
+        }),
+      ],
+      [REVIEW_PAGINATION]: [
+        agent({
+          id: 'mock-board-agent-pagination-implementer' as AgentId,
+          sessionId: REVIEW_PAGINATION,
+          ordinal: 0,
+          name: 'Add pagination to the admin sessions table',
+          kind: 'implementer',
+          status: 'completed',
+        }),
+      ],
+    },
+    sessionTelemetry: {
+      [BUILDING_RATE_LIMIT]: [
+        telemetry({
+          id: 'mock-board-telemetry-rate-limit',
+          sessionId: BUILDING_RATE_LIMIT,
+          costUsd: 0.34,
+          recordedAt: isoAgo(2 * HOUR),
+        }),
+      ],
+      [BUILDING_ONBOARDING]: [
+        telemetry({
+          id: 'mock-board-telemetry-onboarding',
+          sessionId: BUILDING_ONBOARDING,
+          costUsd: 1.2,
+          recordedAt: isoAgo(40 * MINUTE),
+        }),
+      ],
+      [RUNNING_CHECKOUT_RETRY]: [
+        telemetry({
+          id: 'mock-board-telemetry-checkout-retry',
+          sessionId: RUNNING_CHECKOUT_RETRY,
+          costUsd: 2.15,
+          recordedAt: isoAgo(25 * MINUTE),
+        }),
+      ],
+      [ATTENTION_BACKOFF]: [
+        telemetry({
+          id: 'mock-board-telemetry-notify-backoff',
+          sessionId: ATTENTION_BACKOFF,
+          costUsd: 0.02,
+          recordedAt: isoAgo(5 * HOUR),
+        }),
+      ],
+      [ATTENTION_ERROR]: [
+        telemetry({
+          id: 'mock-board-telemetry-settlement-rounding',
+          sessionId: ATTENTION_ERROR,
+          costUsd: 0.58,
+          recordedAt: isoAgo(HOUR),
+        }),
+      ],
+      [REVIEW_PAGINATION]: [
+        telemetry({
+          id: 'mock-board-telemetry-admin-pagination',
+          sessionId: REVIEW_PAGINATION,
+          costUsd: 0.75,
+          recordedAt: isoAgo(6 * HOUR),
+        }),
+      ],
+      [REVIEW_RECONCILIATION]: [
+        telemetry({
+          id: 'mock-board-telemetry-reconciliation-export',
+          sessionId: REVIEW_RECONCILIATION,
+          costUsd: 4.82,
+          recordedAt: isoAgo(2 * DAY),
+        }),
+      ],
+      [DONE_LOCKFILE]: [
+        telemetry({
+          id: 'mock-board-telemetry-lockfile-bump',
+          sessionId: DONE_LOCKFILE,
+          costUsd: 0.05,
+          recordedAt: isoAgo(3 * DAY),
+        }),
+      ],
+      [DONE_CRON]: [
+        telemetry({
+          id: 'mock-board-telemetry-retire-cron',
+          sessionId: DONE_CRON,
+          costUsd: 1.1,
+          recordedAt: isoAgo(4 * DAY),
+        }),
+      ],
+    },
+    sessionWorkflows: { [RUNNING_CHECKOUT_RETRY]: [] },
+    phaseTemplates: { [WORKSPACE_ID]: [] },
+    sessionExternalTasks: {},
+    activeLens: {},
+    workspaceIntegrations: { [WORKSPACE_ID]: [] },
+    sessionAttachments: {},
+    slotHistory: {},
+    slotHistoryCounts: {},
+    loadArchivedSessions: async () => undefined,
+    loadProjectGitStatus: async () => undefined,
+  });
+};
+
 export const BoardScene = () => {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    useAppStore.setState({
-      workspaces: [WORKSPACE],
-      currentWorkspaceId: WORKSPACE_ID,
-      currentSessionId: null,
-      projects: PROJECTS,
-      sessions: SESSIONS,
-      archivedSessions: { [WORKSPACE_ID]: ARCHIVED_SESSIONS },
-      boardReady: true,
-      projectGitStatus: GIT_STATUSES,
-      sessionProjectMounts: {
-        [BUILDING_RATE_LIMIT]: [CORE_MOUNT],
-        [BUILDING_ONBOARDING]: [CONSOLE_MOUNT],
-        [RUNNING_CHECKOUT_RETRY]: [CORE_MOUNT, CONSOLE_MOUNT],
-        [ATTENTION_BACKOFF]: [CONSOLE_MOUNT],
-        [ATTENTION_ERROR]: [LONG_MOUNT],
-        [REVIEW_PAGINATION]: [CONSOLE_MOUNT],
-        [REVIEW_RECONCILIATION]: [LONG_MOUNT],
-        [DONE_LOCKFILE]: [CORE_MOUNT],
-        [DONE_CRON]: [CONSOLE_MOUNT],
-        [ARCHIVED_MACROS]: [CORE_MOUNT],
-        [ARCHIVED_FLAKY_TEST]: [LONG_MOUNT],
-      },
-      sessionGithub: {
-        [BUILDING_RATE_LIMIT]: githubEntry(null),
-        [BUILDING_ONBOARDING]: githubEntry(null),
-        [RUNNING_CHECKOUT_RETRY]: githubEntry(null),
-        [ATTENTION_BACKOFF]: githubEntry(null),
-        [ATTENTION_ERROR]: githubEntry(null),
-        [REVIEW_PAGINATION]: githubEntry(
-          pullRequest({
-            number: 231,
-            title: 'Add pagination to the admin sessions table',
-            headBranch: 'feat/admin-sessions-pagination',
-            state: 'open',
-            checks: 'success',
-          }),
-        ),
-        [REVIEW_RECONCILIATION]: githubEntry(
-          pullRequest({
-            number: 244,
-            title: 'Reconcile the settlement export against the ledger snapshot',
-            headBranch: LONG_MOUNT.branch,
-            state: 'open',
-            isDraft: true,
-            checks: 'pending',
-          }),
-        ),
-        [DONE_LOCKFILE]: githubEntry(
-          pullRequest({
-            number: 198,
-            title: 'Bump the lockfile after the security patch',
-            headBranch: 'chore/lockfile-security-bump',
-            state: 'merged',
-          }),
-        ),
-        [DONE_CRON]: githubEntry(
-          pullRequest({
-            number: 205,
-            title: 'Retire the legacy export cron job',
-            headBranch: 'chore/retire-export-cron',
-            state: 'closed',
-          }),
-        ),
-      },
-      sessionOpenQuestions: { [ATTENTION_BACKOFF]: [OPEN_QUESTION] },
-      sessionPhaseRuns: {
-        [RUNNING_CHECKOUT_RETRY]: [
-          agent({
-            id: 'mock-board-agent-retry-scout' as AgentId,
-            sessionId: RUNNING_CHECKOUT_RETRY,
-            ordinal: 0,
-            name: 'Trace the checkout retry path',
-            kind: 'scout',
-            status: 'completed',
-          }),
-          agent({
-            id: 'mock-board-agent-retry-implementer' as AgentId,
-            sessionId: RUNNING_CHECKOUT_RETRY,
-            ordinal: 1,
-            name: 'Dedupe webhook events in the retry queue',
-            kind: 'implementer',
-            status: 'running',
-            runId: RUNNING_PROVIDER_RUN_ID,
-          }),
-        ],
-        [REVIEW_PAGINATION]: [
-          agent({
-            id: 'mock-board-agent-pagination-implementer' as AgentId,
-            sessionId: REVIEW_PAGINATION,
-            ordinal: 0,
-            name: 'Add pagination to the admin sessions table',
-            kind: 'implementer',
-            status: 'completed',
-          }),
-        ],
-      },
-      sessionTelemetry: {
-        [BUILDING_RATE_LIMIT]: [
-          telemetry({
-            id: 'mock-board-telemetry-rate-limit',
-            sessionId: BUILDING_RATE_LIMIT,
-            costUsd: 0.34,
-            recordedAt: isoAgo(2 * HOUR),
-          }),
-        ],
-        [BUILDING_ONBOARDING]: [
-          telemetry({
-            id: 'mock-board-telemetry-onboarding',
-            sessionId: BUILDING_ONBOARDING,
-            costUsd: 1.2,
-            recordedAt: isoAgo(40 * MINUTE),
-          }),
-        ],
-        [RUNNING_CHECKOUT_RETRY]: [
-          telemetry({
-            id: 'mock-board-telemetry-checkout-retry',
-            sessionId: RUNNING_CHECKOUT_RETRY,
-            costUsd: 2.15,
-            recordedAt: isoAgo(25 * MINUTE),
-          }),
-        ],
-        [ATTENTION_BACKOFF]: [
-          telemetry({
-            id: 'mock-board-telemetry-notify-backoff',
-            sessionId: ATTENTION_BACKOFF,
-            costUsd: 0.02,
-            recordedAt: isoAgo(5 * HOUR),
-          }),
-        ],
-        [ATTENTION_ERROR]: [
-          telemetry({
-            id: 'mock-board-telemetry-settlement-rounding',
-            sessionId: ATTENTION_ERROR,
-            costUsd: 0.58,
-            recordedAt: isoAgo(HOUR),
-          }),
-        ],
-        [REVIEW_PAGINATION]: [
-          telemetry({
-            id: 'mock-board-telemetry-admin-pagination',
-            sessionId: REVIEW_PAGINATION,
-            costUsd: 0.75,
-            recordedAt: isoAgo(6 * HOUR),
-          }),
-        ],
-        [REVIEW_RECONCILIATION]: [
-          telemetry({
-            id: 'mock-board-telemetry-reconciliation-export',
-            sessionId: REVIEW_RECONCILIATION,
-            costUsd: 4.82,
-            recordedAt: isoAgo(2 * DAY),
-          }),
-        ],
-        [DONE_LOCKFILE]: [
-          telemetry({
-            id: 'mock-board-telemetry-lockfile-bump',
-            sessionId: DONE_LOCKFILE,
-            costUsd: 0.05,
-            recordedAt: isoAgo(3 * DAY),
-          }),
-        ],
-        [DONE_CRON]: [
-          telemetry({
-            id: 'mock-board-telemetry-retire-cron',
-            sessionId: DONE_CRON,
-            costUsd: 1.1,
-            recordedAt: isoAgo(4 * DAY),
-          }),
-        ],
-      },
-      sessionWorkflows: { [RUNNING_CHECKOUT_RETRY]: [] },
-      phaseTemplates: { [WORKSPACE_ID]: [] },
-      sessionExternalTasks: {},
-      activeLens: {},
-      workspaceIntegrations: { [WORKSPACE_ID]: [] },
-      sessionAttachments: {},
-      slotHistory: {},
-      slotHistoryCounts: {},
-      loadArchivedSessions: async () => undefined,
-      loadProjectGitStatus: async () => undefined,
-    });
+    seedBoardScene();
     setIsReady(true);
   }, []);
 

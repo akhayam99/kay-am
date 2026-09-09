@@ -7,6 +7,7 @@ import { MountsScene } from './scenes/MountsScene';
 import { ResolveScene } from './scenes/ResolveScene';
 import { ResolveItemScene } from './scenes/ResolveItemScene';
 import { BoardScene } from './scenes/BoardScene';
+import { BoardShellScene } from './scenes/BoardShellScene';
 
 const SCENES = {
   workspace: WorkspaceScene,
@@ -16,6 +17,7 @@ const SCENES = {
   resolve: ResolveScene,
   'resolve-item': ResolveItemScene,
   board: BoardScene,
+  'board-shell': BoardShellScene,
 };
 
 export const MockScene = () => {

@@ -156,8 +156,9 @@ parked beside it.
 
 Workspace identity stays on the left, the Goodboy brand is centred on the
 window, and workspace-wide signals and set-once preferences stay on the right.
-The bar is one three-column grid, `minmax(0,1fr) auto minmax(0,1fr)`, so the
-brand sits at the window midpoint rather than in leftover space; the identity
+The bar is one three-column grid, `minmax(0,1fr) auto minmax(max-content,1fr)`,
+so the brand sits at the window midpoint whenever the signals fit their share
+and slides off it rather than being overlapped when they do not; the identity
 holds a bound and truncates with the full name in its tooltip, the wordmark
 drops below `brand-word` and the mascot below `brand-mark`, and no control ever
 moves into an overflow menu.

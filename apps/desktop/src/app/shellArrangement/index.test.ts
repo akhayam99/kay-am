@@ -86,13 +86,15 @@ describe('shellArrangement', () => {
 });
 
 describe('every shell mount, the app and the mock scenes alike', () => {
-  it('finds the composition root and at least one scene to police', () => {
+  it('finds the composition root and every scene to police, never an empty sweep', () => {
     const paths = shellMounts().map(({ path }) => path);
-    expect(paths.some((path) => path.endsWith('App.tsx'))).toBe(true);
-    expect(paths.some((path) => path.includes('MockScene'))).toBe(true);
+    expect(paths.length).toBeGreaterThanOrEqual(3);
+    expect(paths.filter((path) => path.endsWith('App.tsx'))).toHaveLength(1);
+    expect(paths.filter((path) => path.includes('MockScene')).length).toBeGreaterThanOrEqual(2);
   });
 
   it('derives its arrangement from the helper instead of hand picking one', () => {
+    expect(shellMounts().length).toBeGreaterThan(0);
     const handPicked = shellMounts()
       .filter(({ source }) => !/from '[^']*shellArrangement'/.test(source))
       .map(({ path }) => path);
@@ -100,6 +102,7 @@ describe('every shell mount, the app and the mock scenes alike', () => {
   });
 
   it('never writes a literal into the shell layout props', () => {
+    expect(shellMounts().length).toBeGreaterThan(0);
     const literals = shellMounts()
       .filter(({ source }) =>
         /left(Hidden|SidebarCollapsed)/.test(
