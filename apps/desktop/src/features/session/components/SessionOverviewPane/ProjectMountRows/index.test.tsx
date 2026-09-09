@@ -192,7 +192,7 @@ describe('ProjectMountRows', () => {
     expect(screen.getByRole('listitem', { name: 'WEB on feat/three' })).toBeDefined();
   });
 
-  it('gives each project its own block instead of one shared surface', () => {
+  it('gives each project its own group, separated by rhythm and not by a box', () => {
     store.projects = [
       ...store.projects,
       { id: 'web', workspaceId: 'workspace-1', name: 'WEB', kind: 'repo', rootPath: '/repo/web' },
@@ -212,9 +212,10 @@ describe('ProjectMountRows', () => {
     expect(new Set(blocks).size).toBe(2);
     for (const block of blocks) {
       expect(block).not.toBeNull();
-      expect((block as HTMLElement).className).toContain('border');
+      expect((block as HTMLElement).className).not.toContain('border');
       expect(within(block as HTMLElement).getAllByTestId('project-mount-row')).toHaveLength(1);
     }
+    expect(blocks[0]?.parentElement?.className).toContain('gap-4');
   });
 
   it('renders one row per branch mount of the same project', () => {
@@ -290,7 +291,7 @@ describe('ProjectMountRows', () => {
     );
   });
 
-  it('keeps completed mounts behind a count toggle, in their declared position', () => {
+  it('keeps completed mounts behind a count toggle, under the branches still open', () => {
     store.sessionMounts = {
       'session-1': [
         mountView({ id: 'mount-1', branch: 'feat/one', path: '/api-one' }),
@@ -307,8 +308,8 @@ describe('ProjectMountRows', () => {
 
     const rows = screen.getAllByTestId('project-mount-row');
     expect(rows.map((row) => row.getAttribute('aria-label'))).toEqual([
-      'API on feat/one',
       'API on feat/two',
+      'API on feat/one',
     ]);
   });
 
@@ -329,7 +330,7 @@ describe('ProjectMountRows', () => {
     ]);
   });
 
-  it('reads out the progress of a six part series', () => {
+  it('names the split on the group and the part on the row', () => {
     store.sessionMounts = {
       'session-1': [
         mountView({ id: 'mount-1', branch: 'feat/one', path: '/api-one' }),
@@ -339,8 +340,9 @@ describe('ProjectMountRows', () => {
     store.prSeries = { 'session-1': [seriesOfTwo()] };
     render(<ProjectMountRows session={session} onSelectLens={vi.fn()} />);
 
-    expect(screen.getByText('1 merged · 2 of 6 created')).toBeDefined();
-    expect(screen.getByText('2/6')).toBeDefined();
+    expect(screen.getByText('restyle')).toBeDefined();
+    expect(screen.getByText('Part 2/6')).toBeDefined();
+    expect(screen.queryByText(/of 6 created/)).toBeNull();
   });
 
   it('keeps the secondary commands of every row reachable by keyboard', () => {

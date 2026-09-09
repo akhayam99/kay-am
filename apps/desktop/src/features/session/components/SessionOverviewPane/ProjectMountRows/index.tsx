@@ -45,7 +45,7 @@ export const ProjectMountRows = ({ session, onSelectLens }: Props) => {
         action={<MountProjectAction sessionId={session.id} workspaceId={session.workspaceId} />}
       />
       {groups.length === 0 ? null : (
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-4">
           {groups.map((group) => (
             <ProjectMountGroup
               key={group.projectId}

@@ -72,7 +72,7 @@ export type MountProjectGroup = Readonly<{
   workspaceId: WorkspaceId | null;
   rows: ReadonlyArray<MountRowView>;
   completedRows: ReadonlyArray<MountRowView>;
-  seriesProgress: string | null;
+  seriesName: string | null;
 }>;
 
 type SessionParams = {
@@ -196,25 +196,6 @@ const seriesPositionOf = ({
   return null;
 };
 
-type ProgressParams = {
-  readonly series: ReadonlyArray<PrSeriesView>;
-};
-
-export const seriesProgressLabel = ({ series }: ProgressParams): string | null => {
-  const view = series[0];
-  if (view === undefined) {
-    return null;
-  }
-  const declared = view.members.filter((member) => member.status !== 'omitted');
-  const merged = declared.filter((member) => member.request?.state === 'merged').length;
-  const created = declared.filter((member) => member.request !== null).length;
-  const total = view.plannedCount ?? declared.length;
-  if (total === 0) {
-    return null;
-  }
-  return `${merged} merged \u00b7 ${created} of ${total} created`;
-};
-
 const byDeclaredOrder = (left: MountRowView, right: MountRowView): number => {
   const leftPosition = left.series?.position ?? Number.MAX_SAFE_INTEGER;
   const rightPosition = right.series?.position ?? Number.MAX_SAFE_INTEGER;
@@ -320,9 +301,7 @@ export const buildMountRows = ({
         workspaceId: project?.workspaceId ?? null,
         rows: [...rows.filter((row) => !row.isCompleted)].sort(byDeclaredOrder),
         completedRows: [...rows.filter((row) => row.isCompleted)].sort(byDeclaredOrder),
-        seriesProgress: seriesProgressLabel({
-          series: series.filter((view) => view.projectId === projectId),
-        }),
+        seriesName: series.find((view) => view.projectId === projectId)?.name ?? null,
       },
     ];
   });
