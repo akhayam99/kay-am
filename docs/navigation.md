@@ -88,12 +88,13 @@ grid, so no column resize, no hide animation and no overlay can move it.
 **The pane** is the work: the only surface that scrolls its own body, mounts
 editors and takes a title.
 
-**The scope bar states which projects a session has materialized.** It sits
-above the session pane, lists the mounted projects, and carries the
-**+ project** chip that materializes another one. It renders only when there
-is a choice to state: one mount in a one-project workspace needs no bar.
-Sessions are created lazily on the workspace ([concepts.md](concepts.md) →
-Lazy sessions), so the bar is also where a session's footprint grows.
+**The projects section states which projects a session has materialized.** It
+lives in the session overview and always carries the Mount project action,
+including before the first mount. Mounted projects appear as dense rows; the
+empty section is one quiet action row with a short explanation. Sessions are
+created lazily on the workspace ([concepts.md](concepts.md) → Lazy sessions),
+and this section is where a session's footprint grows. The session header
+does not carry a second mount control.
 
 **Inside a session the sidebar stays the sessions list.** There is no second
 mode: the sidebar lists the workspace's sessions grouped by stage, and the open

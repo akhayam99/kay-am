@@ -110,7 +110,7 @@ export const ProjectMountRow = ({
       aria-label={label}
       className="group/mount-row flex w-full flex-col"
     >
-      <div className="flex min-h-10 w-full items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/40">
+      <div className="flex min-h-8 w-full items-center gap-2 rounded-md px-2 py-1 hover:bg-muted/40">
         <div className={SLOT_BRANCH}>
           {isStatusPending && row.branch === '' ? (
             <span data-testid="project-branch-skeleton" className="shrink-0">

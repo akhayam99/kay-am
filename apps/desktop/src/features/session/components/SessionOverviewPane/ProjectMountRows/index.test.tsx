@@ -215,7 +215,7 @@ describe('ProjectMountRows', () => {
       expect((block as HTMLElement).className).not.toContain('border');
       expect(within(block as HTMLElement).getAllByTestId('project-mount-row')).toHaveLength(1);
     }
-    expect(blocks[0]?.parentElement?.className).toContain('gap-4');
+    expect(blocks[0]?.parentElement?.className).toContain('gap-6');
   });
 
   it('renders one row per branch mount of the same project', () => {
@@ -379,6 +379,9 @@ describe('ProjectMountRows', () => {
     expect(screen.getByText('Projects')).toBeDefined();
     expect(screen.queryByText('No project mounted yet')).toBeNull();
     expect(screen.getByRole('button', { name: 'Mount project' })).toBeDefined();
+    expect(
+      screen.getByText('Mount a workspace project to make it available in this session.'),
+    ).toBeDefined();
   });
 
   it('keeps the mount action in the section header when mounts exist', () => {
@@ -398,5 +401,8 @@ describe('ProjectMountRows', () => {
 
     expect(screen.getByRole('button', { name: 'Mount project' })).toBeDefined();
     expect(screen.getByTestId('project-mount-row')).toBeDefined();
+    expect(
+      screen.queryByText('Mount a workspace project to make it available in this session.'),
+    ).toBeNull();
   });
 });

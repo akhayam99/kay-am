@@ -42,10 +42,21 @@ export const ProjectMountRows = ({ session, onSelectLens }: Props) => {
     <section aria-label="Mounted projects" className="flex min-w-0 flex-col gap-2">
       <SectionHeader
         label="Projects"
-        action={<MountProjectAction sessionId={session.id} workspaceId={session.workspaceId} />}
+        action={
+          <MountProjectAction
+            sessionId={session.id}
+            workspaceId={session.workspaceId}
+            presentation="button"
+          />
+        }
+        hint={
+          groups.length === 0
+            ? 'Mount a workspace project to make it available in this session.'
+            : undefined
+        }
       />
       {groups.length === 0 ? null : (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-6">
           {groups.map((group) => (
             <ProjectMountGroup
               key={group.projectId}
