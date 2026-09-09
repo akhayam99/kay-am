@@ -19,7 +19,9 @@ export const ProjectGitPill = ({ project, status, shouldShowProjectName }: Props
     expectedHeight: isSetup ? 520 : 260,
     align: 'end',
   });
-  const { actionableCount, branch, isWarning } = projectGitPresentationOf({ status });
+  const { actionableCount, uncommittedCount, branch, isWarning } = projectGitPresentationOf({
+    status,
+  });
   const label = shouldShowProjectName ? `${project.name} · ${branch}` : branch;
   return (
     <AnchoredPopover
@@ -47,12 +49,12 @@ export const ProjectGitPill = ({ project, status, shouldShowProjectName }: Props
             <span data-testid="project-git-warning" className="flex items-center text-warning">
               <AlertTriangle size={10} aria-hidden />
             </span>
-          ) : actionableCount > 0 ? (
+          ) : uncommittedCount > 0 ? (
             <span
               data-testid="project-git-count"
-              className="flex min-w-3.5 items-center justify-center rounded-full bg-warning px-1 text-3xs font-semibold leading-3.5 text-warning-foreground"
+              className="shrink-0 text-2xs tabular-nums text-warning"
             >
-              {actionableCount}
+              {uncommittedCount} uncommitted
             </span>
           ) : null}
         </button>

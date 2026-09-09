@@ -13,6 +13,7 @@ type Props = {
 
 type SummaryEntry = ProjectGitStatusEntry & {
   readonly actionableCount: number;
+  readonly uncommittedCount: number;
   readonly branch: string;
   readonly isWarning: boolean;
 };
@@ -44,6 +45,10 @@ export const ProjectGitSummaryPill = ({ entries }: Props) => {
     summaryEntries.find((entry) => entry.project.id === selectedProjectId) ?? null;
   const hasWarning = summaryEntries.some((entry) => entry.isWarning);
   const actionableCount = summaryEntries.reduce((total, entry) => total + entry.actionableCount, 0);
+  const uncommittedCount = summaryEntries.reduce(
+    (total, entry) => total + entry.uncommittedCount,
+    0,
+  );
 
   return (
     <AnchoredPopover
@@ -74,12 +79,12 @@ export const ProjectGitSummaryPill = ({ entries }: Props) => {
             >
               <AlertTriangle size={10} aria-hidden />
             </span>
-          ) : actionableCount > 0 ? (
+          ) : uncommittedCount > 0 ? (
             <span
               data-testid="project-git-summary-count"
-              className="flex min-w-3.5 items-center justify-center rounded-full bg-warning px-1 text-3xs font-semibold leading-3.5 text-warning-foreground"
+              className="shrink-0 text-2xs tabular-nums text-warning"
             >
-              {actionableCount}
+              {uncommittedCount} uncommitted
             </span>
           ) : null}
         </button>
@@ -100,12 +105,12 @@ export const ProjectGitSummaryPill = ({ entries }: Props) => {
               <span className="shrink-0 font-mono text-2xs text-muted-foreground">
                 {entry.branch}
               </span>
-              <span className="flex w-5 shrink-0 justify-end">
+              <span className="flex shrink-0 justify-end">
                 {entry.isWarning ? (
                   <AlertTriangle size={11} aria-label="Warning" className="text-warning" />
-                ) : entry.actionableCount > 0 ? (
-                  <span className="flex min-w-3.5 items-center justify-center rounded-full bg-warning px-1 text-3xs font-semibold leading-3.5 text-warning-foreground">
-                    {entry.actionableCount}
+                ) : entry.uncommittedCount > 0 ? (
+                  <span className="text-2xs tabular-nums text-warning">
+                    {entry.uncommittedCount} uncommitted
                   </span>
                 ) : null}
               </span>
