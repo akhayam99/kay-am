@@ -4,6 +4,7 @@ const {
   removeWorktreeChecked,
   worktreeWriterStatus,
   deleteSessionWorktreeForProject,
+  markSessionMountsRemoved,
   updateSessionActiveProject,
   updateSessionMountLifecycle,
 } = vi.hoisted(() => ({
@@ -25,12 +26,14 @@ const {
     waiting: [],
   })),
   deleteSessionWorktreeForProject: vi.fn(async () => undefined),
+  markSessionMountsRemoved: vi.fn(async () => undefined),
   updateSessionActiveProject: vi.fn(async () => undefined),
   updateSessionMountLifecycle: vi.fn(async () => true),
 }));
 
 vi.mock('@goodboy/db', () => ({
   deleteSessionWorktreeForProject,
+  markSessionMountsRemoved,
   updateSessionActiveProject,
   updateSessionMountLifecycle,
 }));
@@ -59,6 +62,15 @@ const makeStore = () => ({
         branch: 'ak/feat',
       },
       {
+        mountId: 'mount-api-2',
+        revision: 1,
+        projectId: 'project-api',
+        mountName: 'api',
+        worktreePath: '/container/api-2',
+        repoRoot: '/repos/api',
+        branch: 'ak/feat-2',
+      },
+      {
         projectId: 'project-web',
         mountName: 'web',
         worktreePath: '/container/web',
@@ -67,7 +79,9 @@ const makeStore = () => ({
       },
     ],
   },
-  sessionWorktrees: { 'sess-1': ['/container', '/container/api', '/container/web'] },
+  sessionWorktrees: {
+    'sess-1': ['/container', '/container/api', '/container/api-2', '/container/web'],
+  },
   sessionWorktreeRecords: undefined,
   sessionActiveProject: { 'sess-1': 'project-api' },
   sessions: [
@@ -116,11 +130,16 @@ describe('detachProject', () => {
       repoPath: '/repos/api',
       worktreePath: '/container/api',
     });
-    expect(deleteSessionWorktreeForProject).toHaveBeenCalledWith({
+    expect(removeWorktreeChecked).toHaveBeenCalledWith({
+      repoPath: '/repos/api',
+      worktreePath: '/container/api-2',
+    });
+    expect(markSessionMountsRemoved).toHaveBeenCalledWith({
       db: {},
       sessionId: SESSION_ID,
-      projectId: PROJECT_ID,
+      mountIds: ['mount-api', 'mount-api-2'],
     });
+    expect(deleteSessionWorktreeForProject).not.toHaveBeenCalled();
     expect(store.recordSessionEvent).toHaveBeenCalledWith({
       sessionId: SESSION_ID,
       kind: 'project_detached',
@@ -146,6 +165,7 @@ describe('detachProject', () => {
     await runDetach(store);
 
     expect(deleteSessionWorktreeForProject).not.toHaveBeenCalled();
+    expect(markSessionMountsRemoved).not.toHaveBeenCalled();
     expect(updateSessionMountLifecycle).toHaveBeenCalledWith(
       expect.objectContaining({
         mountId: 'mount-api',
@@ -182,14 +202,40 @@ describe('detachProject', () => {
 
     await runDetach(store);
 
-    expect(removeWorktreeChecked).not.toHaveBeenCalled();
+    expect(removeWorktreeChecked).not.toHaveBeenCalledWith({
+      repoPath: '/repos/api',
+      worktreePath: '/container/api',
+    });
     expect(store.recordSessionEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         payload: expect.objectContaining({
+          worktreePath: '/container/api',
           kept: true,
           reason: 'a terminal is open in the worktree',
         }),
       }),
+    );
+  });
+
+  it('marks only the mounts it cleaned when a sibling mount is kept', async () => {
+    const store = makeStore();
+    store.terminalTabs = {
+      'sess-1': [{ id: 'tab-1', sessionId: 'sess-1', cwd: '/container/api' }],
+    } as never;
+
+    await runDetach(store);
+
+    expect(markSessionMountsRemoved).toHaveBeenCalledWith({
+      db: {},
+      sessionId: SESSION_ID,
+      mountIds: ['mount-api-2'],
+    });
+    expect(deleteSessionWorktreeForProject).not.toHaveBeenCalled();
+    expect(updateSessionMountLifecycle).toHaveBeenCalledWith(
+      expect.objectContaining({ mountId: 'mount-api', isAttached: false }),
+    );
+    expect(updateSessionMountLifecycle).not.toHaveBeenCalledWith(
+      expect.objectContaining({ mountId: 'mount-api-2' }),
     );
   });
 
