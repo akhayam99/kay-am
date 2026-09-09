@@ -1037,6 +1037,21 @@ pub async fn worktree_git_common_dir(repo_path: String) -> Option<String> {
     .flatten()
 }
 
+pub(crate) fn remove_worktree_checked_leased(
+    registry: &crate::worktree_writer::WriterLeaseRegistry,
+    repo_path: &Path,
+    worktree_path: &Path,
+) -> Result<WorktreeRemovalResult, WorktreeError> {
+    remove_worktree_checked_with(
+        repo_path,
+        worktree_path,
+        &mut |cwd, args| git(cwd, args),
+        &mut |path| {
+            crate::worktree_writer::is_lease_live(registry, path.to_string_lossy().as_ref())
+        },
+    )
+}
+
 #[tauri::command]
 pub async fn worktree_remove_checked(
     leases: tauri::State<'_, crate::worktree_writer::WriterLeases>,
@@ -1045,14 +1060,7 @@ pub async fn worktree_remove_checked(
 ) -> Result<WorktreeRemovalResult, WorktreeError> {
     let registry = leases.0.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        remove_worktree_checked_with(
-            Path::new(&repo_path),
-            Path::new(&worktree_path),
-            &mut |cwd, args| git(cwd, args),
-            &mut |path| {
-                crate::worktree_writer::is_lease_live(&registry, path.to_string_lossy().as_ref())
-            },
-        )
+        remove_worktree_checked_leased(&registry, Path::new(&repo_path), Path::new(&worktree_path))
     })
     .await
     .map_err(|e| WorktreeError::Io(std::io::Error::other(e.to_string())))?
@@ -2841,7 +2849,7 @@ fn parse_porcelain(stdout: &str) -> Vec<WorktreeInfo> {
             } else if let Some(rest) = line.strip_prefix("HEAD ") {
                 head = rest.to_string();
             } else if let Some(rest) = line.strip_prefix("branch ") {
-                branch = Some(rest.trim_start_matches("refs/heads/").to_string());
+                branch = Some(rest.strip_prefix("refs/heads/").unwrap_or(rest).to_string());
             } else if line == "detached" {
                 branch = None;
             }
@@ -3453,6 +3461,7 @@ mod rewrite_tests {
         })
         .unwrap_err();
 
+        let wire = serde_json::to_value(&error).unwrap();
         let super::WorktreeError::BranchInUse { branch, path } = error else {
             panic!("expected a branch-in-use error, found {error:?}");
         };
@@ -3461,6 +3470,11 @@ mod rewrite_tests {
             std::fs::canonicalize(&path).unwrap(),
             std::fs::canonicalize(&holder).unwrap()
         );
+        assert_eq!(wire["kind"], "branch_in_use");
+        assert!(wire["message"]
+            .as_str()
+            .unwrap()
+            .contains(holder.to_string_lossy().as_ref()));
         assert!(!parent_dir.join("second").exists());
         std::fs::remove_dir_all(root).unwrap();
     }
@@ -3834,9 +3848,10 @@ mod rewrite_tests {
 #[cfg(test)]
 mod teardown_tests {
     use super::{
-        collect_orphans, inspect_worktree_with, remove_worktree_checked_with,
-        worktree_directory_size_blocking, worktree_orphan_remove_blocking, WorktreeError,
-        WorktreeInspection, WorktreeRemovalReason, WorktreeRemovalResult,
+        collect_orphans, inspect_worktree_with, remove_worktree_checked_leased,
+        remove_worktree_checked_with, worktree_directory_size_blocking,
+        worktree_orphan_remove_blocking, WorktreeError, WorktreeInspection, WorktreeRemovalReason,
+        WorktreeRemovalResult,
     };
     use std::path::{Path, PathBuf};
 
@@ -4059,30 +4074,54 @@ mod teardown_tests {
     }
 
     #[test]
-    fn a_writer_lease_taken_after_the_check_keeps_the_worktree() {
-        let root = init_repo("remove-leased");
+    fn a_lease_taken_through_a_symlinked_path_keeps_the_worktree() {
+        let root = init_repo("remove-leased-symlink");
         let target = add_worktree(&root, "leased");
-        let mut remove_attempts = 0;
+        let mirror = temp_root("remove-leased-mirror").join("mirror");
+        std::os::unix::fs::symlink(&root, &mirror).unwrap();
+        let path_the_agent_sees = mirror.join("worktrees").join("leased");
+        let registry = crate::worktree_writer::WriterLeases::new().0;
+        let granted = crate::worktree_writer::acquire_lease(
+            &registry,
+            path_the_agent_sees.to_string_lossy().as_ref(),
+            "agent-1",
+            None,
+        );
 
-        let result = remove_worktree_checked_with(
-            &root,
-            &target,
-            &mut |cwd, args| {
-                if args.starts_with(&["worktree", "remove"]) {
-                    remove_attempts += 1;
-                }
-                super::git(cwd, args)
-            },
-            &mut |path| path == target,
-        )
-        .unwrap();
+        let result = remove_worktree_checked_leased(&registry, &root, &target).unwrap();
 
+        assert!(granted.is_granted);
+        assert_ne!(path_the_agent_sees, target);
         assert_eq!(
             kept_reasons(result),
             vec![WorktreeRemovalReason::WriterLeaseHeld]
         );
-        assert_eq!(remove_attempts, 0);
         assert!(target.join("tracked.txt").exists());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_released_lease_no_longer_keeps_the_worktree() {
+        let root = init_repo("remove-lease-released");
+        let target = add_worktree(&root, "released");
+        let registry = crate::worktree_writer::WriterLeases::new().0;
+        let granted = crate::worktree_writer::acquire_lease(
+            &registry,
+            target.to_string_lossy().as_ref(),
+            "agent-1",
+            None,
+        );
+        crate::worktree_writer::release_lease(
+            &registry,
+            target.to_string_lossy().as_ref(),
+            "agent-1",
+            granted.token.as_deref(),
+        );
+
+        let result = remove_worktree_checked_leased(&registry, &root, &target).unwrap();
+
+        assert!(matches!(result, WorktreeRemovalResult::Removed { .. }));
+        assert!(!target.exists());
         std::fs::remove_dir_all(root).unwrap();
     }
 

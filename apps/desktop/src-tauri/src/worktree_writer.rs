@@ -91,8 +91,50 @@ fn is_abandoned_before_spawn(current: &LeaseHolder, now: Instant) -> bool {
         && now.saturating_duration_since(current.granted_at) >= UNBOUND_LEASE_STEAL_AFTER
 }
 
+fn lease_key(path: &str) -> String {
+    std::fs::canonicalize(path)
+        .map(|resolved| resolved.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| path.to_string())
+}
+
+pub fn acquire_lease(
+    registry: &WriterLeaseRegistry,
+    path: &str,
+    holder: &str,
+    token: Option<&str>,
+) -> WriterLeaseStatus {
+    acquire_in(&mut lock(registry), &lease_key(path), holder, token)
+}
+
+pub fn release_lease(
+    registry: &WriterLeaseRegistry,
+    path: &str,
+    holder: &str,
+    token: Option<&str>,
+) -> (WriterLeaseStatus, bool) {
+    release_in(&mut lock(registry), &lease_key(path), holder, token)
+}
+
+pub fn cancel_lease(registry: &WriterLeaseRegistry, path: &str, holder: &str) -> WriterLeaseStatus {
+    cancel_in(&mut lock(registry), &lease_key(path), holder)
+}
+
+pub fn abandon_lease(
+    registry: &WriterLeaseRegistry,
+    path: &str,
+    holder: &str,
+) -> (WriterLeaseStatus, bool) {
+    abandon_in(&mut lock(registry), &lease_key(path), holder)
+}
+
+pub fn lease_status(registry: &WriterLeaseRegistry, path: &str) -> WriterLeaseStatus {
+    let key = lease_key(path);
+    let map = lock(registry);
+    status_of(&key, map.get(&key), false)
+}
+
 pub fn is_lease_live(registry: &WriterLeaseRegistry, path: &str) -> bool {
-    is_lease_live_at(&lock(registry), path, Instant::now())
+    is_lease_live_at(&lock(registry), &lease_key(path), Instant::now())
 }
 
 fn is_lease_live_at(map: &LeaseMap, path: &str, now: Instant) -> bool {
@@ -276,12 +318,13 @@ impl RunLeaseGuard {
         run_id: &str,
         on_exit: impl Fn() + Send + 'static,
     ) -> Option<Self> {
-        if !bind_run_in(&mut lock(registry), path, holder, token, run_id) {
+        let key = lease_key(path);
+        if !bind_run_in(&mut lock(registry), &key, holder, token, run_id) {
             return None;
         }
         Some(Self {
             registry: Arc::clone(registry),
-            path: path.to_string(),
+            path: key,
             holder: holder.to_string(),
             token: token.to_string(),
             on_exit: Box::new(on_exit),
@@ -310,7 +353,7 @@ pub fn worktree_writer_acquire(
     holder: String,
     token: Option<String>,
 ) -> WriterLeaseStatus {
-    acquire_in(&mut lock(&state.0), &path, &holder, token.as_deref())
+    acquire_lease(&state.0, &path, &holder, token.as_deref())
 }
 
 #[tauri::command]
@@ -321,7 +364,7 @@ pub fn worktree_writer_release(
     holder: String,
     token: Option<String>,
 ) -> WriterLeaseStatus {
-    let (status, released) = release_in(&mut lock(&state.0), &path, &holder, token.as_deref());
+    let (status, released) = release_lease(&state.0, &path, &holder, token.as_deref());
     if released {
         emit_lease_event(&app, &path, &holder, "released");
     }
@@ -334,7 +377,7 @@ pub fn worktree_writer_cancel(
     path: String,
     holder: String,
 ) -> WriterLeaseStatus {
-    cancel_in(&mut lock(&state.0), &path, &holder)
+    cancel_lease(&state.0, &path, &holder)
 }
 
 #[tauri::command]
@@ -344,7 +387,7 @@ pub fn worktree_writer_abandon(
     path: String,
     holder: String,
 ) -> WriterLeaseStatus {
-    let (status, released) = abandon_in(&mut lock(&state.0), &path, &holder);
+    let (status, released) = abandon_lease(&state.0, &path, &holder);
     if released {
         emit_lease_event(&app, &path, &holder, "abandoned");
     }
@@ -353,8 +396,7 @@ pub fn worktree_writer_abandon(
 
 #[tauri::command]
 pub fn worktree_writer_status(state: State<'_, WriterLeases>, path: String) -> WriterLeaseStatus {
-    let map = lock(&state.0);
-    status_of(&path, map.get(&path), false)
+    lease_status(&state.0, &path)
 }
 
 #[cfg(test)]
