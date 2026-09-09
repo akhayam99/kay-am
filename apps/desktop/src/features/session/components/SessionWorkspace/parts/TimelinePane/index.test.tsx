@@ -19,6 +19,7 @@ type FakeSuggestion = {
   readonly kind: string;
   readonly title: string;
   readonly detail?: string;
+  readonly payload?: { readonly projectId: string };
 };
 
 const { storeState, diffStats, unread, questions, suggestionState, agentsLoaded } = vi.hoisted(
@@ -46,7 +47,11 @@ const { storeState, diffStats, unread, questions, suggestionState, agentsLoaded 
       sessionPlans: {},
       sessionExternalTasks: {},
       sessionWorktreeRecords: {} as Record<string, ReadonlyArray<unknown>>,
-      sessionEvents: {},
+      sessionEvents: {} as Record<string, ReadonlyArray<unknown>>,
+      selectedAgentId: {} as Record<string, string | null>,
+      transcripts: {} as Record<string, ReadonlyArray<unknown>>,
+      projects: [] as ReadonlyArray<unknown>,
+      sessionProjectMounts: {} as Record<string, ReadonlyArray<unknown>>,
       agentKindOverride: {},
       loadSessionEvents: vi.fn(async () => undefined),
       loadSessionAnsweredQuestions: vi.fn(async () => undefined),
@@ -129,6 +134,10 @@ beforeEach(() => {
   storeState.sessionWorktreeRecords = {};
   storeState.sessionPhaseRuns = {};
   storeState.sessionEvents = {};
+  storeState.selectedAgentId = {};
+  storeState.transcripts = {};
+  storeState.projects = [];
+  storeState.sessionProjectMounts = {};
   storeState.openMountDiff.mockReset();
   storeState.markAllAgentsSeen.mockReset();
   storeState.setActiveLens.mockReset();
@@ -343,6 +352,7 @@ describe('TimelinePane suggestions', () => {
     kind: 'mount-project',
     title: 'Mount web',
     detail: 'needs the router',
+    payload: { projectId: 'project-web' },
   };
   const PLAN: FakeSuggestion = {
     id: 'plan-ready:plan-1',
@@ -397,6 +407,61 @@ describe('TimelinePane suggestions', () => {
 
     expect(suggestionState.onAct).toHaveBeenCalledWith(MOUNT.id);
     expect(suggestionState.onDismiss).toHaveBeenCalledWith(MOUNT.id);
+  });
+
+  it('drops its actions once the displayed transcript owns the proposal', () => {
+    suggestionState.list = [ANSWER, MOUNT];
+    storeState.selectedAgentId = { 'session-1': 'agent-1' };
+    storeState.transcripts = { 'agent-1': [{ kind: 'assistant_text', runId: 'run-1' }] };
+    storeState.projects = [{ id: 'project-web', workspaceId: 'ws-1' }];
+    storeState.sessionEvents = {
+      'session-1': [
+        {
+          id: 'ev-1',
+          kind: 'project_materialization_proposed',
+          payload: {
+            projectId: 'project-web',
+            projectName: 'web',
+            reason: 'needs the router',
+            agentId: 'agent-1',
+            turnRunId: 'run-1',
+            deferralCause: 'scope',
+          },
+        },
+      ],
+    };
+
+    renderWithActivity();
+
+    expect(screen.queryByTestId(`timeline-suggestion-${MOUNT.id}`)).toBeNull();
+    expect(screen.queryByTestId(`timeline-suggestion-${ANSWER.id}`)).not.toBeNull();
+  });
+
+  it('keeps its actions when no transcript can claim the proposal', () => {
+    suggestionState.list = [MOUNT];
+    storeState.selectedAgentId = { 'session-1': 'agent-2' };
+    storeState.transcripts = { 'agent-2': [{ kind: 'assistant_text', runId: 'run-1' }] };
+    storeState.projects = [{ id: 'project-web', workspaceId: 'ws-1' }];
+    storeState.sessionEvents = {
+      'session-1': [
+        {
+          id: 'ev-1',
+          kind: 'project_materialization_proposed',
+          payload: {
+            projectId: 'project-web',
+            projectName: 'web',
+            reason: 'needs the router',
+            agentId: 'agent-1',
+            turnRunId: 'run-1',
+            deferralCause: 'scope',
+          },
+        },
+      ],
+    };
+
+    renderWithActivity();
+
+    expect(screen.queryByTestId(`timeline-suggestion-${MOUNT.id}`)).not.toBeNull();
   });
 
   it('draws the rail above NOW as a dashed segment', () => {

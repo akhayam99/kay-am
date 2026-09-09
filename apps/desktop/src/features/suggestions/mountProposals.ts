@@ -1,4 +1,11 @@
-import type { AgentId, ProjectId, SessionEvent, SessionEventId } from '@goodboy/types';
+import type {
+  AgentId,
+  MaterializationDeferralCause,
+  ProjectId,
+  ProviderRunId,
+  SessionEvent,
+  SessionEventId,
+} from '@goodboy/types';
 
 export type SuggestionMountEventKind = 'proposed' | 'mounted' | 'dismissed';
 
@@ -9,6 +16,9 @@ export type SuggestionMountEvent = {
   readonly projectName: string;
   readonly reason: string;
   readonly agentId: AgentId | null;
+  readonly turnRunId: ProviderRunId | null;
+  readonly cause: MaterializationDeferralCause | null;
+  readonly hasRecordedReason: boolean;
 };
 
 const MOUNT_EVENT_KIND: Readonly<Partial<Record<string, SuggestionMountEventKind>>> = {
@@ -36,6 +46,9 @@ export const toMountEvents = ({
         projectName: event.payload?.projectName ?? projectId,
         reason: event.payload?.reason ?? 'an agent asked for write access',
         agentId: (event.payload?.agentId as AgentId | undefined) ?? null,
+        turnRunId: (event.payload?.turnRunId as ProviderRunId | undefined) ?? null,
+        cause: event.payload?.deferralCause ?? null,
+        hasRecordedReason: (event.payload?.reason ?? '').trim().length > 0,
       },
     ];
   });

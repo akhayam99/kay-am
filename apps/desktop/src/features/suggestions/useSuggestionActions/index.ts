@@ -12,6 +12,7 @@ import { useRebaseAgent } from '../../session/hooks/useRebaseAgent';
 import { useWorktreeStatuses } from '../../session/hooks/useWorktreeStatuses';
 import { useAdvanceWorkflowAgent } from '../../workflows/useAdvanceWorkflowAgent';
 import { eligibleReviewThreads } from '../eligibleThreads';
+import { useMountProposalActions } from '../useMountProposalActions';
 import type { SessionSuggestion } from '../types';
 
 type Params = {
@@ -51,8 +52,6 @@ export const useSuggestionActions = ({
   );
   const projects = useAppStore((state) => state.projects);
   const emitNotification = useAppStore((state) => state.emitNotification);
-  const materializeProject = useAppStore((state) => state.materializeProject);
-  const recordSessionEvent = useAppStore((state) => state.recordSessionEvent);
   const setSessionActiveProject = useAppStore((state) => state.setSessionActiveProject);
   const roleModels = useSessionRoleModels({ sessionId });
   const spawnAgent = useAppStore((state) => state.spawnAgent);
@@ -60,6 +59,7 @@ export const useSuggestionActions = ({
   const rows = useAppStore((state) => state.sessionResolveThreads[sessionId] ?? EMPTY_ROWS);
   const setActiveLens = useAppStore((state) => state.setActiveLens);
   const advanceAgent = useAdvanceWorkflowAgent({ sessionId });
+  const proposalActions = useMountProposalActions({ sessionId });
 
   const reportError = (title: string) => (message: string) => {
     void emitNotification('error', 'error', title, formatError(message), { sessionId });
@@ -151,35 +151,15 @@ export const useSuggestionActions = ({
     void advanceAgent({ agent: next });
   };
 
-  const mountProposed = ({
+  const proposalTarget = ({
     suggestion,
   }: {
     readonly suggestion: Extract<SessionSuggestion, { readonly kind: 'mount-project' }>;
-  }) => {
-    void materializeProject({
-      sessionId,
-      projectId: suggestion.payload.projectId,
-      reason: suggestion.payload.reason,
-    }).catch((error: unknown) => {
-      reportError('Mount failed')(formatError(error));
-    });
-  };
-
-  const dismissProposed = ({
-    suggestion,
-  }: {
-    readonly suggestion: Extract<SessionSuggestion, { readonly kind: 'mount-project' }>;
-  }) => {
-    void recordSessionEvent({
-      sessionId,
-      kind: 'project_materialization_dismissed',
-      payload: {
-        projectId: suggestion.payload.projectId,
-        projectName: suggestion.payload.projectName,
-        reason: suggestion.payload.reason,
-      },
-    });
-  };
+  }) => ({
+    projectId: suggestion.payload.projectId,
+    projectName: suggestion.payload.projectName,
+    reason: suggestion.payload.reason,
+  });
 
   return ({ suggestion }) => {
     if (suggestion.kind === 'workflow-next-step') {
@@ -216,8 +196,12 @@ export const useSuggestionActions = ({
     }
     if (suggestion.kind === 'mount-project') {
       return {
-        primary: { label: 'Mount', isDisabled: false, onAct: () => mountProposed({ suggestion }) },
-        onDismiss: () => dismissProposed({ suggestion }),
+        primary: {
+          label: 'Mount project',
+          isDisabled: false,
+          onAct: () => proposalActions.mount(proposalTarget({ suggestion })),
+        },
+        onDismiss: () => proposalActions.dismiss(proposalTarget({ suggestion })),
       };
     }
     return NO_ACTIONS;

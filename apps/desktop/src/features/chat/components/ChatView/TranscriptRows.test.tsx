@@ -2,7 +2,8 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
-import type { AgentId, IsoDateTime, SessionId } from '@goodboy/types';
+import type { AgentId, IsoDateTime, ProviderRunId, SessionId } from '@goodboy/types';
+import type { ReactNode } from 'react';
 import type { TranscriptItem } from '../../utils/transcript-items';
 import type { TranscriptRow } from '../../utils/cluster-operations';
 
@@ -40,6 +41,7 @@ const userText = (key: string, at: Date): TranscriptItem => ({
 const renderRows = (
   rows: ReadonlyArray<TranscriptRow>,
   oqByTurnOrdinal: ReadonlyMap<number | null, ReadonlyArray<never>> = new Map(),
+  mountSuggestionsByRun?: ReadonlyMap<ProviderRunId, ReactNode>,
 ) =>
   render(
     <ul>
@@ -55,11 +57,14 @@ const renderRows = (
         thinkingContext="think"
         onRetryError={retryErrorSpy}
         retryingErrorRunId={null}
+        mountSuggestionsByRun={mountSuggestionsByRun}
       />
     </ul>,
   );
 
 afterEach(cleanup);
+
+const RUN_ID = 'run-1' as ProviderRunId;
 
 const kickoff = (key: string): TranscriptItem => ({
   kind: 'workflow_kickoff',
@@ -142,5 +147,46 @@ describe('TranscriptRows', () => {
       'future',
       'legacy',
     ]);
+  });
+
+  it('seats a mount suggestion right after the turn that asked for it', () => {
+    const { container } = renderRows(
+      [
+        itemRow({ kind: 'assistant_text', key: 'a0', text: 'looking' }),
+        itemRow({ kind: 'error', key: 'e1', message: 'Mount deferred for web', runId: RUN_ID }),
+        itemRow({ kind: 'assistant_text', key: 'a1', text: 'carrying on' }),
+      ],
+      new Map(),
+      new Map([[RUN_ID, <div data-testid="mount-suggestion">web</div>]]),
+    );
+    const rows = [...container.querySelectorAll('li')];
+    const suggestionIndex = rows.findIndex(
+      (row) => row.querySelector('[data-testid="mount-suggestion"]') !== null,
+    );
+    expect(suggestionIndex).toBe(2);
+    expect(rows).toHaveLength(4);
+  });
+
+  it('seats a mount suggestion at the tail when its turn left no anchor row', () => {
+    const { container } = renderRows(
+      [itemRow({ kind: 'assistant_text', key: 'a1', text: 'carrying on' })],
+      new Map(),
+      new Map([[RUN_ID, <div data-testid="mount-suggestion">web</div>]]),
+    );
+    const rows = [...container.querySelectorAll('li')];
+    expect(rows).toHaveLength(2);
+    expect(rows[1]!.querySelector('[data-testid="mount-suggestion"]')).not.toBeNull();
+  });
+
+  it('renders one card per proposal even when the same turn errors twice', () => {
+    renderRows(
+      [
+        itemRow({ kind: 'error', key: 'e1', message: 'first', runId: RUN_ID }),
+        itemRow({ kind: 'error', key: 'e2', message: 'second', runId: RUN_ID }),
+      ],
+      new Map(),
+      new Map([[RUN_ID, <div data-testid="mount-suggestion">web</div>]]),
+    );
+    expect(screen.getAllByTestId('mount-suggestion')).toHaveLength(1);
   });
 });

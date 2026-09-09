@@ -30,6 +30,8 @@ import { useActivityFilter } from '../../../../hooks/useActivityFilter';
 import { useTimelineOpen } from '../../../../hooks/useTimelineOpen';
 import { useSessionSuggestions } from '../../../../../suggestions';
 import { useSuggestionActions } from '../../../../../suggestions/useSuggestionActions';
+import { useTranscriptMountProposals } from '../../../../../suggestions/useTranscriptMountProposals';
+import { transcriptOwnedProjectIds } from '../../../../../suggestions/transcriptMountProposals';
 import { ActivityFilterButton } from './ActivityFilterButton';
 import { TimelineSuggestionRow } from './TimelineSuggestionRow';
 import { TimelineDayRule } from './TimelineDayRule';
@@ -72,6 +74,11 @@ export const TimelinePane = ({ session, runs, actions, kickoff }: Props) => {
   const advanceAgent = useAdvanceWorkflowAgent({ sessionId });
   const activity = useActivityFilter();
   const suggestions = useSessionSuggestions({ session, agents });
+  const transcriptProposals = useTranscriptMountProposals({ session });
+  const transcriptOwned = useMemo(
+    () => transcriptOwnedProjectIds({ proposals: transcriptProposals }),
+    [transcriptProposals],
+  );
   const suggestionActions = useSuggestionActions({
     session,
     agents,
@@ -313,7 +320,12 @@ export const TimelinePane = ({ session, runs, actions, kickoff }: Props) => {
 
   const hasUnreadAgents = unreadAgentIds.size > 0;
   const visibleSuggestions = activity.filter.suggestions
-    ? suggestions.filter((suggestion) => suggestion.kind !== 'plan-ready')
+    ? suggestions.filter(
+        (suggestion) =>
+          suggestion.kind !== 'plan-ready' &&
+          (suggestion.kind !== 'mount-project' ||
+            !transcriptOwned.has(suggestion.payload.projectId)),
+      )
     : [];
   const isLoading = (!areEventsLoaded || !areAgentsLoaded) && model.entries.length === 0;
   const emptyHint =

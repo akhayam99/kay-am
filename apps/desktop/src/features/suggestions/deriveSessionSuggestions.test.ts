@@ -30,6 +30,9 @@ const mountEvent = ({
   projectName: 'web',
   reason: 'needs the router',
   agentId: 'agent-1' as AgentId,
+  turnRunId: null,
+  cause: 'scope',
+  hasRecordedReason: true,
 });
 
 const derive = ({

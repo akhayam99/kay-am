@@ -22,6 +22,35 @@ type Props = {
   thinkingContext: ThinkingContext;
   onRetryError: (item: Extract<TranscriptItem, { kind: 'error' }>) => void;
   retryingErrorRunId: ProviderRunId | null;
+  mountSuggestionsByRun?: ReadonlyMap<ProviderRunId, ReactNode>;
+};
+
+const RUN_BEARING_KINDS = new Set<TranscriptItem['kind']>([
+  'error',
+  'permission_request',
+  'permission_decision',
+]);
+
+const rowRunId = ({ row }: { readonly row: TranscriptRow }): ProviderRunId | null => {
+  if (row.kind !== 'item' || !RUN_BEARING_KINDS.has(row.item.kind)) {
+    return null;
+  }
+  return 'runId' in row.item ? (row.item.runId ?? null) : null;
+};
+
+const lastRowIndexByRun = ({
+  rows,
+}: {
+  readonly rows: ReadonlyArray<TranscriptRow>;
+}): ReadonlyMap<ProviderRunId, number> => {
+  const byRun = new Map<ProviderRunId, number>();
+  rows.forEach((row, index) => {
+    const runId = rowRunId({ row });
+    if (runId !== null) {
+      byRun.set(runId, index);
+    }
+  });
+  return byRun;
 };
 
 export const TranscriptRows = ({
@@ -36,8 +65,22 @@ export const TranscriptRows = ({
   thinkingContext,
   onRetryError,
   retryingErrorRunId,
+  mountSuggestionsByRun,
 }: Props) => {
   const out: ReactNode[] = [];
+  const suggestions = mountSuggestionsByRun ?? new Map<ProviderRunId, ReactNode>();
+  const anchors = lastRowIndexByRun({ rows });
+  const placedRunIds = new Set<ProviderRunId>();
+
+  const flushMountSuggestion = ({ index }: { readonly index: number }) => {
+    for (const [runId, node] of suggestions) {
+      if (placedRunIds.has(runId) || anchors.get(runId) !== index) {
+        continue;
+      }
+      placedRunIds.add(runId);
+      out.push(<li key={`mount-suggestion-${runId}`}>{node}</li>);
+    }
+  };
   let lastDay: string | null = null;
   let userTurnOrdinal = 0;
   let railGroup: Array<ReactNode> = [];
@@ -147,6 +190,7 @@ export const TranscriptRows = ({
         )}
       </li>,
     );
+    flushMountSuggestion({ index: idx });
   });
 
   flushOrdinal(userTurnOrdinal);
@@ -155,6 +199,13 @@ export const TranscriptRows = ({
     .sort((a, b) => a - b);
   for (const ordinal of remainingOrdinals) {
     flushOrdinal(ordinal);
+  }
+  for (const [runId, node] of suggestions) {
+    if (placedRunIds.has(runId)) {
+      continue;
+    }
+    placedRunIds.add(runId);
+    out.push(<li key={`mount-suggestion-${runId}`}>{node}</li>);
   }
   const tailCards = oqByTurnOrdinal.get(null);
   if (tailCards != null && tailCards.length > 0) {
