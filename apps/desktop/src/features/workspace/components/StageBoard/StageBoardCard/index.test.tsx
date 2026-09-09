@@ -528,7 +528,7 @@ describe('StageBoardCard footer', () => {
     const chipLabel = screen.getByText('gateway');
     const chip = chipLabel.closest('span.inline-flex');
     expect(chipLabel.className).toContain('truncate');
-    expect(chip?.className).toContain('w-20');
+    expect(chip?.className).toContain('w-24');
     expect(chip?.className).toContain('shrink-0');
     expect(chip?.closest('[data-tooltip]')?.getAttribute('data-tooltip')).toBe('gateway');
   });
@@ -546,7 +546,7 @@ describe('StageBoardCard footer', () => {
     expect(screen.getByLabelText('2 projects: core-api, web-console')).toBeDefined();
     const chip = screen.getByLabelText('2 projects: core-api, web-console');
     expect(chip.textContent).toBe('2 projects');
-    expect(chip.className).toContain('w-20');
+    expect(chip.className).not.toContain('w-24');
     expect(chip.closest('[data-tooltip]')?.getAttribute('data-tooltip')).toBe(
       'core-api, web-console',
     );

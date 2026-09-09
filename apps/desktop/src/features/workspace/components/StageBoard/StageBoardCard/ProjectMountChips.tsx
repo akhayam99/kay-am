@@ -1,7 +1,7 @@
 import { Chip, Tooltip } from '@goodboy/ui';
 import type { SessionProjectMount } from '@goodboy/types';
 
-const SLOT_WIDTH = 'w-20 shrink-0';
+const IDENTITY_SLOT = 'w-24 shrink-0';
 
 type Props = {
   readonly mounts: ReadonlyArray<SessionProjectMount>;
@@ -20,7 +20,7 @@ export const ProjectMountChips = ({ mounts }: Props) => {
           size="xs"
           bordered={false}
           label={<span className="min-w-0 truncate">{first.mountName}</span>}
-          className={SLOT_WIDTH}
+          className={IDENTITY_SLOT}
         />
       </Tooltip>
     );
@@ -38,7 +38,7 @@ export const ProjectMountChips = ({ mounts }: Props) => {
             <span className="tabular-nums">{mounts.length}</span> projects
           </span>
         }
-        className={SLOT_WIDTH}
+        className="shrink-0"
       />
     </Tooltip>
   );
