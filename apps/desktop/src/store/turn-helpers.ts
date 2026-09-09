@@ -67,9 +67,11 @@ import type { SessionNudge } from './types';
 import type { SetFn, GetFn } from './slice-types';
 import { decisionsDelta } from './slices/session-events';
 import {
-  deferredMaterializeMessage,
+  deferredMaterializeNote,
   materializationGate,
+  priorMountCount,
   proposeMaterialization,
+  runMaterializationBatch,
 } from './materializationGate';
 
 type AttachmentsBlockParams = {
@@ -690,45 +692,73 @@ export const captureMaterializeRequestsFromTurn = async ({
       at: new Date().toISOString() as IsoDateTime,
     });
   };
-  let immediateCount = 0;
-  for (const request of requests) {
-    const project = projects.find(
-      (candidate) => candidate.name.toLowerCase() === request.projectName.toLowerCase(),
-    );
-    if (project === undefined) {
-      await get().recordSessionEvent({
-        sessionId,
-        kind: 'project_materialization_refused',
-        payload: {
-          projectName: request.projectName,
-          reason: `no project named "${request.projectName}" in this workspace`,
-        },
-      });
-      const known = projects.map((candidate) => candidate.name).join(', ');
-      note(
-        `materialize refused: no project named "${request.projectName}" in this workspace.${known.length > 0 ? ` Known projects: ${known}.` : ''}`,
-      );
-      continue;
-    }
-    const gate = materializationGate({ get, sessionId, project, immediateCount });
-    if (gate === 'deferred') {
-      await proposeMaterialization({ get, sessionId, project, reason: request.reason, agentId });
-      note(deferredMaterializeMessage({ projectName: project.name }));
-      continue;
-    }
-    if (gate === 'allowed') {
-      immediateCount += 1;
-    }
-    try {
-      await get().materializeProject({
-        sessionId,
-        projectId: project.id,
-        reason: request.reason,
-      });
-    } catch (error) {
-      note(`materialize failed for ${project.name}: ${formatError(error)}`);
-    }
-  }
+  const decisionNote = (message: string) => {
+    get().appendTurnEvent(agentId, sessionId, {
+      kind: 'decision_note',
+      runId,
+      message,
+      at: new Date().toISOString() as IsoDateTime,
+    });
+  };
+  await runMaterializationBatch({
+    sessionId,
+    run: async () => {
+      const priorMounts = priorMountCount({ get, sessionId });
+      let immediateCount = 0;
+      for (const request of requests) {
+        const project = projects.find(
+          (candidate) => candidate.name.toLowerCase() === request.projectName.toLowerCase(),
+        );
+        if (project === undefined) {
+          await get().recordSessionEvent({
+            sessionId,
+            kind: 'project_materialization_refused',
+            payload: {
+              projectName: request.projectName,
+              reason: `no project named "${request.projectName}" in this workspace`,
+            },
+          });
+          const known = projects.map((candidate) => candidate.name).join(', ');
+          note(
+            `materialize refused: no project named "${request.projectName}" in this workspace.${known.length > 0 ? ` Known projects: ${known}.` : ''}`,
+          );
+          continue;
+        }
+        const decision = materializationGate({
+          get,
+          sessionId,
+          project,
+          priorMounts,
+          immediateCount,
+        });
+        if (decision.kind === 'deferred') {
+          await proposeMaterialization({
+            get,
+            sessionId,
+            project,
+            reason: request.reason,
+            cause: decision.cause,
+            agentId,
+            turnRunId: runId,
+          });
+          decisionNote(deferredMaterializeNote({ projectName: project.name }));
+          continue;
+        }
+        try {
+          await get().materializeProject({
+            sessionId,
+            projectId: project.id,
+            reason: request.reason,
+          });
+          if (decision.kind === 'allowed') {
+            immediateCount += 1;
+          }
+        } catch (error) {
+          note(`materialize failed for ${project.name}: ${formatError(error)}`);
+        }
+      }
+    },
+  });
 };
 
 type RecordNudgeShownParams = {

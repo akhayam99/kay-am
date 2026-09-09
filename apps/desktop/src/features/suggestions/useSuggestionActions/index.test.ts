@@ -296,7 +296,7 @@ describe('useSuggestionActions', () => {
       },
     });
 
-    expect(actions.primary?.label).toBe('Mount');
+    expect(actions.primary?.label).toBe('Mount project');
     actions.primary?.onAct();
 
     expect(spies.materializeProject).toHaveBeenCalledWith({

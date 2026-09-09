@@ -91,6 +91,14 @@ const webMount = {
   branch: WEB_BRANCH,
 };
 
+const otherMount = {
+  projectId: 'project-other' as ProjectId,
+  mountName: 'other',
+  repoRoot: '/tmp/other',
+  worktreePath: SECOND_MOUNT_PATH,
+  branch: 'goodboy/goal-12345678-other',
+};
+
 const seedSession = (projects: ReadonlyArray<typeof appProject>) => {
   useAppStore.setState({
     workspaces: [workspace],
@@ -439,8 +447,11 @@ describe('story: an agent asks for write access with the materialize marker', ()
     );
   });
 
-  it('defers a mount the session never named and hands the owner the proposal', async () => {
+  it('defers a mount beyond the allowance and hands the owner the proposal', async () => {
     seedSession([appProject, webProject]);
+    useAppStore.setState({
+      sessionProjectMounts: { [SESSION_ID]: [appMount, otherMount] },
+    } as never);
     storySpies.runTurn.mockImplementation(
       assistantTurnStream('<<materialize: web | reading the router>>'),
     );
@@ -448,18 +459,23 @@ describe('story: an agent asks for write access with the materialize marker', ()
     await useAppStore.getState().sendTurn({ sessionId: SESSION_ID, content: 'go' });
 
     expect(storySpies.createWorktree).not.toHaveBeenCalled();
-    expect(useAppStore.getState().sessionProjectMounts[SESSION_ID]).toEqual([appMount]);
-    expect(recordedEvent('project_materialization_proposed')?.payload).toMatchObject({
+    expect(useAppStore.getState().sessionProjectMounts[SESSION_ID]).toEqual([appMount, otherMount]);
+    const proposal = recordedEvent('project_materialization_proposed')?.payload;
+    expect(proposal).toMatchObject({
       projectName: 'web',
       reason: 'reading the router',
       agentId: AGENT_ID,
+      deferralCause: 'scope',
     });
+    expect(proposal?.turnRunId).toBeTypeOf('string');
     const transcript = useAppStore.getState().transcripts[AGENT_ID] ?? [];
+    const note = transcript.find((event) => event.kind === 'decision_note');
+    expect(note).toMatchObject({ message: 'Mount deferred for web.' });
     expect(
       transcript.some(
-        (event) => event.kind === 'error' && event.message.includes('materialize deferred'),
+        (event) => event.kind === 'error' && event.message.includes('Mount deferred'),
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('refuses an unknown project name and notes it inline for the user', async () => {

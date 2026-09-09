@@ -57,8 +57,13 @@ export type {
 export type { FileVersion, FileVersionChangeKind, FileVersionSnapshotSource } from './file-version';
 export type { IntegrationCredential, IntegrationCredentialUsage } from './integration-credential';
 export type { OpenQuestion, OpenQuestionSelectMode, OpenQuestionStatus } from './open-question';
-export { SESSION_EVENT_KINDS } from './session-event';
-export type { SessionEvent, SessionEventKind, SessionEventPayload } from './session-event';
+export { MATERIALIZATION_DEFERRAL_CAUSES, SESSION_EVENT_KINDS } from './session-event';
+export type {
+  MaterializationDeferralCause,
+  SessionEvent,
+  SessionEventKind,
+  SessionEventPayload,
+} from './session-event';
 export type {
   BitbucketIntegrationConfig,
   BitbucketIntegrationBinding,

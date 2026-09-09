@@ -11,6 +11,7 @@ import { PermissionRequestCard } from '../../../../features/permissions/componen
 import { PermissionDecisionCard } from '../../../../features/permissions/components/PermissionDecisionCard';
 import { ToolCallCard } from '../ToolCallCard';
 import { AssistantText } from './AssistantText';
+import { DecisionNoteRow } from './DecisionNoteRow';
 import { TranscriptErrorRow } from './TranscriptErrorRow';
 import { FileEditBlock } from './FileEditBlock';
 import { UsageRow } from './UsageRow';
@@ -76,6 +77,8 @@ function TranscriptCardImpl({
           }
         />
       );
+    case 'decision_note':
+      return <DecisionNoteRow message={item.message} />;
     case 'auth_required':
       return (
         <AuthRequiredCallout

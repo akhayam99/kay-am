@@ -94,6 +94,48 @@ describe('session_events queries', () => {
     expect((await listSessionEvents({ db, sessionId }))[0]?.payload?.agentId).toBe('agent-7');
   });
 
+  it('keeps the turn link and the deferral cause on a materialization proposal', async () => {
+    const db = await seed();
+    const event = makeEvent({
+      overrides: {
+        kind: 'project_materialization_proposed',
+        payload: {
+          projectId: 'project-api',
+          projectName: 'api',
+          reason: 'edit the contract',
+          agentId: 'agent-7',
+          turnRunId: 'run-42',
+          deferralCause: 'batch',
+        },
+      },
+    });
+
+    await insertSessionEvent({ db, event });
+
+    expect((await listSessionEvents({ db, sessionId }))[0]?.payload).toMatchObject({
+      turnRunId: 'run-42',
+      deferralCause: 'batch',
+    });
+  });
+
+  it('drops a deferral cause outside the known set', async () => {
+    const db = await seed();
+    await db.execute(
+      'INSERT INTO session_events (id, session_id, kind, payload_json, created_at) VALUES (?, ?, ?, ?, ?)',
+      [
+        'ev-cause',
+        sessionId,
+        'project_materialization_proposed',
+        '{"projectId":"project-api","deferralCause":"vibes","turnRunId":9}',
+        Date.parse('2026-08-21T10:00:00.000Z'),
+      ],
+    );
+
+    expect((await listSessionEvents({ db, sessionId }))[0]?.payload).toEqual({
+      projectId: 'project-api',
+    });
+  });
+
   it('drops payload fields of the wrong shape', async () => {
     const db = await seed();
     await db.execute(

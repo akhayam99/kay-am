@@ -88,6 +88,12 @@ export type TurnEvent =
       retryable?: boolean;
       at: IsoDateTime;
     }
+  | {
+      kind: 'decision_note';
+      runId: ProviderRunId;
+      message: string;
+      at: IsoDateTime;
+    }
   | { kind: 'done'; runId: ProviderRunId; at: IsoDateTime }
   | {
       kind: 'provider_session_init';

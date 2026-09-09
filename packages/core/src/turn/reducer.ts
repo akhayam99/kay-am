@@ -82,6 +82,7 @@ function applyTurnEvent(state: TurnState, turn: TurnEvent): TurnState {
     case 'step_transition':
     case 'orchestrator_decision':
     case 'permission_decision':
+    case 'decision_note':
     case 'unknown_payload':
     case 'provider_session_init':
       return state;

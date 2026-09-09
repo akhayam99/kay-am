@@ -46,6 +46,7 @@ export type TranscriptItem =
       runId?: ProviderRunId;
       retryable?: boolean;
     }
+  | { kind: 'decision_note'; key: string; message: string; runId: ProviderRunId }
   | { kind: 'auth_required'; key: string; providerId: ProviderId; identity: string | null }
   | { kind: 'skill_invocation'; key: string; skillName: string; args: ReadonlyArray<string> }
   | {
@@ -271,6 +272,14 @@ export const reduceTranscript = (
         }
         break;
       }
+      case 'decision_note':
+        items.push({
+          kind: 'decision_note',
+          key: `decision-${i}`,
+          message: event.message,
+          runId: event.runId,
+        });
+        break;
       case 'skill_invocation':
         items.push({
           kind: 'skill_invocation',

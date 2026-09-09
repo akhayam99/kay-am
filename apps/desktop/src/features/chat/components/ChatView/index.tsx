@@ -40,6 +40,10 @@ import { ChatInput } from '../ChatInput';
 import { DiffViewerDialog } from '../../../../features/permissions/components/DiffViewerDialog';
 import { worktreeDiff } from '../../../../features/worktree/worktree';
 import { isBranchlessSession } from '../../../../shared/utils/isBranchlessSession';
+import { MountSuggestionCard } from '../MountSuggestionCard';
+import { useTranscriptMountProposals } from '../../../suggestions/useTranscriptMountProposals';
+import { useMountProposalActions } from '../../../suggestions/useMountProposalActions';
+import { mountProposalsByRun } from '../../../suggestions/transcriptMountProposals';
 import { ChatEmptyState } from './ChatEmptyState';
 import { TranscriptRows } from './TranscriptRows';
 import { ChatImageLoaderProvider } from './ChatImageLoaderProvider';
@@ -294,6 +298,54 @@ export const ChatView = ({ session, isActive = true, header }: Props) => {
     [events, selectedAgentId, sendTurn, session.id, worktreePath],
   );
 
+  const mountProposals = useTranscriptMountProposals({ session });
+  const mountProposalActions = useMountProposalActions({ sessionId: session.id });
+  const loadSessionEvents = useAppStore((s) => s.loadSessionEvents);
+
+  useEffect(() => {
+    if (loadSessionEvents == null) {
+      return;
+    }
+    void loadSessionEvents({ sessionId: session.id });
+  }, [loadSessionEvents, session.id]);
+
+  const mountSuggestionsByRun = useMemo(() => {
+    const nodes = new Map<ProviderRunId, ReactNode>();
+    for (const [runId, proposals] of mountProposalsByRun({ proposals: mountProposals })) {
+      nodes.set(
+        runId,
+        <div className="flex min-w-0 flex-col gap-2">
+          {proposals.map((proposal) => (
+            <MountSuggestionCard
+              key={proposal.projectId}
+              projectName={proposal.projectName}
+              agentName={
+                phaseRuns.find((run) => run.id === proposal.agentId)?.name ?? 'the requesting agent'
+              }
+              reason={proposal.reason}
+              cause={proposal.cause}
+              onMount={() =>
+                mountProposalActions.mount({
+                  projectId: proposal.projectId,
+                  projectName: proposal.projectName,
+                  reason: proposal.reason,
+                })
+              }
+              onDismiss={() =>
+                mountProposalActions.dismiss({
+                  projectId: proposal.projectId,
+                  projectName: proposal.projectName,
+                  reason: proposal.reason,
+                })
+              }
+            />
+          ))}
+        </div>,
+      );
+    }
+    return nodes;
+  }, [mountProposalActions, mountProposals, phaseRuns]);
+
   const openQuestions = useSessionOpenQuestions(session.id);
   const answeredQuestions = useSessionAnsweredQuestions(session.id);
   const loadSessionOpenQuestions = useAppStore((s) => s.loadSessionOpenQuestions);
@@ -436,6 +488,7 @@ export const ChatView = ({ session, isActive = true, header }: Props) => {
                   thinkingContext={thinkingContext}
                   onRetryError={(item) => void handleRetryError({ item })}
                   retryingErrorRunId={retryingErrorRunId}
+                  mountSuggestionsByRun={mountSuggestionsByRun}
                 />
               </ChatImageLoaderProvider>
             </ul>

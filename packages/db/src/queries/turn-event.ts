@@ -73,6 +73,7 @@ const toTruncatedEvent = ({ event }: SerializeTurnEventParams): TurnEvent => {
         at: event.at,
       };
     case 'error':
+    case 'decision_note':
       return { ...event, message: markTruncated(event.message) };
     case 'done':
       return event;

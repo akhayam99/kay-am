@@ -28,6 +28,10 @@ export const SESSION_EVENT_KINDS = [
 
 export type SessionEventKind = (typeof SESSION_EVENT_KINDS)[number];
 
+export const MATERIALIZATION_DEFERRAL_CAUSES = ['batch', 'scope'] as const;
+
+export type MaterializationDeferralCause = (typeof MATERIALIZATION_DEFERRAL_CAUSES)[number];
+
 export type SessionEventPayload = Readonly<{
   worktreePath?: string;
   branch?: string;
@@ -52,6 +56,8 @@ export type SessionEventPayload = Readonly<{
   externalId?: string;
   agentId?: string;
   behind?: number;
+  turnRunId?: string;
+  deferralCause?: MaterializationDeferralCause;
 }>;
 
 export type SessionEvent = Readonly<{
