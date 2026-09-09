@@ -22,9 +22,9 @@ export const CountToggle = ({ label, count, isShown, icon, onChange }: Props) =>
       onClick={() => onChange(!isShown)}
       aria-pressed={isShown}
       className={cn(
-        'flex h-7 items-center gap-1 rounded-md px-1.5 text-2xs font-medium transition-colors',
+        'flex h-7 items-center gap-1 rounded-md px-1.5 text-2xs font-medium motion-safe:transition-colors',
         isShown
-          ? 'bg-primary/10 text-primary'
+          ? 'bg-muted text-foreground'
           : 'text-muted-foreground hover:bg-foreground/5 hover:text-foreground',
       )}
     >

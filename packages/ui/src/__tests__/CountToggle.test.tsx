@@ -40,6 +40,23 @@ describe('CountToggle', () => {
     expect(onChange).toHaveBeenCalledWith(true);
   });
 
+  it('reads as a disclosure when shown, never as a primary action', () => {
+    render(
+      <CountToggle
+        label="Completed"
+        count={3}
+        isShown={true}
+        icon={CircleCheck}
+        onChange={vi.fn()}
+      />,
+    );
+
+    const toggle = screen.getByRole('button', { name: 'Completed (3)' });
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(toggle.className).toContain('bg-muted');
+    expect(toggle.className).not.toContain('primary');
+  });
+
   it('does not set a native title', () => {
     render(
       <CountToggle
