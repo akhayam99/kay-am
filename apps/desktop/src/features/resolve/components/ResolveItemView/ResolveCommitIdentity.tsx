@@ -27,6 +27,13 @@ const shaLink = ({
   </Tooltip>
 );
 
+const identityRow = ({ label, value }: { readonly label: string; readonly value: ReactNode }) => (
+  <span className="flex min-w-0 items-baseline gap-2">
+    <span className="w-32 shrink-0 text-2xs text-muted-foreground">{label}</span>
+    <span className="flex min-w-0 flex-wrap items-baseline gap-2">{value}</span>
+  </span>
+);
+
 export const ResolveCommitIdentity = ({
   integratedSha,
   candidateSha,
@@ -34,31 +41,24 @@ export const ResolveCommitIdentity = ({
   onOpenCommit,
 }: Props) => (
   <div className="flex min-w-0 flex-col gap-2">
-    <span className="flex min-w-0 items-center gap-2">
-      <span className="shrink-0 text-2xs text-muted-foreground">
-        {integratedSha === null
-          ? RESOLVE_ITEM_LABEL.noFixingCommit
-          : RESOLVE_ITEM_LABEL.fixingCommit}
-      </span>
-      {integratedSha !== null && shaLink({ sha: integratedSha, onOpenCommit })}
-    </span>
-    {candidateSha !== null && (
-      <span className="flex min-w-0 items-center gap-2">
-        <span className="shrink-0 text-2xs text-muted-foreground">
-          {RESOLVE_ITEM_LABEL.candidate}
-        </span>
-        {shaLink({ sha: candidateSha, onOpenCommit })}
-      </span>
-    )}
-    {recordedShas.length > 0 && (
-      <span className="flex min-w-0 flex-wrap items-center gap-2">
-        <span className="shrink-0 text-2xs text-muted-foreground">
-          {RESOLVE_ITEM_LABEL.recordedCommits}
-        </span>
-        {recordedShas.map((sha) => (
-          <span key={sha}>{shaLink({ sha, onOpenCommit })}</span>
-        ))}
-      </span>
-    )}
+    {identityRow({
+      label: RESOLVE_ITEM_LABEL.fixingCommit,
+      value:
+        integratedSha === null ? (
+          <span className="text-3xs text-muted-foreground">{RESOLVE_ITEM_LABEL.notRecorded}</span>
+        ) : (
+          shaLink({ sha: integratedSha, onOpenCommit })
+        ),
+    })}
+    {candidateSha !== null &&
+      identityRow({
+        label: RESOLVE_ITEM_LABEL.candidate,
+        value: shaLink({ sha: candidateSha, onOpenCommit }),
+      })}
+    {recordedShas.length > 0 &&
+      identityRow({
+        label: RESOLVE_ITEM_LABEL.recordedCommits,
+        value: recordedShas.map((sha) => <span key={sha}>{shaLink({ sha, onOpenCommit })}</span>),
+      })}
   </div>
 );

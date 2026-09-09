@@ -190,10 +190,11 @@ describe('the resolve item view', () => {
     );
   });
 
-  it('says there is no fixing commit rather than showing a candidate as the fix', () => {
+  it('names the missing fix in the same shape as a present one, beside its label', () => {
     renderView();
 
-    expect(screen.getByText('No fixing commit')).toBeDefined();
+    expect(screen.getByText('Fixing commit')).toBeDefined();
+    expect(screen.getByText('Not recorded')).toBeDefined();
   });
 
   it('opens the exact recorded commit from the fixing-commit line', () => {
@@ -250,6 +251,7 @@ describe('the resolve item view', () => {
     renderView();
 
     expect(screen.getByText('No checks run')).toBeDefined();
+    expect(screen.queryByRole('button', { name: /No checks run ·/ })).toBeNull();
     expect(screen.queryByText('Passed')).toBeNull();
   });
 
@@ -283,11 +285,12 @@ describe('the resolve item view', () => {
       } as unknown as ResolveChecksSummary,
     });
 
-    expect(screen.getByText('Passes on proposal; current code not checked')).toBeDefined();
     expect(screen.getByText('Scoped checks')).toBeDefined();
     expect(screen.queryByText('Passed')).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: /Check runs \(1\)/ }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /Passes on proposal; current code not checked · 1 run/ }),
+    );
 
     expect(screen.getByText('Passed')).toBeDefined();
     expect(screen.getByText('pnpm test')).toBeDefined();
@@ -323,8 +326,7 @@ describe('the resolve item view', () => {
       } as unknown as ResolveChecksSummary,
     });
 
-    expect(screen.getByText('Checks out of date')).toBeDefined();
-    fireEvent.click(screen.getByRole('button', { name: /Check runs \(1\)/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Checks out of date · 1 run/ }));
     expect(screen.getByText('Stale')).toBeDefined();
     expect(screen.queryByText('Passed')).toBeNull();
   });

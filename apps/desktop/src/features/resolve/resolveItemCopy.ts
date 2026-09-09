@@ -23,7 +23,7 @@ export const RESOLVE_ITEM_LABEL = {
   viewWork: 'View work',
   reopen: 'Reopen',
   fixingCommit: 'Fixing commit',
-  noFixingCommit: 'No fixing commit',
+  notRecorded: 'Not recorded',
   candidate: 'Candidate',
   recordedCommits: 'Recorded commits',
   noCapturedChange: 'No captured change',

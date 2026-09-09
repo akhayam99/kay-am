@@ -32,13 +32,17 @@ const receiptWord = ({ receipt }: { readonly receipt: ResolveCheckReceipt }): st
 };
 
 export const ChecksBlock = ({ checks, canRunCheck, isRunning, note, onRunCheck }: Props) => {
-  const [areReceiptsShown, setAreReceiptsShown] = useState(false);
+  const [areRunsShown, setAreRunsShown] = useState(false);
   const runCount = checks.receipts.length;
+  const headline = checksHeadline({ verdict: checks.verdict });
+  const summary =
+    runCount === 0 ? headline : `${headline} · ${runCount} ${runCount === 1 ? 'run' : 'runs'}`;
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <SectionHeader
         label={RESOLVE_ITEM_LABEL.checks}
         headingLevel={3}
+        hint={checks.isScoped ? scopedRunNote : undefined}
         action={
           canRunCheck ? (
             <Button size="sm" variant="ghost" disabled={isRunning} onClick={onRunCheck}>
@@ -47,21 +51,21 @@ export const ChecksBlock = ({ checks, canRunCheck, isRunning, note, onRunCheck }
           ) : null
         }
       />
-      <p
-        className={cn(
-          'rounded-md text-sm text-foreground',
-          isRunning && 'spin-border spin-border-info px-2 py-1',
-        )}
-      >
-        {checksHeadline({ verdict: checks.verdict })}
-      </p>
-      {checks.isScoped && <p className="text-2xs text-muted-foreground">{scopedRunNote}</p>}
-      {note !== null && <p className="text-2xs text-warning">{note}</p>}
-      {checks.receipts.length > 0 && (
+      {runCount === 0 ? (
+        <p
+          className={cn(
+            'w-fit rounded-md text-sm text-foreground',
+            isRunning && 'spin-border spin-border-info px-2 py-1',
+          )}
+        >
+          {summary}
+        </p>
+      ) : (
         <Collapsible
-          open={areReceiptsShown}
-          onOpenChange={setAreReceiptsShown}
-          trigger={`Check runs (${runCount})`}
+          open={areRunsShown}
+          onOpenChange={setAreRunsShown}
+          className={cn(isRunning && 'spin-border spin-border-info')}
+          trigger={summary}
         >
           <ul className="flex flex-col gap-2">
             {checks.receipts.map((receipt) => (
@@ -93,6 +97,7 @@ export const ChecksBlock = ({ checks, canRunCheck, isRunning, note, onRunCheck }
           </ul>
         </Collapsible>
       )}
+      {note !== null && <p className="text-2xs text-warning">{note}</p>}
     </div>
   );
 };
