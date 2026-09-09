@@ -26,6 +26,7 @@ import { useOpenSession } from '../../../../../shared/hooks/useOpenSession';
 import type { BoardNavigation } from '../useBoardNavigation';
 import { getLinkedRequest } from './getLinkedRequest';
 import { PrRequestSlot } from './PrRequestSlot';
+import { ProjectMountChips } from './ProjectMountChips';
 import { useDynamicActions, type DynamicAction } from './useDynamicActions';
 
 const SESSION_CARD_REVEAL =
@@ -277,18 +278,7 @@ export const StageBoardCard = memo(function StageBoardCard({
               />
             </Tooltip>
           )}
-          {showProjectChips
-            ? mounts.map((mount) => (
-                <Chip
-                  key={mount.projectId}
-                  tone="neutral"
-                  size="xs"
-                  bordered={false}
-                  label={<span className="truncate">{mount.mountName}</span>}
-                  className="min-w-0"
-                />
-              ))
-            : null}
+          {showProjectChips ? <ProjectMountChips mounts={mounts} /> : null}
           {externalTasks.map((task) => (
             <ExternalTaskChip
               key={`${task.provider}:${task.externalId}`}

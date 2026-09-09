@@ -519,16 +519,37 @@ describe('StageBoardCard footer', () => {
     expect(metaRow?.querySelector('.lucide-chevron-right')).toBeNull();
   });
 
-  it('gives the project chip an ellipsis instead of a hard clip', () => {
+  it('holds the project slot at one width and truncates the name inside it', () => {
     state.projects = [{}, {}];
     state.sessionProjectMounts = {
       [SESSION_ID]: [{ projectId: 'project-1', mountName: 'gateway' }],
     };
     render(<StageBoardCard session={session} nav={nav} />);
     const chipLabel = screen.getByText('gateway');
+    const chip = chipLabel.closest('span.inline-flex');
     expect(chipLabel.className).toContain('truncate');
-    expect(chipLabel.closest('span.inline-flex')?.className).toContain('min-w-0');
-    expect(chipLabel.closest('span.inline-flex')?.className).not.toContain('shrink-0');
+    expect(chip?.className).toContain('w-20');
+    expect(chip?.className).toContain('shrink-0');
+    expect(chip?.closest('[data-tooltip]')?.getAttribute('data-tooltip')).toBe('gateway');
+  });
+
+  it('collapses several projects into one count naming them', () => {
+    state.projects = [{}, {}];
+    state.sessionProjectMounts = {
+      [SESSION_ID]: [
+        { projectId: 'project-1', mountName: 'core-api' },
+        { projectId: 'project-2', mountName: 'web-console' },
+      ],
+    };
+    render(<StageBoardCard session={session} nav={nav} />);
+    expect(screen.queryByText('core-api')).toBeNull();
+    expect(screen.getByLabelText('2 projects: core-api, web-console')).toBeDefined();
+    const chip = screen.getByLabelText('2 projects: core-api, web-console');
+    expect(chip.textContent).toBe('2 projects');
+    expect(chip.className).toContain('w-20');
+    expect(chip.closest('[data-tooltip]')?.getAttribute('data-tooltip')).toBe(
+      'core-api, web-console',
+    );
   });
 
   it('keeps the lifecycle slot bottom right over the trailing metadata', () => {
