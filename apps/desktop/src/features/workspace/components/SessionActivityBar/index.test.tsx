@@ -80,7 +80,7 @@ function renderBar(
 }
 
 function toggleArchivedTab() {
-  fireEvent.click(screen.getByRole('button', { name: /^Archived \(\d+\)$/ }));
+  fireEvent.click(screen.getByRole('button', { name: /^(Show|Hide) archived \(\d+\)$/ }));
 }
 
 function rowAt(index: number): HTMLElement {
@@ -169,7 +169,7 @@ describe('SessionActivityBar, baseline', () => {
     const onArchivedTabOpen = vi.fn();
     renderBar([makeSession('s-1', 'archived one')], [], vi.fn(), onArchivedTabOpen);
 
-    const toggle = screen.getByRole('button', { name: 'Archived (1)' });
+    const toggle = screen.getByRole('button', { name: 'Show archived (1)' });
     fireEvent.click(toggle);
 
     expect(onArchivedTabOpen).toHaveBeenCalledOnce();

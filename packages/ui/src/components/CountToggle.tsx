@@ -1,4 +1,4 @@
-import type { LucideIcon } from 'lucide-react';
+import { Check, type LucideIcon } from 'lucide-react';
 import { cn } from '../cn';
 
 export type Props = {
@@ -7,14 +7,18 @@ export type Props = {
   readonly isShown: boolean;
   readonly icon: LucideIcon;
   readonly onChange: (isShown: boolean) => void;
+  readonly isFilter?: boolean;
 };
 
-export const CountToggle = ({ label, count, isShown, icon, onChange }: Props) => {
+export const CountToggle = ({ label, count, isShown, icon, onChange, isFilter = false }: Props) => {
   if (count === 0) {
     return null;
   }
 
   const Icon = icon;
+  const text = isFilter
+    ? `${label} (${count})`
+    : `${isShown ? 'Hide' : 'Show'} ${label} (${count})`;
 
   return (
     <button
@@ -29,7 +33,8 @@ export const CountToggle = ({ label, count, isShown, icon, onChange }: Props) =>
       )}
     >
       <Icon size={10} aria-hidden />
-      {label} ({count})
+      {text}
+      {isFilter && isShown ? <Check size={10} aria-hidden /> : null}
     </button>
   );
 };

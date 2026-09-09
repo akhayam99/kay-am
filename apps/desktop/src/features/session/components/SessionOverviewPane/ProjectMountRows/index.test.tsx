@@ -303,7 +303,7 @@ describe('ProjectMountRows', () => {
     render(<ProjectMountRows session={session} onSelectLens={vi.fn()} />);
 
     expect(screen.getAllByTestId('project-mount-row')).toHaveLength(1);
-    const toggle = screen.getByRole('button', { name: /Completed \(1\)/ });
+    const toggle = screen.getByRole('button', { name: /Show completed \(1\)/ });
     fireEvent.click(toggle);
 
     const rows = screen.getAllByTestId('project-mount-row');

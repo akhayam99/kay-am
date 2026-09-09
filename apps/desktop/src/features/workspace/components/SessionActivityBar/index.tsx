@@ -168,7 +168,7 @@ export const SessionActivityBar = ({
           <div className="flex items-center gap-0.5">
             <ProjectFilter workspaceId={workspaceId} sessions={filterSessions} />
             <CountToggle
-              label="Archived"
+              label="archived"
               count={archivedSessions.length}
               icon={Archive}
               isShown={isArchivedView}

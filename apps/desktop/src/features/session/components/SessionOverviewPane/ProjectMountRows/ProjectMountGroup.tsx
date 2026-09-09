@@ -80,7 +80,7 @@ export const ProjectMountGroup = ({
         )}
         <div className="ml-auto flex shrink-0 items-center gap-1">
           <CountToggle
-            label="Completed"
+            label="completed"
             count={group.completedRows.length}
             isShown={isCompletedShown}
             icon={ChevronDown}
