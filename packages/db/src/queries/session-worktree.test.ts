@@ -12,6 +12,8 @@ import {
   listMountPathOwnership,
   listSessionMounts,
   listWorktreesForSession,
+  markSessionMountRemoved,
+  markSessionMountRemovedByPath,
   updateSessionMountBranch,
   updateSessionWorktreeRepoSlug,
 } from './session-worktree';
@@ -204,6 +206,92 @@ describe('deleteWorktreesForSession', () => {
       isAttached: false,
       diskState: 'removed',
     });
+    expect(sessions[0]?.active_mount_id).toBeNull();
+  });
+});
+
+describe('markSessionMountRemoved', () => {
+  const seedThreeMounts = async (db: Database): Promise<void> => {
+    for (const [index, id] of ['mount-a', 'mount-b', 'mount-c'].entries()) {
+      await insertSessionWorktree(db, {
+        id,
+        sessionId,
+        worktreePath: `/tmp/wt/${id}`,
+        branch: `feature/${id}`,
+        parallelIndex: index,
+        createdAt: Date.now(),
+      });
+    }
+  };
+
+  it('releases only the addressed mount and clears it as the active one', async () => {
+    const db = await seed();
+    await seedThreeMounts(db);
+    await db.execute('UPDATE sessions SET active_mount_id = ? WHERE id = ?', [
+      'mount-b',
+      sessionId,
+    ]);
+
+    const written = await markSessionMountRemoved({
+      db,
+      sessionId,
+      mountId: 'mount-b' as MountId,
+    });
+
+    const mounts = await listSessionMounts({ db, sessionId });
+    const sessions = await db.select<{ readonly active_mount_id: string | null }>(
+      'SELECT active_mount_id FROM sessions WHERE id = ?',
+      [sessionId],
+    );
+    expect(written).toBe(true);
+    expect(mounts.map((mount) => [mount.id, mount.diskState, mount.worktreePath])).toEqual([
+      ['mount-a', 'unchecked', '/tmp/wt/mount-a'],
+      ['mount-b', 'removed', null],
+      ['mount-c', 'unchecked', '/tmp/wt/mount-c'],
+    ]);
+    expect(sessions[0]?.active_mount_id).toBeNull();
+  });
+
+  it('reports no write when the addressed mount belongs to another session', async () => {
+    const db = await seed();
+    await seedThreeMounts(db);
+
+    const written = await markSessionMountRemoved({
+      db,
+      sessionId: otherSessionId,
+      mountId: 'mount-a' as MountId,
+    });
+
+    const mounts = await listSessionMounts({ db, sessionId });
+    expect(written).toBe(false);
+    expect(mounts[0]).toMatchObject({ worktreePath: '/tmp/wt/mount-a', diskState: 'unchecked' });
+  });
+
+  it('releases a mount addressed by its worktree path alone', async () => {
+    const db = await seed();
+    await seedThreeMounts(db);
+    await db.execute('UPDATE sessions SET active_mount_id = ? WHERE id = ?', [
+      'mount-c',
+      sessionId,
+    ]);
+
+    const written = await markSessionMountRemovedByPath({
+      db,
+      sessionId,
+      worktreePath: '/tmp/wt/mount-c',
+    });
+
+    const mounts = await listSessionMounts({ db, sessionId });
+    const sessions = await db.select<{ readonly active_mount_id: string | null }>(
+      'SELECT active_mount_id FROM sessions WHERE id = ?',
+      [sessionId],
+    );
+    expect(written).toBe(true);
+    expect(mounts.map((mount) => [mount.id, mount.diskState, mount.worktreePath])).toEqual([
+      ['mount-a', 'unchecked', '/tmp/wt/mount-a'],
+      ['mount-b', 'unchecked', '/tmp/wt/mount-b'],
+      ['mount-c', 'removed', null],
+    ]);
     expect(sessions[0]?.active_mount_id).toBeNull();
   });
 });

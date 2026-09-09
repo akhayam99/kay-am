@@ -4,7 +4,6 @@ import { forkMount } from './forkMount';
 import { inspectMount } from './inspectMount';
 import { loadSessionMounts } from './loadSessionMounts';
 import { openMountRequest } from './openMountRequest';
-import { recoverMountOperations } from './recoverMountOperations';
 import { resolveMountBranchMismatch } from './resolveMountBranchMismatch';
 import { setSessionActiveMount } from './setSessionActiveMount';
 import { switchMount } from './switchMount';
@@ -21,7 +20,6 @@ export const createProjectMountsSlice = (set: SetFn, get: GetFn) => {
     attachMount: attachMount(set, get),
     unmountMount: unmountMount(set, get),
     inspectMount: inspectMount(set, get),
-    recoverMountOperations: recoverMountOperations(set, get),
     resolveMountBranchMismatch: resolveMountBranchMismatch(set, get),
     setSessionActiveMount: setSessionActiveMount(set, get),
   };

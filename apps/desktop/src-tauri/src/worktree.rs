@@ -20,6 +20,10 @@ pub enum WorktreeError {
     NoCommit(String),
     #[error("git failed: {message}")]
     Git { message: String },
+    #[error(
+        "branch {branch} is already checked out at {path}. switch that worktree to another branch, or fork a new one instead"
+    )]
+    BranchInUse { branch: String, path: String },
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
     #[error("invalid utf-8 in git output")]
@@ -35,6 +39,7 @@ impl WorktreeError {
             WorktreeError::NoRepository(_) => "no_repository",
             WorktreeError::NoCommit(_) => "no_commit",
             WorktreeError::Git { .. } => "git",
+            WorktreeError::BranchInUse { .. } => "branch_in_use",
             WorktreeError::Io(_) => "io",
             WorktreeError::InvalidUtf8 => "invalid_utf8",
         }
@@ -97,6 +102,7 @@ pub enum WorktreeRemovalReason {
     UntrackedFiles,
     UnmergedConflicts,
     OperationInProgress,
+    WriterLeaseHeld,
 }
 
 #[derive(Debug, Serialize, PartialEq, Eq)]
@@ -395,6 +401,18 @@ pub async fn worktree_create(args: CreateArgs) -> Result<CreatedWorktree, Worktr
         .map_err(|e| WorktreeError::Io(std::io::Error::other(e.to_string())))?
 }
 
+fn branch_checkout_path_with(
+    repo_path: &Path,
+    branch: &str,
+    run_git: &mut dyn FnMut(&Path, &[&str]) -> Result<String, WorktreeError>,
+) -> Option<String> {
+    let stdout = run_git(repo_path, &["worktree", "list", "--porcelain"]).ok()?;
+    parse_porcelain(&stdout)
+        .into_iter()
+        .find(|entry| entry.branch.as_deref() == Some(branch))
+        .map(|entry| entry.path)
+}
+
 fn worktree_create_blocking(args: CreateArgs) -> Result<CreatedWorktree, WorktreeError> {
     let repo_path = PathBuf::from(&args.repo_path);
     if !repo_path.exists() {
@@ -469,6 +487,14 @@ fn worktree_create_blocking(args: CreateArgs) -> Result<CreatedWorktree, Worktre
         )
         .is_ok();
         if local_exists {
+            if let Some(holder) =
+                branch_checkout_path_with(&repo_path, name, &mut |cwd, args| git(cwd, args))
+            {
+                return Err(WorktreeError::BranchInUse {
+                    branch: name.to_string(),
+                    path: holder,
+                });
+            }
             git(
                 &repo_path,
                 &[
@@ -910,12 +936,20 @@ pub(crate) fn remove_worktree_checked_with(
     repo_path: &Path,
     worktree_path: &Path,
     run_git: &mut dyn FnMut(&Path, &[&str]) -> Result<String, WorktreeError>,
+    is_lease_live: &mut dyn FnMut(&Path) -> bool,
 ) -> Result<WorktreeRemovalResult, WorktreeError> {
     let target = match validate_removal_with(repo_path, worktree_path, run_git) {
         Ok(found) => found,
         Err(result) => return Ok(result),
     };
     let target_string = target.to_string_lossy().into_owned();
+    let leased = WorktreeRemovalResult::Kept {
+        path: target_string.clone(),
+        reasons: vec![WorktreeRemovalReason::WriterLeaseHeld],
+    };
+    if is_lease_live(&target) {
+        return Ok(leased);
+    }
     let remove_args = ["worktree", "remove", "--force", target_string.as_str()];
     let first = run_git(repo_path, &remove_args);
     if first.is_ok() {
@@ -936,6 +970,9 @@ pub(crate) fn remove_worktree_checked_with(
             });
         }
         Err(result) => return Ok(result),
+    }
+    if is_lease_live(&target) {
+        return Ok(leased);
     }
     if run_git(repo_path, &remove_args).is_ok() {
         return Ok(WorktreeRemovalResult::Removed {
@@ -1000,27 +1037,33 @@ pub async fn worktree_git_common_dir(repo_path: String) -> Option<String> {
     .flatten()
 }
 
+pub(crate) fn remove_worktree_checked_leased(
+    registry: &crate::worktree_writer::WriterLeaseRegistry,
+    repo_path: &Path,
+    worktree_path: &Path,
+) -> Result<WorktreeRemovalResult, WorktreeError> {
+    remove_worktree_checked_with(
+        repo_path,
+        worktree_path,
+        &mut |cwd, args| git(cwd, args),
+        &mut |path| {
+            crate::worktree_writer::is_lease_live(registry, path.to_string_lossy().as_ref())
+        },
+    )
+}
+
 #[tauri::command]
 pub async fn worktree_remove_checked(
+    leases: tauri::State<'_, crate::worktree_writer::WriterLeases>,
     repo_path: String,
     worktree_path: String,
 ) -> Result<WorktreeRemovalResult, WorktreeError> {
+    let registry = leases.0.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        worktree_remove_checked_blocking(repo_path, worktree_path)
+        remove_worktree_checked_leased(&registry, Path::new(&repo_path), Path::new(&worktree_path))
     })
     .await
     .map_err(|e| WorktreeError::Io(std::io::Error::other(e.to_string())))?
-}
-
-fn worktree_remove_checked_blocking(
-    repo_path: String,
-    worktree_path: String,
-) -> Result<WorktreeRemovalResult, WorktreeError> {
-    remove_worktree_checked_with(
-        Path::new(&repo_path),
-        Path::new(&worktree_path),
-        &mut |cwd, args| git(cwd, args),
-    )
 }
 
 fn exclude_file_path(repo_path: &Path) -> Option<PathBuf> {
@@ -2806,7 +2849,7 @@ fn parse_porcelain(stdout: &str) -> Vec<WorktreeInfo> {
             } else if let Some(rest) = line.strip_prefix("HEAD ") {
                 head = rest.to_string();
             } else if let Some(rest) = line.strip_prefix("branch ") {
-                branch = Some(rest.trim_start_matches("refs/heads/").to_string());
+                branch = Some(rest.strip_prefix("refs/heads/").unwrap_or(rest).to_string());
             } else if line == "detached" {
                 branch = None;
             }
@@ -2864,7 +2907,7 @@ fn parse_registered_worktrees(stdout: &str) -> Vec<RegisteredWorktree> {
 #[cfg(test)]
 mod rewrite_tests {
     use super::{
-        worktree_amend_commit_blocking, worktree_create_blocking, worktree_remove_checked_blocking,
+        remove_worktree_checked_with, worktree_amend_commit_blocking, worktree_create_blocking,
         worktree_squash_commits_blocking, worktree_status_blocking, CreateArgs, GitDistance,
         GitUnknownReason, GitWorkingTree, RewriteArgs,
     };
@@ -3374,6 +3417,69 @@ mod rewrite_tests {
     }
 
     #[test]
+    fn a_branch_checked_out_elsewhere_is_read_from_the_worktree_listing() {
+        let listing = "worktree /repo\nHEAD aaaa\nbranch refs/heads/main\n\nworktree /repo/.goodboy/worktrees/one\nHEAD bbbb\nbranch refs/heads/feature/one\n\nworktree /repo/.goodboy/worktrees/two\nHEAD cccc\ndetached\n";
+
+        let holder = super::branch_checkout_path_with(Path::new("/repo"), "feature/one", &mut |_, _| {
+            Ok(listing.to_string())
+        });
+        let free = super::branch_checkout_path_with(Path::new("/repo"), "feature/two", &mut |_, _| {
+            Ok(listing.to_string())
+        });
+
+        assert_eq!(holder.as_deref(), Some("/repo/.goodboy/worktrees/one"));
+        assert_eq!(free, None);
+    }
+
+    #[test]
+    fn adopting_a_branch_another_worktree_holds_names_that_worktree() {
+        let root = std::fs::canonicalize(init_repo("adopt-in-use")).unwrap();
+        commit(&root, "a.txt", "a\n", "first");
+        let parent_dir = root.join(".goodboy").join("worktrees");
+        let holder = parent_dir.join("holder");
+        std::fs::create_dir_all(&parent_dir).unwrap();
+        git_ok(
+            &root,
+            &[
+                "worktree",
+                "add",
+                "-b",
+                "feature/shared",
+                holder.to_str().unwrap(),
+            ],
+        );
+
+        let error = worktree_create_blocking(CreateArgs {
+            repo_path: root.to_string_lossy().into_owned(),
+            branch_prefix: "feature".to_string(),
+            slug: "shared".to_string(),
+            parent_dir: Some(parent_dir.to_string_lossy().into_owned()),
+            existing_branch: Some("feature/shared".to_string()),
+            fallback_ref: None,
+            base_branch: None,
+            dir_name: Some("second".to_string()),
+        })
+        .unwrap_err();
+
+        let wire = serde_json::to_value(&error).unwrap();
+        let super::WorktreeError::BranchInUse { branch, path } = error else {
+            panic!("expected a branch-in-use error, found {error:?}");
+        };
+        assert_eq!(branch, "feature/shared");
+        assert_eq!(
+            std::fs::canonicalize(&path).unwrap(),
+            std::fs::canonicalize(&holder).unwrap()
+        );
+        assert_eq!(wire["kind"], "branch_in_use");
+        assert!(wire["message"]
+            .as_str()
+            .unwrap()
+            .contains(holder.to_string_lossy().as_ref()));
+        assert!(!parent_dir.join("second").exists());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn refuses_to_create_a_worktree_before_the_repository_exists() {
         let root = temp_root("create-without-git");
 
@@ -3545,6 +3651,16 @@ mod rewrite_tests {
         assert!(!root.join(".git").join("rebase-apply").exists());
     }
 
+    fn remove_checked(root: &Path, worktree_path: &str) {
+        remove_worktree_checked_with(
+            root,
+            Path::new(worktree_path),
+            &mut |cwd, args| super::git(cwd, args),
+            &mut |_| false,
+        )
+        .unwrap();
+    }
+
     fn create_session_mount(root: &Path, slug: &str) -> super::CreatedWorktree {
         let parent = root.join(".goodboy").join("worktrees");
         worktree_create_blocking(CreateArgs {
@@ -3679,11 +3795,7 @@ mod rewrite_tests {
             1
         );
 
-        worktree_remove_checked_blocking(
-            root.to_string_lossy().into_owned(),
-            created.worktree_path.clone(),
-        )
-        .unwrap();
+        remove_checked(&root, &created.worktree_path);
 
         assert!(!Path::new(&created.worktree_path).exists());
         let after = std::fs::read_to_string(&exclude_path).unwrap();
@@ -3698,11 +3810,7 @@ mod rewrite_tests {
         push_to_new_remote(&root);
         let created = create_session_mount(&root, "goal-tidy0001");
 
-        worktree_remove_checked_blocking(
-            root.to_string_lossy().into_owned(),
-            created.worktree_path.clone(),
-        )
-        .unwrap();
+        remove_checked(&root, &created.worktree_path);
         super::tidy_goodboy_dir(&root);
 
         assert!(!root.join(".goodboy").exists());
@@ -3723,11 +3831,7 @@ mod rewrite_tests {
         let removed = create_session_mount(&root, "goal-tidy0002");
         let survivor = create_session_mount(&root, "goal-tidy0003");
 
-        worktree_remove_checked_blocking(
-            root.to_string_lossy().into_owned(),
-            removed.worktree_path.clone(),
-        )
-        .unwrap();
+        remove_checked(&root, &removed.worktree_path);
         super::tidy_goodboy_dir(&root);
 
         assert!(Path::new(&survivor.worktree_path).is_dir());
@@ -3744,9 +3848,10 @@ mod rewrite_tests {
 #[cfg(test)]
 mod teardown_tests {
     use super::{
-        collect_orphans, inspect_worktree_with, remove_worktree_checked_with,
-        worktree_directory_size_blocking, worktree_orphan_remove_blocking, WorktreeError,
-        WorktreeInspection, WorktreeRemovalReason, WorktreeRemovalResult,
+        collect_orphans, inspect_worktree_with, remove_worktree_checked_leased,
+        remove_worktree_checked_with, worktree_directory_size_blocking,
+        worktree_orphan_remove_blocking, WorktreeError, WorktreeInspection, WorktreeRemovalReason,
+        WorktreeRemovalResult,
     };
     use std::path::{Path, PathBuf};
 
@@ -3806,7 +3911,13 @@ mod teardown_tests {
     }
 
     fn remove(root: &Path, target: &Path) -> WorktreeRemovalResult {
-        remove_worktree_checked_with(root, target, &mut |cwd, args| super::git(cwd, args)).unwrap()
+        remove_worktree_checked_with(
+            root,
+            target,
+            &mut |cwd, args| super::git(cwd, args),
+            &mut |_| false,
+        )
+        .unwrap()
     }
 
     fn kept_reasons(result: WorktreeRemovalResult) -> Vec<WorktreeRemovalReason> {
@@ -3963,6 +4074,58 @@ mod teardown_tests {
     }
 
     #[test]
+    fn a_lease_taken_through_a_symlinked_path_keeps_the_worktree() {
+        let root = init_repo("remove-leased-symlink");
+        let target = add_worktree(&root, "leased");
+        let mirror = temp_root("remove-leased-mirror").join("mirror");
+        std::os::unix::fs::symlink(&root, &mirror).unwrap();
+        let path_the_agent_sees = mirror.join("worktrees").join("leased");
+        let registry = crate::worktree_writer::WriterLeases::new().0;
+        let granted = crate::worktree_writer::acquire_lease(
+            &registry,
+            path_the_agent_sees.to_string_lossy().as_ref(),
+            "agent-1",
+            None,
+        );
+
+        let result = remove_worktree_checked_leased(&registry, &root, &target).unwrap();
+
+        assert!(granted.is_granted);
+        assert_ne!(path_the_agent_sees, target);
+        assert_eq!(
+            kept_reasons(result),
+            vec![WorktreeRemovalReason::WriterLeaseHeld]
+        );
+        assert!(target.join("tracked.txt").exists());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_released_lease_no_longer_keeps_the_worktree() {
+        let root = init_repo("remove-lease-released");
+        let target = add_worktree(&root, "released");
+        let registry = crate::worktree_writer::WriterLeases::new().0;
+        let granted = crate::worktree_writer::acquire_lease(
+            &registry,
+            target.to_string_lossy().as_ref(),
+            "agent-1",
+            None,
+        );
+        crate::worktree_writer::release_lease(
+            &registry,
+            target.to_string_lossy().as_ref(),
+            "agent-1",
+            granted.token.as_deref(),
+        );
+
+        let result = remove_worktree_checked_leased(&registry, &root, &target).unwrap();
+
+        assert!(matches!(result, WorktreeRemovalResult::Removed { .. }));
+        assert!(!target.exists());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn fallback_removes_only_the_revalidated_registered_target() {
         let root = init_repo("remove-fallback");
         let target = add_worktree(&root, "fallback");
@@ -3976,13 +4139,18 @@ mod teardown_tests {
         std::fs::create_dir_all(&neighbor).unwrap();
         let mut remove_attempts = 0;
 
-        let result = remove_worktree_checked_with(&root, &target, &mut |cwd, args| {
-            if args.starts_with(&["worktree", "remove"]) {
-                remove_attempts += 1;
-                return Err(not_empty());
-            }
-            super::git(cwd, args)
-        })
+        let result = remove_worktree_checked_with(
+            &root,
+            &target,
+            &mut |cwd, args| {
+                if args.starts_with(&["worktree", "remove"]) {
+                    remove_attempts += 1;
+                    return Err(not_empty());
+                }
+                super::git(cwd, args)
+            },
+            &mut |_| false,
+        )
         .unwrap();
 
         assert!(matches!(result, WorktreeRemovalResult::Removed { .. }));
@@ -3998,18 +4166,23 @@ mod teardown_tests {
         let displaced = root.join("displaced");
         let mut remove_attempts = 0;
 
-        let result = remove_worktree_checked_with(&root, &target, &mut |cwd, args| {
-            if args.starts_with(&["worktree", "remove"]) {
-                remove_attempts += 1;
-                if remove_attempts == 2 {
-                    std::fs::rename(&target, &displaced).unwrap();
-                    std::fs::create_dir_all(&target).unwrap();
-                    std::fs::write(target.join("precious.txt"), "keep").unwrap();
+        let result = remove_worktree_checked_with(
+            &root,
+            &target,
+            &mut |cwd, args| {
+                if args.starts_with(&["worktree", "remove"]) {
+                    remove_attempts += 1;
+                    if remove_attempts == 2 {
+                        std::fs::rename(&target, &displaced).unwrap();
+                        std::fs::create_dir_all(&target).unwrap();
+                        std::fs::write(target.join("precious.txt"), "keep").unwrap();
+                    }
+                    return Err(not_empty());
                 }
-                return Err(not_empty());
-            }
-            super::git(cwd, args)
-        })
+                super::git(cwd, args)
+            },
+            &mut |_| false,
+        )
         .unwrap();
 
         assert_eq!(
