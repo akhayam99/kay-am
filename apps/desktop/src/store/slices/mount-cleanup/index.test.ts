@@ -333,36 +333,32 @@ describe('cleaning the mounts of a session', () => {
     expect(row?.['diskState']).toBe('removed');
   });
 
-  it('keeps a directory a writer lease still holds and proposes it instead', async () => {
+  it('keeps a directory the removal command refuses over a live writer lease', async () => {
     seedMount();
-    h.worktreeWriterStatus.mockResolvedValue({
+    h.removeWorktreeChecked.mockResolvedValue({
+      kind: 'kept',
       path: WORKTREE_PATH,
-      holder: 'run-1',
-      token: 't',
-      runId: 'run-1',
-      isGranted: true,
-      hasExited: false,
-      waiting: [],
+      reasons: ['writer-lease-held'],
     });
     const { slice } = makeSlice();
 
     const outcomes = await slice.cleanupSessionMounts({ sessionId: SESSION_ID, reason: 'archive' });
 
-    expect(h.removeWorktreeChecked).not.toHaveBeenCalled();
+    expect(h.worktreeWriterStatus).not.toHaveBeenCalled();
     expect(outcomes[0]?.decision).toMatchObject({
       kind: 'kept',
-      reason: 'a writer lease still holds the worktree',
+      reason: 'writer-lease-held',
     });
     expect(h.rows.get(MOUNT_ID)?.['worktreePath']).toBe(WORKTREE_PATH);
   });
 
-  it('keeps a directory whose lease the status command reports without a grant', async () => {
+  it('removes a directory whose holder the registry has already let go', async () => {
     seedMount();
     h.worktreeWriterStatus.mockResolvedValue({
       path: WORKTREE_PATH,
-      holder: 'run-2',
+      holder: 'run-1',
       token: null,
-      runId: 'run-2',
+      runId: null,
       isGranted: false,
       hasExited: false,
       waiting: [],
@@ -371,11 +367,11 @@ describe('cleaning the mounts of a session', () => {
 
     const outcomes = await slice.cleanupSessionMounts({ sessionId: SESSION_ID, reason: 'archive' });
 
-    expect(h.removeWorktreeChecked).not.toHaveBeenCalled();
-    expect(outcomes[0]?.decision).toMatchObject({
-      kind: 'kept',
-      reason: 'a writer lease still holds the worktree',
+    expect(h.removeWorktreeChecked).toHaveBeenCalledWith({
+      repoPath: REPO_ROOT,
+      worktreePath: WORKTREE_PATH,
     });
+    expect(outcomes[0]?.decision).toMatchObject({ kind: 'removed' });
   });
 
   it('never deletes a local branch or the pull request ownership of a mount', async () => {
