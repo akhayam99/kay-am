@@ -1,5 +1,7 @@
 import type { SessionMountView } from '@goodboy/types';
+import { runMountRecoveryOnce } from './mountRecoveryGuard';
 import { applyMountViews, loadMountViews } from './mountViews';
+import { recoverMountOperations } from './recoverMountOperations';
 import { verifyAvailableWorktrees } from './verifyAvailableWorktrees';
 import type { GetFn, SessionKeyInput, SetFn } from './types';
 
@@ -29,6 +31,10 @@ export const loadSessionMounts = (set: SetFn, get: GetFn) => {
       return { ...view, isAttached: false, diskState: 'unchecked' };
     });
     applyMountViews({ set, sessionId, views: verifiedViews });
+    runMountRecoveryOnce({
+      sessionId,
+      run: () => recoverMountOperations(set, get)({ sessionId }),
+    });
     return verifiedViews;
   };
 };
