@@ -14,6 +14,7 @@ import type { OverflowMenuItem } from '@goodboy/ui';
 import type { FileDiff } from '@goodboy/types';
 import type { ResolveChecksSummary } from '../../checkReceipts';
 import type { ResolveQueueRow } from '../../buildResolveQueueRows';
+import { EMPTY_REFUSAL_REPLY } from '../../../../store/slices/resolve/refuseResolveQueueItem';
 import { RESOLVE_ITEM_LABEL, runNote } from '../../resolveItemCopy';
 import {
   RESOLVE_COMMENT_UNAVAILABLE,
@@ -21,6 +22,7 @@ import {
   RESOLVE_QUEUE_STATUS_LABEL,
   sharedRunHeading,
 } from '../../resolveQueueCopy';
+import { deliverySupportLine } from '../../resolveDeliverySupport';
 import { BADGE_TONE_BY_STATUS } from '../ResolveQueueHome/statusTone';
 import { ChangeBlock } from './ChangeBlock';
 import { ChecksBlock } from './ChecksBlock';
@@ -44,6 +46,7 @@ type Props = {
   readonly isBusy: boolean;
   readonly canApprove: boolean;
   readonly approveBlockedReason: string | null;
+  readonly refuseBlockedReason: string | null;
   readonly canRunCheck: boolean;
   readonly isCheckRunning: boolean;
   readonly checksNote: string | null;
@@ -53,6 +56,9 @@ type Props = {
   readonly onApprove: () => void;
   readonly onStartRevise: () => void;
   readonly onCancelRevise: () => void;
+  readonly onStartRefuse: () => void;
+  readonly onCancelRefuse: () => void;
+  readonly onRefuse: () => void;
   readonly onSendToAgent: () => void;
   readonly onLater: () => void;
   readonly onReopen: () => void;
@@ -79,6 +85,7 @@ export const ResolveItemView = ({
   isBusy,
   canApprove,
   approveBlockedReason,
+  refuseBlockedReason,
   canRunCheck,
   isCheckRunning,
   checksNote,
@@ -88,6 +95,9 @@ export const ResolveItemView = ({
   onApprove,
   onStartRevise,
   onCancelRevise,
+  onStartRefuse,
+  onCancelRefuse,
+  onRefuse,
   onSendToAgent,
   onLater,
   onReopen,
@@ -99,7 +109,8 @@ export const ResolveItemView = ({
   onSelectRelated,
 }: Props) => {
   const note = runNote({ stateReason: row.thread.stateReason });
-  const isDelivered = row.status === 'pushed';
+  const isDelivered = row.status === 'pushed' || row.status === 'wont_fix_sent';
+  const isReplyBlank = reply.trim() === '';
   const question = row.thread.question;
   const fieldId = `resolve-item-${row.thread.threadId}`;
   const menuItems: ReadonlyArray<OverflowMenuItem> = isDelivered
@@ -119,6 +130,14 @@ export const ResolveItemView = ({
           label: RESOLVE_QUEUE_ACTION_LABEL.askForChanges,
           disabled: isBusy,
           onClick: onStartRevise,
+        },
+        {
+          kind: 'item',
+          key: 'wont-fix',
+          label: RESOLVE_QUEUE_ACTION_LABEL.wontFix,
+          disabled: isBusy || refuseBlockedReason !== null,
+          hint: refuseBlockedReason ?? undefined,
+          onClick: onStartRefuse,
         },
         {
           kind: 'item',
@@ -179,6 +198,7 @@ export const ResolveItemView = ({
             mode={mode}
             isDelivered={isDelivered}
             deliveredReply={row.delivery?.replyBody ?? null}
+            deliverySupport={deliverySupportLine({ row })}
             isBusy={isBusy}
             onChangeReply={onChangeReply}
             onChangeInstruction={onChangeInstruction}
@@ -236,6 +256,25 @@ export const ResolveItemView = ({
           )}
         </div>
       </ScrollFade>
+      {mode === 'refuse' && (
+        <>
+          <Divider />
+          <div className="flex shrink-0 items-center justify-end gap-3 px-3 py-2">
+            {isReplyBlank && <p className="mr-auto text-2xs text-warning">{EMPTY_REFUSAL_REPLY}</p>}
+            <Button size="sm" variant="ghost" disabled={isBusy} onClick={onCancelRefuse}>
+              {RESOLVE_QUEUE_ACTION_LABEL.cancel}
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={isBusy || isReplyBlank}
+              onClick={onRefuse}
+            >
+              {RESOLVE_QUEUE_ACTION_LABEL.wontFix}
+            </Button>
+          </div>
+        </>
+      )}
       {mode === 'revise' && (
         <>
           <Divider />

@@ -5,10 +5,10 @@ import { formatAbsoluteDateTime, formatRelativeAge } from '../../../../shared/ut
 import { stripInlineMarkdown } from '../../../../shared/components/InlineMarkdown/stripInlineMarkdown';
 import {
   RESOLVE_COMMENT_UNAVAILABLE,
-  RESOLVE_DELIVERY_SUPPORT,
   RESOLVE_QUEUE_ACTION_LABEL,
   RESOLVE_QUEUE_STATUS_LABEL,
 } from '../../resolveQueueCopy';
+import { deliverySupportLine } from '../../resolveDeliverySupport';
 import { shortSha } from '../../resolveItemCopy';
 import type { ResolveQueueRow as QueueRow } from '../../buildResolveQueueRows';
 import { BADGE_TONE_BY_STATUS } from './statusTone';
@@ -25,23 +25,6 @@ type Props = {
 const REVEAL_GROUP =
   'group-hover/resolve-row:opacity-100 group-focus-within/resolve-row:opacity-100';
 
-const deliverySupport = ({ row }: { readonly row: QueueRow }): string | null => {
-  if (row.status === 'ready_to_push') {
-    return RESOLVE_DELIVERY_SUPPORT.replyPending;
-  }
-  const delivery = row.delivery;
-  if (delivery === null) {
-    return null;
-  }
-  const reply = delivery.isReplyPosted
-    ? RESOLVE_DELIVERY_SUPPORT.replyPosted
-    : RESOLVE_DELIVERY_SUPPORT.replyPending;
-  const thread = delivery.isThreadResolved
-    ? RESOLVE_DELIVERY_SUPPORT.threadResolved
-    : RESOLVE_DELIVERY_SUPPORT.threadLeftOpen;
-  return `${reply} · ${thread}`;
-};
-
 const deliveryTimeMs = ({ row }: { readonly row: QueueRow }): number | null =>
   row.delivery === null ? null : (row.delivery.replyPostedAt ?? row.delivery.resolvedAt);
 
@@ -57,7 +40,7 @@ export const ResolveQueueRow = ({
   const body = reviewerNote?.body ?? null;
   const accessibleName =
     body === null ? RESOLVE_COMMENT_UNAVAILABLE : stripInlineMarkdown({ text: body });
-  const support = deliverySupport({ row });
+  const support = deliverySupportLine({ row });
   const integratedSha = item.integratedSha;
   const postedAtMs = deliveryTimeMs({ row });
   const canDefer = item.approvalState === 'none' && status !== 'working';

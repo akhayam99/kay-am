@@ -114,6 +114,7 @@ const renderView = (overrides: Partial<Parameters<typeof ResolveItemView>[0]> = 
       isBusy={false}
       canApprove
       approveBlockedReason={null}
+      refuseBlockedReason={null}
       checksNote={null}
       canRunCheck={false}
       isCheckRunning={false}
@@ -123,6 +124,9 @@ const renderView = (overrides: Partial<Parameters<typeof ResolveItemView>[0]> = 
       onApprove={vi.fn()}
       onStartRevise={vi.fn()}
       onCancelRevise={vi.fn()}
+      onStartRefuse={vi.fn()}
+      onCancelRefuse={vi.fn()}
+      onRefuse={vi.fn()}
       onSendToAgent={vi.fn()}
       onLater={vi.fn()}
       onReopen={vi.fn()}
@@ -350,5 +354,70 @@ describe('the resolve item view', () => {
     expect(screen.getByRole('button', { name: 'Send to agent' }).hasAttribute('disabled')).toBe(
       true,
     );
+  });
+  it('offers the refusal from the overflow menu and edits the reviewer reply in place', () => {
+    const onStartRefuse = vi.fn();
+    renderView({ onStartRefuse });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Comment actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Will not fix' }));
+
+    expect(onStartRefuse).toHaveBeenCalledOnce();
+  });
+
+  it('blocks the refusal with its reason once the fix is already integrated', () => {
+    renderView({ refuseBlockedReason: 'Fix already integrated' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Comment actions' }));
+
+    const entry = screen.getByRole('menuitem', { name: /Will not fix/ });
+    expect(entry.hasAttribute('disabled')).toBe(true);
+    expect(screen.getByText('Fix already integrated')).toBeDefined();
+  });
+
+  it('refuses to post a blank refusal and says why', () => {
+    renderView({ mode: 'refuse', reply: '   ' });
+
+    expect(screen.getByRole('button', { name: 'Will not fix' }).hasAttribute('disabled')).toBe(
+      true,
+    );
+    expect(
+      screen.getByText('Write the reply the reviewer will read before you refuse'),
+    ).toBeDefined();
+  });
+
+  it('confirms the refusal from its own footer once the reply is written', () => {
+    const onRefuse = vi.fn();
+    renderView({ mode: 'refuse', reply: 'We are keeping this as it is.', onRefuse });
+
+    expect(screen.queryByRole('button', { name: 'Approve fix' })).toBeNull();
+    expect(screen.getByLabelText('Reply to reviewer')).toHaveProperty(
+      'value',
+      'We are keeping this as it is.',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Will not fix' }));
+
+    expect(onRefuse).toHaveBeenCalledOnce();
+  });
+
+  it('says a refused comment was answered and its reviewer thread left open', () => {
+    renderView({
+      row: {
+        ...LEAD,
+        status: 'wont_fix_sent',
+        delivery: {
+          isReplyPosted: true,
+          replyPostedAt: 10,
+          isThreadResolved: false,
+          resolvedAt: null,
+          isComplete: true,
+          replyBody: 'We are keeping this as it is.',
+        },
+      } as unknown as ResolveQueueRow,
+    });
+
+    expect(screen.getByText('Reply posted')).toBeDefined();
+    expect(screen.getByText('Reply posted · Thread left open')).toBeDefined();
+    expect(screen.queryByLabelText('Reply to reviewer')).toBeNull();
   });
 });

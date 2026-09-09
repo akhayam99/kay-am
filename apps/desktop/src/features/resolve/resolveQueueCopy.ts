@@ -20,6 +20,7 @@ export const RESOLVE_QUEUE_ACTION_LABEL = {
   resume: 'Resume',
   later: 'Later',
   approveFix: 'Approve fix',
+  wontFix: 'Will not fix',
   askForChanges: 'Ask agent to revise',
   send: 'Send to agent',
   startRun: 'Start resolve run',

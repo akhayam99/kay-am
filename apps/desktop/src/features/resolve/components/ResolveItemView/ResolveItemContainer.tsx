@@ -8,6 +8,7 @@ import { acceptedItemIds } from '../../acceptedItemIds';
 import { summariseResolveChecks } from '../../checkReceipts';
 import type { ResolveQueueRow } from '../../buildResolveQueueRows';
 import { useResolveCandidateDiff } from '../../hooks/useResolveCandidateDiff';
+import { refuseBlockedReason } from '../../refuseBlockedReason';
 import { candidateHeadSha, selectResolveCandidate } from '../../selectResolveCandidate';
 import { selectResolveCheckScript } from '../../selectResolveCheckScript';
 import type { ResolveCandidateWithItems } from '../../../../store/slices/resolve/state';
@@ -71,6 +72,7 @@ export const ResolveItemContainer = ({
       EMPTY_SCRIPT_GROUPS,
   );
   const acceptResolveQueueItem = useAppStore((s) => s.acceptResolveQueueItem);
+  const refuseResolveQueueItem = useAppStore((s) => s.refuseResolveQueueItem);
   const deferResolveQueueItem = useAppStore((s) => s.deferResolveQueueItem);
   const reopenResolveQueueItem = useAppStore((s) => s.reopenResolveQueueItem);
   const runResolveCheck = useAppStore((s) => s.runResolveCheck);
@@ -157,6 +159,20 @@ export const ResolveItemContainer = ({
     });
   };
 
+  const onRefuse = (): void => {
+    void guard({
+      run: async () => {
+        await refuseResolveQueueItem({
+          sessionId,
+          itemId: row.item.id,
+          revision: row.thread.revision,
+          reply,
+        });
+        setMode('reply');
+      },
+    });
+  };
+
   const onLater = (): void => {
     void guard({
       run: async () => {
@@ -213,6 +229,7 @@ export const ResolveItemContainer = ({
       isBusy={isBusy}
       canApprove={row.status === 'for_you' || row.status === 'changed_since_accepted'}
       approveBlockedReason={approveBlockedReasonFor({ row })}
+      refuseBlockedReason={refuseBlockedReason({ row })}
       canRunCheck={candidate !== null && checkScript !== null}
       isCheckRunning={isCheckRunning}
       checksNote={unprovable}
@@ -221,6 +238,12 @@ export const ResolveItemContainer = ({
       onChangeInstruction={setInstruction}
       onApprove={onApprove}
       onStartRevise={() => setMode('revise')}
+      onStartRefuse={() => setMode('refuse')}
+      onCancelRefuse={() => {
+        setReply(row.proposal ?? '');
+        setMode('reply');
+      }}
+      onRefuse={onRefuse}
       onCancelRevise={() => {
         setInstruction('');
         setMode('reply');

@@ -1,7 +1,7 @@
 import { Markdown, SectionHeader, Textarea } from '@goodboy/ui';
 import { RESOLVE_ITEM_LABEL } from '../../resolveItemCopy';
 
-export type ResolveDecisionMode = 'reply' | 'revise';
+export type ResolveDecisionMode = 'reply' | 'revise' | 'refuse';
 
 type Props = {
   readonly fieldId: string;
@@ -10,9 +10,23 @@ type Props = {
   readonly mode: ResolveDecisionMode;
   readonly isDelivered: boolean;
   readonly deliveredReply: string | null;
+  readonly deliverySupport: string | null;
   readonly isBusy: boolean;
   readonly onChangeReply: (value: string) => void;
   readonly onChangeInstruction: (value: string) => void;
+};
+
+const sectionLabel = ({
+  mode,
+  isDelivered,
+}: {
+  readonly mode: ResolveDecisionMode;
+  readonly isDelivered: boolean;
+}): string => {
+  if (isDelivered) {
+    return RESOLVE_ITEM_LABEL.replyPosted;
+  }
+  return mode === 'refuse' ? RESOLVE_ITEM_LABEL.refusalReply : RESOLVE_ITEM_LABEL.reply;
 };
 
 export const DecisionBlock = ({
@@ -22,21 +36,28 @@ export const DecisionBlock = ({
   mode,
   isDelivered,
   deliveredReply,
+  deliverySupport,
   isBusy,
   onChangeReply,
   onChangeInstruction,
 }: Props) => (
   <div className="flex min-w-0 flex-col gap-2">
     <SectionHeader
-      label={isDelivered ? RESOLVE_ITEM_LABEL.replyPosted : RESOLVE_ITEM_LABEL.reply}
+      label={sectionLabel({ mode, isDelivered })}
+      hint={mode === 'refuse' ? RESOLVE_ITEM_LABEL.refusalNote : undefined}
       headingLevel={3}
     />
     {isDelivered ? (
-      <Markdown
-        text={deliveredReply ?? reply}
-        variant="preview"
-        className="max-w-[65ch] text-sm text-foreground"
-      />
+      <>
+        <Markdown
+          text={deliveredReply ?? reply}
+          variant="preview"
+          className="max-w-[65ch] text-sm text-foreground"
+        />
+        {deliverySupport !== null && (
+          <p className="text-2xs text-muted-foreground">{deliverySupport}</p>
+        )}
+      </>
     ) : (
       <Textarea
         id={`${fieldId}-reply`}

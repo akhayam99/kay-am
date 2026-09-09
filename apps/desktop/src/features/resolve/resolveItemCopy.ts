@@ -11,6 +11,8 @@ export const RESOLVE_ITEM_LABEL = {
   reply: 'Reply',
   replyPreview: 'Reply to reviewer',
   replyPosted: 'Reply posted',
+  refusalReply: 'Reply the reviewer will read',
+  refusalNote: 'The reviewer thread stays open',
   run: 'Run',
   openInDiff: 'Open diff',
   backToResolve: 'Back to Resolve',
