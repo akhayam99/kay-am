@@ -9,6 +9,7 @@ import { ICON_SIZE } from '../../../../shared/components/conceptIcons';
 
 type Props = {
   readonly sessionId: SessionId;
+  readonly sessionTitle: string;
   readonly value: string;
   readonly historyCount: number;
   readonly isLoading: boolean;
@@ -30,6 +31,7 @@ const isTextGesture = ({ event }: ClickParams): boolean => {
 
 export const GoalOverviewRegion = ({
   sessionId,
+  sessionTitle,
   value,
   historyCount,
   isLoading,
@@ -74,6 +76,8 @@ export const GoalOverviewRegion = ({
   };
 
   const hasValue = value !== '';
+  const isSameAsTitle = hasValue && value.trim() === sessionTitle.trim();
+  const hasOwnText = hasValue && !isSameAsTitle;
 
   return (
     <section aria-label="Goal" className="flex min-w-0 flex-col gap-2">
@@ -139,12 +143,14 @@ export const GoalOverviewRegion = ({
           aria-label={hasValue ? 'Edit goal' : 'Add a goal'}
           className={cn(
             'min-w-0 max-w-full rounded-md motion-safe:transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-focus-ring)]',
-            hasValue ? 'text-foreground' : 'cursor-text text-sm text-muted-foreground',
+            hasOwnText ? 'text-foreground' : 'cursor-text text-sm text-muted-foreground',
             isSummarizing ? 'cursor-default' : 'cursor-text hover:bg-foreground/[0.03]',
           )}
         >
-          {hasValue ? (
+          {hasOwnText ? (
             <ClampedProse text={value} lines={4} className="text-sm text-foreground" />
+          ) : isSameAsTitle ? (
+            'Same as the title'
           ) : (
             'No goal yet'
           )}

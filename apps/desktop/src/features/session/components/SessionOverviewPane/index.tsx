@@ -70,6 +70,7 @@ export const SessionOverviewPane = ({ session, onSelectLens }: Props) => {
             goal={
               <GoalOverviewRegion
                 sessionId={sessionId}
+                sessionTitle={session.goal}
                 value={goalSlot?.value ?? ''}
                 historyCount={goalHistoryCount}
                 isLoading={goalSlot == null && slotLoading.slots}

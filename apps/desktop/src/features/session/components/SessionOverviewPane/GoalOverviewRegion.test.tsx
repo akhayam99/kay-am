@@ -38,6 +38,7 @@ const SESSION_ID = 'sess-1' as SessionId;
 
 type RenderParams = {
   readonly value?: string;
+  readonly sessionTitle?: string;
   readonly historyCount?: number;
   readonly isLoading?: boolean;
   readonly onOpenHistory?: () => void;
@@ -45,6 +46,7 @@ type RenderParams = {
 
 const renderRegion = ({
   value = 'Ship the parser rewrite',
+  sessionTitle = 'Rewrite the parser',
   historyCount = 2,
   isLoading = false,
   onOpenHistory = vi.fn(),
@@ -52,6 +54,7 @@ const renderRegion = ({
   render(
     <GoalOverviewRegion
       sessionId={SESSION_ID}
+      sessionTitle={sessionTitle}
       value={value}
       historyCount={historyCount}
       isLoading={isLoading}
@@ -157,6 +160,24 @@ describe('GoalOverviewRegion', () => {
     fireEvent.keyDown(input, { key: 'Enter', metaKey: true });
 
     expect(store.upsertSessionSlot).toHaveBeenCalledWith(SESSION_ID, 'goal', 'Ship the parser');
+  });
+
+  it('states the goal once when it still repeats the session title', () => {
+    renderRegion({ value: 'Ship the parser rewrite', sessionTitle: 'Ship the parser rewrite' });
+
+    expect(screen.queryByText('Ship the parser rewrite')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Edit goal' }).textContent).toContain(
+      'Same as the title',
+    );
+  });
+
+  it('shows the goal as soon as it says more than the title', () => {
+    renderRegion({
+      value: 'Ship the parser rewrite behind a flag',
+      sessionTitle: 'Ship the parser rewrite',
+    });
+
+    expect(screen.getByText('Ship the parser rewrite behind a flag')).toBeDefined();
   });
 
   it('keeps a bare Enter free to type a newline, so a multi-line goal survives editing', () => {
