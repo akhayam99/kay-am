@@ -50,7 +50,7 @@ export const SessionActivityItem = ({
       type="button"
       data-select-id={session.id}
       aria-pressed={isSelected}
-      aria-keyshortcuts="Alt+Enter"
+      aria-keyshortcuts="Alt+Enter Alt+Space"
       onClick={(event) => {
         if (event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) {
           onModifierClick(session.id as SessionId, event);
