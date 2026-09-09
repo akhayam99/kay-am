@@ -39,6 +39,7 @@ const makeState = (): State => ({
     ],
   },
   sessionWorktrees: { [SESSION_ID]: [WORKTREE_PATH] },
+  sessionActiveMount: {},
   sessionActiveProject: { [SESSION_ID]: PROJECT_ID },
   sessionGithub: { [SESSION_ID]: { pr: { number: 42 } } },
   sessionProjectPrs: { [SESSION_ID]: { [PROJECT_ID]: [{ number: 42 }] } },
@@ -87,6 +88,54 @@ describe('reconcileSessionBranch', () => {
     expect(state.sessionProjectPrs).toEqual({ [SESSION_ID]: { [PROJECT_ID]: [{ number: 42 }] } });
     expect(state.sessionSelectedPrNumber).toEqual({ [SESSION_ID]: 40 });
     expect(state.sessionGithub).toEqual({ [SESSION_ID]: { pr: { number: 42 } } });
+  });
+
+  it('records nothing when the project holds several mounts and none is selected', async () => {
+    const state = makeState();
+    const rows =
+      (state['sessionProjectMounts'] as Record<string, Array<unknown>>)[SESSION_ID] ?? [];
+    rows.push({
+      mountId: 'mount-2' as MountId,
+      projectId: PROJECT_ID,
+      mountName: 'goodboy',
+      worktreePath: '/repos/goodboy/.goodboy/worktrees/task-2',
+      repoRoot: '/repos/goodboy',
+      branch: 'ak/second',
+      revision: 0,
+    });
+
+    await observe(state, 'ak/incoming');
+
+    expect(state.mountBranchObservations).toEqual({});
+  });
+
+  it('attributes the observation to the selected mount, not the first row', async () => {
+    const state = makeState();
+    const rows =
+      (state['sessionProjectMounts'] as Record<string, Array<unknown>>)[SESSION_ID] ?? [];
+    rows.push({
+      mountId: 'mount-2' as MountId,
+      projectId: PROJECT_ID,
+      mountName: 'goodboy',
+      worktreePath: '/repos/goodboy/.goodboy/worktrees/task-2',
+      repoRoot: '/repos/goodboy',
+      branch: 'ak/second',
+      revision: 5,
+    });
+    (state['sessionActiveMount'] as Record<string, string>)[SESSION_ID] = 'mount-2';
+
+    await observe(state, 'ak/incoming');
+
+    expect(state.mountBranchObservations).toEqual({
+      [SESSION_ID]: [
+        expect.objectContaining({
+          mountId: 'mount-2',
+          recordedBranch: 'ak/second',
+          observedBranch: 'ak/incoming',
+          revision: 5,
+        }),
+      ],
+    });
   });
 
   it('records a detached head when no branch is observed', async () => {

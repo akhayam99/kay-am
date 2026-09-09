@@ -13,6 +13,7 @@ import { tauriGhRunner } from '../../../features/github/github';
 import { createSessionDir, createWorktree } from '../../../features/worktree/worktree';
 import { DEFAULT_BRANCH_PREFIX } from '../../../features/settings/settings';
 import { consumeAdoptionSeed, materializationSeedFor } from './materializationSeeds';
+import { branchInUseError } from '../project-mounts/mountErrors';
 import { mountDirName } from '../project-mounts/mountDirName';
 import { deriveBranchName } from './deriveBranchName';
 import type { GetFn, SetFn } from './types';
@@ -208,6 +209,10 @@ export const materializeProject = (set: SetFn, get: GetFn) => {
         kind: 'project_materialization_refused',
         payload: { projectId, projectName: project.name, reason: formatError(error) },
       });
+      const branchInUse = branchInUseError({ error });
+      if (branchInUse !== null) {
+        throw branchInUse;
+      }
       throw error;
     }
     if (adoptedBranch !== undefined) {

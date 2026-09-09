@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { ListFilter, X } from 'lucide-react';
-import { AnchoredPopover, cn, Divider, Eyebrow, Tooltip, useDropdown } from '@goodboy/ui';
+import { AnchoredPopover, cn, Divider, Eyebrow, IconButton, useDropdown } from '@goodboy/ui';
 import type { Session, WorkspaceId } from '@goodboy/types';
 import {
   EMPTY_ARRAY,
@@ -8,6 +8,7 @@ import {
   useAppStore,
   useSelectedProjectIds,
 } from '../../../../store';
+import { ICON_SIZE } from '../../../../shared/components/conceptIcons';
 import { ProjectFilterOption } from './ProjectFilterOption';
 
 type Props = {
@@ -109,27 +110,24 @@ export const ProjectFilter = ({ workspaceId, sessions }: Props) => {
       className="py-1"
       hasBackdrop
       trigger={
-        <Tooltip content="Filter by project" side="bottom">
-          <button
-            ref={triggerRef}
-            type="button"
-            onClick={toggle}
-            aria-haspopup="dialog"
-            aria-expanded={open}
-            aria-label={
-              activeCount > 0 ? `Project filter, ${activeCount} active` : 'Project filter'
-            }
-            className={cn(
-              'inline-flex shrink-0 items-center gap-1 rounded px-1 py-0.5 text-2xs font-medium motion-safe:transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40',
-              activeCount > 0 || open
-                ? 'bg-primary/10 text-primary'
-                : 'text-muted-foreground/70 hover:bg-foreground/10 hover:text-foreground',
-            )}
-          >
-            <ListFilter size={11} aria-hidden />
-            {activeCount > 0 ? <span className="tabular-nums">{activeCount}</span> : null}
-          </button>
-        </Tooltip>
+        <IconButton
+          ref={triggerRef}
+          variant="ghost"
+          icon={ListFilter}
+          iconSize={ICON_SIZE.row}
+          label={activeCount > 0 ? `Project filter, ${activeCount} active` : 'Project filter'}
+          tooltip={
+            activeCount > 0 ? `Filter by project, ${activeCount} active` : 'Filter by project'
+          }
+          onClick={toggle}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          className={cn(
+            'size-7 shrink-0',
+            (activeCount > 0 || open) &&
+              'bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary',
+          )}
+        />
       }
     >
       <div className="flex items-center justify-between gap-2 px-3 py-2">

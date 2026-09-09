@@ -1,14 +1,6 @@
 import { memo, useEffect, useMemo } from 'react';
-import {
-  Archive,
-  Bot,
-  ChevronRight,
-  Code,
-  MessageSquareDiff,
-  RotateCcw,
-  Trash2,
-} from 'lucide-react';
-import { Chip, cn, Divider, formatUsd, Tooltip } from '@goodboy/ui';
+import { Archive, ChevronRight, Code, MessageSquareDiff, RotateCcw, Trash2 } from 'lucide-react';
+import { Chip, cn, formatUsd, Tooltip } from '@goodboy/ui';
 import type { Session, SessionId } from '@goodboy/types';
 import {
   EMPTY_ARRAY,
@@ -28,15 +20,23 @@ import {
   ICON_SIZE,
 } from '../../../../../shared/components/conceptIcons';
 import { InlineMarkdown } from '../../../../../shared/components/InlineMarkdown';
-import { stripInlineMarkdown } from '../../../../../shared/components/InlineMarkdown/stripInlineMarkdown';
-import { STAGE_TONE } from '../../../../session/session-stage';
 import { sessionCardShell } from '../../../../session/components/sessionCardShell';
 import { formatRelativeAge } from '../../../../../shared/utils/relativeDate';
 import { useOpenSession } from '../../../../../shared/hooks/useOpenSession';
 import type { BoardNavigation } from '../useBoardNavigation';
 import { getLinkedRequest } from './getLinkedRequest';
 import { PrRequestSlot } from './PrRequestSlot';
-import { useDynamicActions } from './useDynamicActions';
+import { ProjectMountChips } from './ProjectMountChips';
+import { useDynamicActions, type DynamicAction } from './useDynamicActions';
+
+const SESSION_CARD_REVEAL =
+  'group-hover/session-card:opacity-100 group-focus-within/session-card:opacity-100';
+
+const SESSION_CARD_META_HIDE =
+  'group-hover/session-card:opacity-0 group-focus-within/session-card:opacity-0';
+
+const isUrgent = ({ tone }: { readonly tone: DynamicAction['tone'] }): boolean =>
+  tone === 'warning' || tone === 'danger';
 
 type CardSelectionEvent = {
   readonly shiftKey: boolean;
@@ -104,8 +104,8 @@ export const StageBoardCard = memo(function StageBoardCard({
     ? (reviewDrafts ?? []).filter((draft) => draft.status === 'draft').length
     : 0;
 
-  const plainGoal = stripInlineMarkdown({ text: session.goal });
   const age = formatRelativeAge({ fromIso: session.updatedAt });
+  const [visibleAction, ...revealedActions] = dynamicActions;
   const linkedRequest = getLinkedRequest({ pullRequest, mergeRequest });
   const isGitlab = mergeRequest != null && pullRequest == null;
 
@@ -156,46 +156,104 @@ export const StageBoardCard = memo(function StageBoardCard({
         nav.selectCard(session);
       }}
       className={cn(
-        'group/session-card grid h-[8.25rem] min-h-[8.25rem] shrink-0 cursor-pointer grid-cols-[minmax(0,1fr)_auto] grid-rows-[1fr_auto] gap-2 p-3 text-left shadow-sm',
+        'group/session-card grid h-28 shrink-0 cursor-pointer grid-cols-[minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)_auto] gap-x-2 gap-y-1 p-3 text-left',
         sessionCardShell({ stage, selected }),
       )}
     >
-      <span className="row-span-2 flex min-w-0 flex-col justify-between gap-2">
-        <span className="flex min-h-10 items-start gap-1.5">
+      <span className="flex min-w-0 flex-col justify-between">
+        <span className="flex min-h-10 items-start gap-2">
           <PrRequestSlot
             linkedRequest={linkedRequest}
             isGitlab={isGitlab}
             prFetchState={prFetchState}
             onOpen={handlePrClick}
           />
-          <Tooltip content={`${plainGoal}${reason ? ` · ${reason}` : ''}`} side="top">
-            <InlineMarkdown
-              text={session.goal}
-              className="line-clamp-2 min-h-10 min-w-0 flex-1 text-sm font-medium leading-snug"
-            />
-          </Tooltip>
+          <InlineMarkdown
+            text={session.goal}
+            className="line-clamp-2 min-h-10 min-w-0 flex-1 text-sm font-medium leading-5"
+          />
         </span>
 
-        {reason && (
-          <span className="truncate text-2xs leading-tight text-muted-foreground/60">{reason}</span>
-        )}
+        {reason && <span className="truncate text-2xs text-muted-foreground">{reason}</span>}
+      </span>
 
-        <span className="flex min-h-5 flex-nowrap items-center gap-1.5 overflow-hidden">
+      <span className="col-start-2 row-start-1 flex items-center gap-1 self-start">
+        <CardActionSlot label="Session quick actions">
+          {!archived &&
+            revealedActions.map((action) => (
+              <CardAction
+                key={action.key}
+                icon={action.icon}
+                tone={action.tone}
+                highlighted={isUrgent({ tone: action.tone })}
+                label={action.label}
+                onClick={action.onClick}
+                reveal
+                revealGroup={SESSION_CARD_REVEAL}
+              />
+            ))}
+          {!archived && (
+            <CardAction
+              icon={Code}
+              label="Open in editor"
+              onClick={() => nav.openIDE(session)}
+              disabled={worktreePath == null}
+              reveal
+              revealGroup={SESSION_CARD_REVEAL}
+            />
+          )}
+          {!archived && (
+            <CardAction
+              icon={CONCEPT_ICONS.terminal}
+              label="Open terminal"
+              onClick={() => nav.openTerminal(session)}
+              reveal
+              revealGroup={SESSION_CARD_REVEAL}
+            />
+          )}
+          {!archived && visibleAction !== undefined && (
+            <CardAction
+              key={visibleAction.key}
+              icon={visibleAction.icon}
+              tone={visibleAction.tone}
+              highlighted={isUrgent({ tone: visibleAction.tone })}
+              label={visibleAction.label}
+              onClick={visibleAction.onClick}
+            />
+          )}
+          {archived === true && (
+            <CardAction
+              icon={RotateCcw}
+              tone="primary"
+              label="Restore"
+              onClick={() => onRestore?.(session)}
+            />
+          )}
+        </CardActionSlot>
+        <ChevronRight
+          size={ICON_SIZE.row}
+          aria-hidden
+          className="shrink-0 text-muted-foreground/40 group-hover/session-card:text-muted-foreground/70"
+        />
+      </span>
+
+      <span className="col-span-2 col-start-1 row-start-2 flex h-5 min-w-0 items-center gap-2">
+        <span className="flex min-w-0 items-center gap-2 overflow-hidden">
           {agentCount > 0 && (
             <Tooltip content={agentCountLabel} side="top">
               <span
                 aria-label={agentCountLabel}
-                className="inline-flex shrink-0 items-center gap-1 text-2xs text-muted-foreground"
+                className="inline-flex shrink-0 items-center gap-1 text-3xs tabular-nums text-muted-foreground/70"
               >
-                <Bot size={ICON_SIZE.control} aria-hidden />
-                <span className="tabular-nums">{agentCount}</span>
+                <CONCEPT_ICONS.agents size={ICON_SIZE.row} aria-hidden />
+                <span>{agentCount}</span>
               </span>
             </Tooltip>
           )}
           {reviewDraftCount > 0 && (
             <Chip
               tone="draft"
-              size="3xs"
+              size="xs"
               bordered={false}
               ariaLabel={`Review ${reviewDraftCount} draft ${reviewDraftCount === 1 ? 'comment' : 'comments'}`}
               onClick={(event) => {
@@ -208,6 +266,20 @@ export const StageBoardCard = memo(function StageBoardCard({
               className="shrink-0"
             />
           )}
+          {isAutoMode && (
+            <Tooltip content="Autorun" side="top">
+              <span className="inline-flex shrink-0">
+                <Chip
+                  tone={CONCEPT_TONE.autorun}
+                  size="xs"
+                  bordered={false}
+                  ariaLabel="Autorun"
+                  icon={<CONCEPT_ICONS.autorun size={ICON_SIZE.row} aria-hidden />}
+                />
+              </span>
+            </Tooltip>
+          )}
+          {showProjectChips ? <ProjectMountChips mounts={mounts} /> : null}
           {externalTasks.map((task) => (
             <ExternalTaskChip
               key={`${task.provider}:${task.externalId}`}
@@ -215,96 +287,46 @@ export const StageBoardCard = memo(function StageBoardCard({
               variant="icon"
             />
           ))}
-          {showProjectChips
-            ? mounts.map((mount) => (
-                <Chip
-                  key={mount.mountId ?? mount.projectId}
-                  tone="neutral"
-                  size="3xs"
-                  bordered={false}
-                  label={mount.mountName}
-                  className="shrink-0"
-                />
-              ))
-            : null}
+        </span>
+        <span
+          className={cn(
+            'ml-auto flex shrink-0 items-center gap-2 motion-safe:transition-opacity',
+            SESSION_CARD_META_HIDE,
+          )}
+        >
           {sessionCost > 0 && (
             <CostBadge
               value={sessionCost}
               title={`Session spend: ${formatUsd(sessionCost)} (excludes summarizer)`}
-              className="shrink-0 text-2xs font-medium tabular-nums text-muted-foreground"
-            />
-          )}
-          {isAutoMode && (
-            <Chip
-              tone={CONCEPT_TONE.autorun}
-              size="sm"
-              icon={<CONCEPT_ICONS.autorun size={10} aria-hidden />}
-              label="Autorun"
-              className="shrink-0"
+              className="shrink-0 text-3xs tabular-nums text-muted-foreground/70"
             />
           )}
           {age && (
-            <span className="shrink-0 text-2xs tabular-nums text-muted-foreground/50">{age}</span>
+            <span className="shrink-0 text-3xs tabular-nums text-muted-foreground/70">{age}</span>
           )}
-          <ChevronRight
-            size={ICON_SIZE.row}
-            aria-hidden
-            className="ml-auto shrink-0 text-muted-foreground/40 group-hover/session-card:text-muted-foreground/70"
-          />
         </span>
       </span>
 
       <CardActionSlot
-        label="Session quick actions"
-        className="col-start-2 row-start-1 flex-col items-end self-start"
+        label="Session lifecycle actions"
+        className="col-start-2 row-start-2 h-5 self-center justify-self-end"
       >
         {!archived && (
-          <span className="flex flex-nowrap justify-end gap-1">
-            {dynamicActions.map((action) => (
-              <CardAction
-                key={action.key}
-                icon={action.icon}
-                tone={action.tone}
-                highlighted={action.tone === STAGE_TONE.attention}
-                label={action.label}
-                onClick={action.onClick}
-              />
-            ))}
-            <CardAction
-              icon={Code}
-              label="Open in editor"
-              onClick={() => nav.openIDE(session)}
-              disabled={worktreePath == null}
-            />
-            <CardAction
-              icon={CONCEPT_ICONS.terminal}
-              label="Open terminal"
-              onClick={() => nav.openTerminal(session)}
-            />
-          </span>
-        )}
-      </CardActionSlot>
-
-      <CardActionSlot
-        label="Session lifecycle actions"
-        className="col-start-2 row-start-2 self-end"
-      >
-        {archived ? (
           <CardAction
-            icon={RotateCcw}
-            tone="primary"
-            label="Restore"
-            onClick={() => onRestore?.(session)}
+            icon={Archive}
+            label="Archive"
+            onClick={() => onArchive?.(session)}
+            reveal
+            revealGroup={SESSION_CARD_REVEAL}
           />
-        ) : (
-          <CardAction icon={Archive} label="Archive" onClick={() => onArchive?.(session)} />
         )}
-        <Divider orientation="vertical" className="mx-0.5 h-4 shrink-0 self-center" />
         <CardAction
           icon={Trash2}
           tone="danger"
           label="Delete"
           onClick={() => onDelete?.(session)}
+          reveal
+          revealGroup={SESSION_CARD_REVEAL}
         />
       </CardActionSlot>
     </div>

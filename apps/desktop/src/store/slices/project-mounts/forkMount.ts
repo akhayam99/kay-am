@@ -5,7 +5,7 @@ import { tauriDatabase } from '../../../shared/lib/db';
 import { createWorktree, listBranchNames } from '../../../features/worktree/worktree';
 import { nextAvailableSlug } from '../sessions/deriveBranchName';
 import { mountDirName } from './mountDirName';
-import { mountError } from './mountErrors';
+import { branchInUseError, mountError } from './mountErrors';
 import { withRepositoryAndMountLock } from './mountLocks';
 import {
   beginMountOperation,
@@ -127,12 +127,19 @@ export const forkMount = (set: SetFn, get: GetFn) => {
             ...(baseBranch !== undefined ? { baseBranch } : {}),
           });
         } catch (error) {
-          await failMountOperation({ operation, errorCode: 'unknown-state' });
+          const branchInUse = branchInUseError({ error });
+          await failMountOperation({
+            operation,
+            errorCode: branchInUse === null ? 'unknown-state' : 'branch-taken',
+          });
           await get().recordSessionEvent({
             sessionId,
             kind: 'project_materialization_refused',
             payload: { projectId, projectName: project.name, reason: formatError(error) },
           });
+          if (branchInUse !== null) {
+            throw branchInUse;
+          }
           throw error;
         }
         const occupant = views.find(

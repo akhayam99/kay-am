@@ -1,6 +1,7 @@
 import type { SessionId } from '@goodboy/types';
 import { isBranchlessSession } from '../../../shared/utils/isBranchlessSession';
 import { recordMountBranchObservation } from '../project-mounts/mountBranchObservations';
+import { selectUnambiguousProjectMount } from '../project-mounts/selectors';
 import type { GetFn, SetFn } from './types';
 
 export const reconcileSessionBranch = (set: SetFn, get: GetFn) => {
@@ -12,9 +13,16 @@ export const reconcileSessionBranch = (set: SetFn, get: GetFn) => {
     const mounts = state.sessionProjectMounts[sessionId] ?? [];
     const session = state.sessions.find((candidate) => candidate.id === sessionId);
     const activeProjectId = state.sessionActiveProject[sessionId] ?? session?.activeProjectId;
-    const active = mounts.find((mount) => mount.projectId === activeProjectId) ?? mounts[0];
+    const activeMountId = state.sessionActiveMount[sessionId] ?? session?.activeMountId ?? null;
+    const identified =
+      activeMountId === null ? undefined : mounts.find((mount) => mount.mountId === activeMountId);
+    const active =
+      identified ??
+      (activeProjectId == null
+        ? null
+        : selectUnambiguousProjectMount({ state, sessionId, projectId: activeProjectId }));
     const mountId = active?.mountId;
-    if (active === undefined || mountId === undefined) {
+    if (active == null || mountId === undefined) {
       return;
     }
     const view = (state.sessionMounts[sessionId] ?? []).find(

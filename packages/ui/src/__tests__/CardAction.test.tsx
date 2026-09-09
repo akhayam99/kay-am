@@ -24,6 +24,34 @@ describe('CardAction', () => {
     expect(button.className).toContain('group-focus-within/agent-card:opacity-100');
   });
 
+  it('keeps a disabled reveal action invisible at rest and dims it inside the group', () => {
+    render(
+      <CardAction
+        icon={Star}
+        label="Open in editor"
+        disabled
+        reveal
+        revealGroup="group-hover/agent-card:opacity-100 group-focus-within/agent-card:opacity-100"
+        onClick={vi.fn()}
+      />,
+    );
+    const button = screen.getByRole('button', { name: 'Open in editor' });
+
+    expect(button.className).toContain('opacity-0');
+    expect(button.className).not.toContain('opacity-40');
+    expect(button.className).toContain('group-hover/agent-card:opacity-100');
+    expect(button.querySelector('svg')?.getAttribute('class')).toContain('opacity-40');
+  });
+
+  it('dims a disabled action in place when it does not reveal', () => {
+    render(<CardAction icon={Star} label="Pin" disabled onClick={vi.fn()} />);
+    const button = screen.getByRole('button', { name: 'Pin' });
+
+    expect(button.className).toContain('opacity-40');
+    expect(button.className).not.toContain('opacity-0');
+    expect(button.querySelector('svg')?.getAttribute('class') ?? '').not.toContain('opacity-40');
+  });
+
   it('stays opaque when reveal is not set', () => {
     render(<CardAction icon={Star} label="Pin" onClick={vi.fn()} />);
     expect(screen.getByRole('button', { name: 'Pin' }).className).not.toContain('opacity-0');

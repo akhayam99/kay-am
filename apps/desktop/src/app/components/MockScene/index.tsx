@@ -4,12 +4,14 @@ import { WorkspaceScene } from './scenes/WorkspaceScene';
 import { WorkflowScene } from './scenes/WorkflowScene';
 import { ShellScene } from './scenes/ShellScene';
 import { MountsScene } from './scenes/MountsScene';
+import { BoardScene } from './scenes/BoardScene';
 
 const SCENES = {
   workspace: WorkspaceScene,
   workflow: WorkflowScene,
   shell: ShellScene,
   mounts: MountsScene,
+  board: BoardScene,
 };
 
 export const MockScene = () => {
