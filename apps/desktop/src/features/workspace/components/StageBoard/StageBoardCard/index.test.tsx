@@ -526,11 +526,11 @@ describe('StageBoardCard footer', () => {
     };
     render(<StageBoardCard session={session} nav={nav} />);
     const chipLabel = screen.getByText('gateway');
-    const chip = chipLabel.closest('span.inline-flex');
+    const slot = chipLabel.closest('.w-24');
     expect(chipLabel.className).toContain('truncate');
-    expect(chip?.className).toContain('w-24');
-    expect(chip?.className).toContain('shrink-0');
-    expect(chip?.closest('[data-tooltip]')?.getAttribute('data-tooltip')).toBe('gateway');
+    expect(slot?.className).toContain('w-24');
+    expect(slot?.className).toContain('shrink-0');
+    expect(slot?.closest('[data-tooltip]')?.getAttribute('data-tooltip')).toBe('gateway');
   });
 
   it('collapses several projects into one count naming them', () => {

@@ -268,14 +268,15 @@ export const StageBoardCard = memo(function StageBoardCard({
           )}
           {isAutoMode && (
             <Tooltip content="Autorun" side="top">
-              <Chip
-                tone={CONCEPT_TONE.autorun}
-                size="xs"
-                bordered={false}
-                ariaLabel="Autorun"
-                icon={<CONCEPT_ICONS.autorun size={ICON_SIZE.row} aria-hidden />}
-                className="shrink-0"
-              />
+              <span className="inline-flex shrink-0">
+                <Chip
+                  tone={CONCEPT_TONE.autorun}
+                  size="xs"
+                  bordered={false}
+                  ariaLabel="Autorun"
+                  icon={<CONCEPT_ICONS.autorun size={ICON_SIZE.row} aria-hidden />}
+                />
+              </span>
             </Tooltip>
           )}
           {showProjectChips ? <ProjectMountChips mounts={mounts} /> : null}

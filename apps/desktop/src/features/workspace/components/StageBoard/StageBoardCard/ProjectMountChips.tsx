@@ -1,4 +1,4 @@
-import { Chip, Tooltip } from '@goodboy/ui';
+import { Chip, Tooltip, cn } from '@goodboy/ui';
 import type { SessionProjectMount } from '@goodboy/types';
 
 const IDENTITY_SLOT = 'w-24 shrink-0';
@@ -15,31 +15,34 @@ export const ProjectMountChips = ({ mounts }: Props) => {
   if (mounts.length === 1) {
     return (
       <Tooltip content={first.mountName} side="top">
-        <Chip
-          tone="neutral"
-          size="xs"
-          bordered={false}
-          label={<span className="min-w-0 truncate">{first.mountName}</span>}
-          className={IDENTITY_SLOT}
-        />
+        <span className={cn('inline-flex min-w-0', IDENTITY_SLOT)}>
+          <Chip
+            tone="neutral"
+            size="xs"
+            bordered={false}
+            label={<span className="min-w-0 truncate">{first.mountName}</span>}
+            className="w-full"
+          />
+        </span>
       </Tooltip>
     );
   }
   const names = mounts.map((mount) => mount.mountName).join(', ');
   return (
     <Tooltip content={names} side="top">
-      <Chip
-        tone="neutral"
-        size="xs"
-        bordered={false}
-        ariaLabel={`${mounts.length} projects: ${names}`}
-        label={
-          <span className="min-w-0 truncate">
-            <span className="tabular-nums">{mounts.length}</span> projects
-          </span>
-        }
-        className="shrink-0"
-      />
+      <span className="inline-flex shrink-0">
+        <Chip
+          tone="neutral"
+          size="xs"
+          bordered={false}
+          ariaLabel={`${mounts.length} projects: ${names}`}
+          label={
+            <span className="min-w-0 truncate">
+              <span className="tabular-nums">{mounts.length}</span> projects
+            </span>
+          }
+        />
+      </span>
     </Tooltip>
   );
 };
