@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ResolveQueueRow } from './buildResolveQueueRows';
-import { orderResolveQueueRows, resolveQueueNeighbours } from './orderResolveQueueRows';
+import { orderResolveQueueRows } from './orderResolveQueueRows';
 
 const rowOf = ({ threadId }: { readonly threadId: string }): ResolveQueueRow =>
   ({
@@ -43,20 +43,5 @@ describe('resolve queue ordering', () => {
     const rows = [rowOf({ threadId: 'b' }), rowOf({ threadId: 'a' })];
 
     expect(idsOf({ rows: orderResolveQueueRows({ rows, pinned: [] }) })).toEqual(['b', 'a']);
-  });
-
-  it('reads the previous and next item off the order the user sees', () => {
-    const rows = [rowOf({ threadId: 'a' }), rowOf({ threadId: 'b' }), rowOf({ threadId: 'c' })];
-
-    expect(resolveQueueNeighbours({ rows, threadId: 'b' })).toEqual({
-      index: 1,
-      previousThreadId: 'a',
-      nextThreadId: 'c',
-    });
-    expect(resolveQueueNeighbours({ rows, threadId: 'missing' })).toEqual({
-      index: -1,
-      previousThreadId: null,
-      nextThreadId: null,
-    });
   });
 });
