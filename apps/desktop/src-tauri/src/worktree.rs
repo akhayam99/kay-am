@@ -120,6 +120,35 @@ pub enum WorktreeRemovalResult {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum WorktreeRemovalMode {
+    Safe,
+    Confirmed,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum WorktreeDetachAssessment {
+    Missing {
+        path: String,
+    },
+    Unavailable {
+        path: String,
+        branch: Option<String>,
+    },
+    Assessed {
+        path: String,
+        branch: Option<String>,
+        #[serde(rename = "hasUpstream")]
+        has_upstream: bool,
+        #[serde(rename = "affectedFiles")]
+        affected_files: u32,
+        #[serde(rename = "localOnlyCommits")]
+        local_only_commits: u32,
+    },
+}
+
 #[derive(Debug, Serialize, PartialEq, Eq)]
 pub struct WorktreeDirectorySize {
     pub path: String,
@@ -890,6 +919,7 @@ fn status_removal_reasons_with(
 fn validate_removal_with(
     repo_path: &Path,
     worktree_path: &Path,
+    mode: WorktreeRemovalMode,
     run_git: &mut dyn FnMut(&Path, &[&str]) -> Result<String, WorktreeError>,
 ) -> Result<PathBuf, WorktreeRemovalResult> {
     match inspect_worktree_with(repo_path, worktree_path, run_git) {
@@ -923,11 +953,16 @@ fn validate_removal_with(
         }),
         WorktreeInspection::Registered { path, .. } => {
             let target = PathBuf::from(&path);
-            let reasons = status_removal_reasons_with(&target, run_git);
-            if !reasons.is_empty() {
-                return Err(WorktreeRemovalResult::Kept { path, reasons });
+            match mode {
+                WorktreeRemovalMode::Confirmed => Ok(target),
+                WorktreeRemovalMode::Safe => {
+                    let reasons = status_removal_reasons_with(&target, run_git);
+                    if !reasons.is_empty() {
+                        return Err(WorktreeRemovalResult::Kept { path, reasons });
+                    }
+                    Ok(target)
+                }
             }
-            Ok(target)
         }
     }
 }
@@ -935,10 +970,11 @@ fn validate_removal_with(
 pub(crate) fn remove_worktree_checked_with(
     repo_path: &Path,
     worktree_path: &Path,
+    mode: WorktreeRemovalMode,
     run_git: &mut dyn FnMut(&Path, &[&str]) -> Result<String, WorktreeError>,
     is_lease_live: &mut dyn FnMut(&Path) -> bool,
 ) -> Result<WorktreeRemovalResult, WorktreeError> {
-    let target = match validate_removal_with(repo_path, worktree_path, run_git) {
+    let target = match validate_removal_with(repo_path, worktree_path, mode, run_git) {
         Ok(found) => found,
         Err(result) => return Ok(result),
     };
@@ -950,7 +986,12 @@ pub(crate) fn remove_worktree_checked_with(
     if is_lease_live(&target) {
         return Ok(leased);
     }
-    let remove_args = ["worktree", "remove", "--force", target_string.as_str()];
+    let remove_args: Vec<&str> = match mode {
+        WorktreeRemovalMode::Safe => vec!["worktree", "remove", target_string.as_str()],
+        WorktreeRemovalMode::Confirmed => {
+            vec!["worktree", "remove", "--force", target_string.as_str()]
+        }
+    };
     let first = run_git(repo_path, &remove_args);
     if first.is_ok() {
         return Ok(WorktreeRemovalResult::Removed {
@@ -962,7 +1003,7 @@ pub(crate) fn remove_worktree_checked_with(
         return Err(error);
     }
     std::thread::sleep(REMOVE_RETRY_DELAY);
-    match validate_removal_with(repo_path, &target, run_git) {
+    match validate_removal_with(repo_path, &target, mode, run_git) {
         Ok(_) => {}
         Err(WorktreeRemovalResult::Missing { .. }) => {
             return Ok(WorktreeRemovalResult::Removed {
@@ -979,7 +1020,7 @@ pub(crate) fn remove_worktree_checked_with(
             path: target_string,
         });
     }
-    match validate_removal_with(repo_path, &target, run_git) {
+    match validate_removal_with(repo_path, &target, mode, run_git) {
         Ok(revalidated) if revalidated == target => {}
         Ok(_) => {
             return Ok(WorktreeRemovalResult::Kept {
@@ -1041,10 +1082,12 @@ pub(crate) fn remove_worktree_checked_leased(
     registry: &crate::worktree_writer::WriterLeaseRegistry,
     repo_path: &Path,
     worktree_path: &Path,
+    mode: WorktreeRemovalMode,
 ) -> Result<WorktreeRemovalResult, WorktreeError> {
     remove_worktree_checked_with(
         repo_path,
         worktree_path,
+        mode,
         &mut |cwd, args| git(cwd, args),
         &mut |path| {
             crate::worktree_writer::is_lease_live(registry, path.to_string_lossy().as_ref())
@@ -1057,13 +1100,77 @@ pub async fn worktree_remove_checked(
     leases: tauri::State<'_, crate::worktree_writer::WriterLeases>,
     repo_path: String,
     worktree_path: String,
+    mode: Option<WorktreeRemovalMode>,
 ) -> Result<WorktreeRemovalResult, WorktreeError> {
     let registry = leases.0.clone();
+    let selected = mode.unwrap_or(WorktreeRemovalMode::Safe);
     tauri::async_runtime::spawn_blocking(move || {
-        remove_worktree_checked_leased(&registry, Path::new(&repo_path), Path::new(&worktree_path))
+        remove_worktree_checked_leased(
+            &registry,
+            Path::new(&repo_path),
+            Path::new(&worktree_path),
+            selected,
+        )
     })
     .await
     .map_err(|e| WorktreeError::Io(std::io::Error::other(e.to_string())))?
+}
+
+#[tauri::command]
+pub async fn worktree_detach_assessment(
+    worktree_path: String,
+) -> Result<WorktreeDetachAssessment, WorktreeError> {
+    tauri::async_runtime::spawn_blocking(move || worktree_detach_assessment_blocking(worktree_path))
+        .await
+        .map_err(|e| WorktreeError::Io(std::io::Error::other(e.to_string())))?
+}
+
+fn local_only_commit_count(cwd: &Path) -> Option<u32> {
+    git(cwd, &["rev-list", "--count", "HEAD", "--not", "--remotes"])
+        .ok()
+        .and_then(|raw| raw.trim().parse::<u32>().ok())
+}
+
+fn worktree_detach_assessment_blocking(
+    worktree_path: String,
+) -> Result<WorktreeDetachAssessment, WorktreeError> {
+    let p = Path::new(&worktree_path);
+    if !p.exists() {
+        return Ok(WorktreeDetachAssessment::Missing {
+            path: worktree_path,
+        });
+    }
+    let Ok(raw) = git(p, &["status", "--porcelain=v2", "--branch"]) else {
+        return Ok(WorktreeDetachAssessment::Unavailable {
+            path: worktree_path,
+            branch: None,
+        });
+    };
+    let snapshot = parse_status_v2(&raw);
+    let branch = snapshot.branch.clone();
+    let GitWorkingTree::Known { changed, .. } = snapshot.working_tree else {
+        return Ok(WorktreeDetachAssessment::Unavailable {
+            path: worktree_path,
+            branch,
+        });
+    };
+    let local_only_commits = match snapshot.head {
+        None => Some(0),
+        Some(_) => local_only_commit_count(p),
+    };
+    let Some(local_only_commits) = local_only_commits else {
+        return Ok(WorktreeDetachAssessment::Unavailable {
+            path: worktree_path,
+            branch,
+        });
+    };
+    Ok(WorktreeDetachAssessment::Assessed {
+        path: worktree_path,
+        branch,
+        has_upstream: snapshot.upstream.is_some(),
+        affected_files: changed,
+        local_only_commits,
+    })
 }
 
 fn exclude_file_path(repo_path: &Path) -> Option<PathBuf> {
@@ -2909,7 +3016,7 @@ mod rewrite_tests {
     use super::{
         remove_worktree_checked_with, worktree_amend_commit_blocking, worktree_create_blocking,
         worktree_squash_commits_blocking, worktree_status_blocking, CreateArgs, GitDistance,
-        GitUnknownReason, GitWorkingTree, RewriteArgs,
+        GitUnknownReason, GitWorkingTree, RewriteArgs, WorktreeRemovalMode,
     };
     use std::path::{Path, PathBuf};
 
@@ -3655,6 +3762,7 @@ mod rewrite_tests {
         remove_worktree_checked_with(
             root,
             Path::new(worktree_path),
+            WorktreeRemovalMode::Safe,
             &mut |cwd, args| super::git(cwd, args),
             &mut |_| false,
         )
@@ -3849,9 +3957,10 @@ mod rewrite_tests {
 mod teardown_tests {
     use super::{
         collect_orphans, inspect_worktree_with, remove_worktree_checked_leased,
-        remove_worktree_checked_with, worktree_directory_size_blocking,
-        worktree_orphan_remove_blocking, WorktreeError, WorktreeInspection, WorktreeRemovalReason,
-        WorktreeRemovalResult,
+        remove_worktree_checked_with, worktree_detach_assessment_blocking,
+        worktree_directory_size_blocking, worktree_orphan_remove_blocking,
+        WorktreeDetachAssessment, WorktreeError, WorktreeInspection, WorktreeRemovalMode,
+        WorktreeRemovalReason, WorktreeRemovalResult,
     };
     use std::path::{Path, PathBuf};
 
@@ -3911,9 +4020,18 @@ mod teardown_tests {
     }
 
     fn remove(root: &Path, target: &Path) -> WorktreeRemovalResult {
+        remove_with_mode(root, target, WorktreeRemovalMode::Safe)
+    }
+
+    fn remove_with_mode(
+        root: &Path,
+        target: &Path,
+        mode: WorktreeRemovalMode,
+    ) -> WorktreeRemovalResult {
         remove_worktree_checked_with(
             root,
             target,
+            mode,
             &mut |cwd, args| super::git(cwd, args),
             &mut |_| false,
         )
@@ -4088,7 +4206,9 @@ mod teardown_tests {
             None,
         );
 
-        let result = remove_worktree_checked_leased(&registry, &root, &target).unwrap();
+        let result =
+            remove_worktree_checked_leased(&registry, &root, &target, WorktreeRemovalMode::Safe)
+                .unwrap();
 
         assert!(granted.is_granted);
         assert_ne!(path_the_agent_sees, target);
@@ -4118,7 +4238,9 @@ mod teardown_tests {
             granted.token.as_deref(),
         );
 
-        let result = remove_worktree_checked_leased(&registry, &root, &target).unwrap();
+        let result =
+            remove_worktree_checked_leased(&registry, &root, &target, WorktreeRemovalMode::Safe)
+                .unwrap();
 
         assert!(matches!(result, WorktreeRemovalResult::Removed { .. }));
         assert!(!target.exists());
@@ -4142,6 +4264,7 @@ mod teardown_tests {
         let result = remove_worktree_checked_with(
             &root,
             &target,
+            WorktreeRemovalMode::Safe,
             &mut |cwd, args| {
                 if args.starts_with(&["worktree", "remove"]) {
                     remove_attempts += 1;
@@ -4169,6 +4292,7 @@ mod teardown_tests {
         let result = remove_worktree_checked_with(
             &root,
             &target,
+            WorktreeRemovalMode::Safe,
             &mut |cwd, args| {
                 if args.starts_with(&["worktree", "remove"]) {
                     remove_attempts += 1;
@@ -4342,6 +4466,203 @@ mod teardown_tests {
 
         assert!(outcome.is_err(), "{outcome:?}");
         assert!(outside.exists(), "a path outside the folder was deleted");
+    }
+
+    fn publish_repo(root: &Path) {
+        let bare = root.join("origin.git");
+        git_ok(root, &["init", "--bare", bare.to_str().unwrap()]);
+        git_ok(root, &["remote", "add", "origin", bare.to_str().unwrap()]);
+        git_ok(root, &["push", "-u", "origin", "main"]);
+    }
+
+    fn assess(target: &Path) -> WorktreeDetachAssessment {
+        worktree_detach_assessment_blocking(target.to_string_lossy().into_owned()).unwrap()
+    }
+
+    #[test]
+    fn safe_removal_never_passes_force_to_git() {
+        let root = init_repo("remove-no-force");
+        let target = add_worktree(&root, "no-force");
+        let mut seen: Vec<String> = Vec::new();
+
+        let result = remove_worktree_checked_with(
+            &root,
+            &target,
+            WorktreeRemovalMode::Safe,
+            &mut |cwd, args| {
+                if args.starts_with(&["worktree", "remove"]) {
+                    seen = args.iter().map(|arg| arg.to_string()).collect();
+                }
+                super::git(cwd, args)
+            },
+            &mut |_| false,
+        )
+        .unwrap();
+
+        assert!(matches!(result, WorktreeRemovalResult::Removed { .. }));
+        assert!(!seen.iter().any(|arg| arg == "--force"), "{seen:?}");
+        assert!(!target.exists());
+    }
+
+    #[test]
+    fn confirmed_removal_forces_a_dirty_worktree_that_safe_mode_keeps() {
+        let root = init_repo("remove-confirmed");
+        let target = add_worktree(&root, "confirmed");
+        std::fs::write(target.join("tracked.txt"), "edited\n").unwrap();
+        std::fs::write(target.join("scratch.txt"), "new\n").unwrap();
+
+        let kept = remove(&root, &target);
+        let mut seen: Vec<String> = Vec::new();
+        let confirmed = remove_worktree_checked_with(
+            &root,
+            &target,
+            WorktreeRemovalMode::Confirmed,
+            &mut |cwd, args| {
+                if args.starts_with(&["worktree", "remove"]) {
+                    seen = args.iter().map(|arg| arg.to_string()).collect();
+                }
+                super::git(cwd, args)
+            },
+            &mut |_| false,
+        )
+        .unwrap();
+
+        assert_eq!(
+            kept_reasons(kept),
+            vec![
+                WorktreeRemovalReason::UnstagedChanges,
+                WorktreeRemovalReason::UntrackedFiles
+            ]
+        );
+        assert!(matches!(confirmed, WorktreeRemovalResult::Removed { .. }));
+        assert!(seen.iter().any(|arg| arg == "--force"), "{seen:?}");
+        assert!(!target.exists());
+        assert_eq!(
+            git_ok(&root, &["rev-parse", "--verify", "test/confirmed"]).len(),
+            40
+        );
+    }
+
+    #[test]
+    fn assessment_reports_a_clean_published_worktree_as_safe() {
+        let root = init_repo("assess-clean");
+        publish_repo(&root);
+        let target = add_worktree(&root, "clean");
+        git_ok(&target, &["push", "-u", "origin", "test/clean"]);
+
+        assert_eq!(
+            assess(&target),
+            WorktreeDetachAssessment::Assessed {
+                path: target.to_string_lossy().into_owned(),
+                branch: Some("test/clean".to_string()),
+                has_upstream: true,
+                affected_files: 0,
+                local_only_commits: 0,
+            }
+        );
+    }
+
+    #[test]
+    fn assessment_counts_each_affected_path_once_and_skips_ignored_files() {
+        let root = init_repo("assess-files");
+        publish_repo(&root);
+        let target = add_worktree(&root, "files");
+        git_ok(&target, &["push", "-u", "origin", "test/files"]);
+        std::fs::write(target.join("tracked.txt"), "staged\n").unwrap();
+        git_ok(&target, &["add", "tracked.txt"]);
+        std::fs::write(target.join("tracked.txt"), "staged and then edited\n").unwrap();
+        std::fs::write(target.join("scratch.txt"), "untracked\n").unwrap();
+        std::fs::create_dir_all(target.join("node_modules")).unwrap();
+        std::fs::write(target.join("node_modules").join("dep.js"), "x").unwrap();
+
+        let WorktreeDetachAssessment::Assessed {
+            affected_files,
+            local_only_commits,
+            has_upstream,
+            ..
+        } = assess(&target)
+        else {
+            panic!("expected an assessed worktree");
+        };
+
+        assert_eq!(
+            (affected_files, local_only_commits, has_upstream),
+            (2, 0, true)
+        );
+    }
+
+    #[test]
+    fn assessment_counts_commits_that_no_remote_ref_contains() {
+        let root = init_repo("assess-commits");
+        publish_repo(&root);
+        let target = add_worktree(&root, "commits");
+        git_ok(&target, &["push", "-u", "origin", "test/commits"]);
+        std::fs::write(target.join("tracked.txt"), "local\n").unwrap();
+        git_ok(&target, &["commit", "-am", "local work"]);
+
+        let WorktreeDetachAssessment::Assessed {
+            affected_files,
+            local_only_commits,
+            has_upstream,
+            ..
+        } = assess(&target)
+        else {
+            panic!("expected an assessed worktree");
+        };
+
+        assert_eq!(
+            (affected_files, local_only_commits, has_upstream),
+            (0, 1, true)
+        );
+    }
+
+    #[test]
+    fn assessment_reports_a_branch_without_an_upstream() {
+        let root = init_repo("assess-no-upstream");
+        publish_repo(&root);
+        let target = add_worktree(&root, "no-upstream");
+
+        let WorktreeDetachAssessment::Assessed {
+            affected_files,
+            local_only_commits,
+            has_upstream,
+            ..
+        } = assess(&target)
+        else {
+            panic!("expected an assessed worktree");
+        };
+
+        assert_eq!(
+            (affected_files, local_only_commits, has_upstream),
+            (0, 0, false)
+        );
+    }
+
+    #[test]
+    fn assessment_reports_an_absent_directory_as_missing() {
+        let root = init_repo("assess-missing");
+        let target = root.join("worktrees").join("gone");
+
+        assert_eq!(
+            assess(&target),
+            WorktreeDetachAssessment::Missing {
+                path: target.to_string_lossy().into_owned()
+            }
+        );
+    }
+
+    #[test]
+    fn assessment_reports_a_non_repository_directory_as_unavailable() {
+        let root = temp_root("assess-unavailable");
+        std::fs::create_dir_all(root.join("plain")).unwrap();
+
+        assert_eq!(
+            assess(&root.join("plain")),
+            WorktreeDetachAssessment::Unavailable {
+                path: root.join("plain").to_string_lossy().into_owned(),
+                branch: None
+            }
+        );
     }
 }
 

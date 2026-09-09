@@ -86,6 +86,20 @@ export type WorktreeRemovalResult =
       readonly reasons: ReadonlyArray<WorktreeRemovalReason>;
     };
 
+export type WorktreeRemovalMode = 'safe' | 'confirmed';
+
+export type WorktreeDetachAssessment =
+  | { readonly kind: 'missing'; readonly path: string }
+  | { readonly kind: 'unavailable'; readonly path: string; readonly branch: string | null }
+  | {
+      readonly kind: 'assessed';
+      readonly path: string;
+      readonly branch: string | null;
+      readonly hasUpstream: boolean;
+      readonly affectedFiles: number;
+      readonly localOnlyCommits: number;
+    };
+
 export type WorktreeDirectorySize = {
   readonly path: string;
   readonly sizeBytes: number | null;
