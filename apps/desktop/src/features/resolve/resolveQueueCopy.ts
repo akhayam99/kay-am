@@ -1,44 +1,66 @@
 import type { ResolveQueueStatus } from '../../store/slices/resolve/deriveResolveQueueStatus';
 
+export const RESOLVE_QUEUE_TITLE = 'Resolve';
+
 export const RESOLVE_QUEUE_STATUS_LABEL: Record<ResolveQueueStatus, string> = {
-  for_you: 'For you',
-  agent_asked: 'Agent asked you',
+  for_you: 'Needs review',
+  agent_asked: 'Answer agent',
   working: 'Working',
-  ready_to_push: 'Ready to push',
-  pushed: 'Pushed and posted',
+  ready_to_push: 'Ready to publish',
+  pushed: 'Completed',
   later: 'Later',
+  changed_since_accepted: 'Review again',
+  delivery_failed: 'Delivery failed',
+  confirm_delivery: 'Confirm delivery',
+  run_failed: 'Run did not finish',
   wont_fix: 'Will not fix',
   wont_fix_sent: 'Will not fix, reply sent',
-  changed_since_accepted: 'Changed since you accepted',
 };
 
 export const RESOLVE_QUEUE_ACTION_LABEL = {
-  treatAsOneFix: 'Treat as one fix',
-  takeUp: 'Take up',
+  resume: 'Resume',
   later: 'Later',
-  askForChanges: 'Ask for changes',
-  send: 'Send',
-  acceptAll: 'Accept all',
+  approveFix: 'Approve fix',
+  answerAgent: 'Answer agent',
+  wontFix: 'Will not fix',
+  askForChanges: 'Ask agent to revise',
+  send: 'Send to agent',
+  startRun: 'Start resolve run',
+  openComment: 'Open comment',
+  cancel: 'Cancel',
 } as const;
 
-export const forYouHeading = ({ count }: { readonly count: number }): string => `${count} for you`;
+export const RESOLVE_QUEUE_REFRESH_LABEL = 'the latest comments';
 
-export const acceptFixLabel = ({ coveredCount }: { readonly coveredCount: number }): string =>
-  coveredCount > 1 ? `Accept fix (${coveredCount})` : 'Accept fix';
+export const RESOLVE_RUN_IN_PROGRESS = 'Resolve run in progress';
 
-export const secondaryStatusLine = ({
-  workingCount,
-  readyToPushCount,
+export const RESOLVE_COMMENT_UNAVAILABLE = 'Comment unavailable';
+
+export const RESOLVE_HISTORY_LABEL = {
+  later: 'later',
+  completed: 'completed',
+} as const;
+
+export const RESOLVE_DELIVERY_SUPPORT = {
+  replyPending: 'Reply pending',
+  replyPosted: 'Reply posted',
+  threadResolved: 'Thread resolved',
+  threadLeftOpen: 'Thread left open',
+} as const;
+
+const countedLabel = ({
+  label,
+  count,
 }: {
-  readonly workingCount: number;
-  readonly readyToPushCount: number;
-}): string => `${workingCount} working · ${readyToPushCount} ready to push`;
+  readonly label: string;
+  readonly count: number;
+}): string => (count === 0 ? label : `${label} ${count}`);
 
-export const coversSeveralSentence = ({
-  coveredCount,
-}: {
-  readonly coveredCount: number;
-}): string | null =>
-  coveredCount > 1
-    ? `This proposal also covers ${coveredCount - 1} other comment${coveredCount - 1 === 1 ? '' : 's'}.`
-    : null;
+export const needsReviewFilterLabel = ({ count }: { readonly count: number }): string =>
+  countedLabel({ label: 'Needs review', count });
+
+export const activeFilterLabel = ({ count }: { readonly count: number }): string =>
+  countedLabel({ label: 'Active', count });
+
+export const sharedRunHeading = ({ count }: { readonly count: number }): string =>
+  `Shared run · ${count} ${count === 1 ? 'comment' : 'comments'}`;

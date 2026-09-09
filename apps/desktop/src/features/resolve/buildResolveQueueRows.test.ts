@@ -39,10 +39,12 @@ const thread = ({
   threadId,
   activeAttemptId = null,
   replyDraft = null,
+  commitShas = null,
 }: {
   readonly threadId: string;
   readonly activeAttemptId?: string | null;
   readonly replyDraft?: string | null;
+  readonly commitShas?: ReadonlyArray<string> | null;
 }): ResolveThread => ({
   id: `row-${threadId}`,
   sessionId,
@@ -56,7 +58,7 @@ const thread = ({
   activeAttemptId,
   disposition: null,
   replyDraft,
-  commitShas: null,
+  commitShas,
   question: null,
   replyPostedAt: null,
   replyId: null,
@@ -148,6 +150,31 @@ describe('buildResolveQueueRows', () => {
     expect(rows[0]?.coveredThreadIds).toEqual(['t2']);
     expect(rows[1]?.coveredThreadIds).toEqual(['t1']);
     expect(rows[0]?.attempt).toBe(attempt);
+  });
+
+  it('separates a comment with nothing proposed from a deliberate reply', () => {
+    const entries: ReadonlyArray<ResolveQueueItemWithThread> = [
+      { item: item({ threadId: 'empty' }), thread: thread({ threadId: 'empty' }) },
+      {
+        item: item({ threadId: 'blank' }),
+        thread: thread({ threadId: 'blank', replyDraft: '   ' }),
+      },
+      {
+        item: item({ threadId: 'words' }),
+        thread: thread({ threadId: 'words', replyDraft: 'This is intended.' }),
+      },
+      {
+        item: item({ threadId: 'fixed' }),
+        thread: thread({ threadId: 'fixed', commitShas: ['abc1234'] }),
+      },
+    ];
+    const rows = buildResolveQueueRows({
+      entries,
+      attempts: [],
+      deliveryReceipts: [],
+      comments: [],
+    });
+    expect(rows.map((row) => row.proposalKind)).toEqual(['none', 'none', 'reply_only', 'fix']);
   });
 
   it('leaves the reviewer note null when no matching comment exists', () => {

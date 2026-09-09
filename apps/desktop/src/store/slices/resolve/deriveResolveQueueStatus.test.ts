@@ -172,6 +172,35 @@ describe('deriveResolveQueueStatus', () => {
       attempt,
       receipts: [],
     },
+    {
+      status: 'run_failed',
+      item,
+      thread,
+      attempt: { ...attempt, phase: 'failed', error: 'the model stopped' },
+      receipts: [],
+    },
+    {
+      status: 'run_failed',
+      item,
+      thread,
+      attempt: { ...attempt, phase: 'cancelled' },
+      receipts: [],
+    },
+    { status: 'working', item, thread, attempt: { ...attempt, phase: 'queued' }, receipts: [] },
+    {
+      status: 'agent_asked',
+      item,
+      thread: { ...thread, state: 'needs_answer', question: 'Which?' },
+      attempt: { ...attempt, phase: 'failed' },
+      receipts: [],
+    },
+    {
+      status: 'ready_to_push',
+      item: { ...item, approvalState: 'accepted', approvedRevision: 2 },
+      thread,
+      attempt: { ...attempt, phase: 'failed' },
+      receipts: [],
+    },
   ])(
     'returns $status',
     ({ status, item: candidate, thread: row, attempt: activeAttempt, receipts }) => {

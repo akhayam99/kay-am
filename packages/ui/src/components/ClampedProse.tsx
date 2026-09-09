@@ -19,6 +19,8 @@ const CLAMP_CLASS: Record<ClampLines, string> = {
   6: 'line-clamp-6',
 };
 
+export const CLAMP_CHILD_CLASS = '[&>*]:block';
+
 const CHARS_PER_LINE = 72;
 
 type EstimateParams = {
@@ -40,7 +42,10 @@ export const ClampedProse = ({ text, lines = 3, className }: ClampedProseProps) 
 
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <div className={cn('min-w-0', !expanded && CLAMP_CLASS[lines])}>
+      <div
+        data-clamped={!expanded}
+        className={cn('min-w-0', !expanded && cn(CLAMP_CLASS[lines], CLAMP_CHILD_CLASS))}
+      >
         <Markdown text={text} variant="preview" className={className} />
       </div>
       <button

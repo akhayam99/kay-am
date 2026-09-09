@@ -1,21 +1,15 @@
 import { AlertTriangle, CheckCheck, Inbox } from 'lucide-react';
-import { Button, EmptyState } from '@goodboy/ui';
+import { Button, EmptyState, FilledEmptyState } from '@goodboy/ui';
 
 type NothingWaitingProps = {
-  readonly onOpenSpawn: () => void;
+  readonly hasOtherActiveWork: boolean;
 };
 
-export const NothingWaitingState = ({ onOpenSpawn }: NothingWaitingProps) => (
-  <EmptyState
+export const NothingWaitingState = ({ hasOtherActiveWork }: NothingWaitingProps) => (
+  <FilledEmptyState
     icon={CheckCheck}
-    tone="success"
-    title="Nothing is waiting on you"
-    description="Every review comment on this pull request has an answer."
-    action={
-      <Button size="sm" variant="secondary" onClick={onOpenSpawn}>
-        Start a resolve run
-      </Button>
-    }
+    tone="neutral"
+    title={hasOtherActiveWork ? 'No comments need review' : 'No active comments'}
   />
 );
 
@@ -26,8 +20,8 @@ type NoPullRequestProps = {
 export const NoResolveTargetState = ({ onOpenReview }: NoPullRequestProps) => (
   <EmptyState
     icon={Inbox}
-    title="No pull request to resolve yet"
-    description="Open a pull request or leave a note on a diff to see what is for you."
+    title="No pull request"
+    description="Open Review to create or select a pull request."
     action={
       <Button size="sm" variant="secondary" onClick={onOpenReview}>
         Open review
@@ -45,7 +39,7 @@ export const ResolveQueueErrorState = ({ message, onRetry }: ErrorProps) => (
   <EmptyState
     icon={AlertTriangle}
     tone="danger"
-    title="Could not load what is for you"
+    title="Could not load comments"
     description={message}
     action={
       <Button size="sm" variant="secondary" onClick={onRetry}>

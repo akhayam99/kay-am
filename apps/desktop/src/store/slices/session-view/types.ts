@@ -16,6 +16,7 @@ import type {
   WorkspaceId,
 } from '@goodboy/types';
 import type { ReviewMode } from '../../../features/review/reviewMode';
+import type { ResolveItemDraft } from '../../../features/resolve/resolveItemDraft';
 
 export type { SetFn, GetFn } from '../../slice-types';
 
@@ -167,6 +168,9 @@ type SessionViewSliceState = {
   readonly diffFocus: Readonly<Record<SessionId, DiffFocus | null>>;
   readonly resolveQueueView: Readonly<Record<SessionId, ResolveQueueView>>;
   readonly resolveDiffReturn: Readonly<Record<SessionId, ResolveDiffReturn | null>>;
+  readonly resolveItemDrafts: Readonly<
+    Record<SessionId, Readonly<Record<string, ResolveItemDraft>>>
+  >;
   readonly diffMountPath: Readonly<Record<SessionId, string | null>>;
   readonly sessionCreations: Readonly<Record<SessionId, ReadonlyArray<SessionCreation>>>;
 };
@@ -200,6 +204,11 @@ type SessionViewSliceActions = {
     readonly scrollTop: number;
   }): void;
   returnFromResolveDiff(params: { readonly sessionId: SessionId }): void;
+  setResolveItemDraft(params: {
+    readonly sessionId: SessionId;
+    readonly threadId: string;
+    readonly patch: Partial<ResolveItemDraft>;
+  }): void;
   openDiffLens(sessionId: SessionId, focus: DiffFocus | null): void;
   openMountDiff(sessionId: SessionId, worktreePath: string): void;
   beginSessionCreation(

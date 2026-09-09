@@ -10,6 +10,8 @@ import { groupThreads } from '../github/comment-threads';
 import { prCommentLocation } from '../session/pr-comment-location';
 import {
   deriveResolveQueueStatus,
+  isDeliveryComplete,
+  resolveDeliveryReceiptsFor,
   type ResolveQueueStatus,
 } from '../../store/slices/resolve/deriveResolveQueueStatus';
 
@@ -22,6 +24,17 @@ export type ResolveQueueReviewerNote = {
   readonly line: number | null;
 };
 
+export type ResolveQueueDelivery = {
+  readonly isReplyPosted: boolean;
+  readonly replyPostedAt: number | null;
+  readonly isThreadResolved: boolean;
+  readonly resolvedAt: number | null;
+  readonly isComplete: boolean;
+  readonly replyBody: string | null;
+};
+
+export type ResolveProposalKind = 'fix' | 'reply_only' | 'none';
+
 export type ResolveQueueRow = {
   readonly item: ResolveQueueItem;
   readonly thread: ResolveThread;
@@ -29,7 +42,9 @@ export type ResolveQueueRow = {
   readonly attempt: ResolveAttempt | null;
   readonly reviewerNote: ResolveQueueReviewerNote | null;
   readonly proposal: string | null;
+  readonly proposalKind: ResolveProposalKind;
   readonly coveredThreadIds: ReadonlyArray<string>;
+  readonly delivery: ResolveQueueDelivery | null;
 };
 
 type Params = {
@@ -63,6 +78,23 @@ const reviewerNoteByThreadId = ({
   return map;
 };
 
+const proposalKindFor = ({
+  item,
+  thread,
+}: {
+  readonly item: ResolveQueueItem;
+  readonly thread: ResolveThread;
+}): ResolveProposalKind => {
+  if (item.integratedSha !== null || (thread.commitShas?.length ?? 0) > 0) {
+    return 'fix';
+  }
+  const draft = thread.replyDraft;
+  if (draft !== null && draft.trim() !== '') {
+    return 'reply_only';
+  }
+  return 'none';
+};
+
 const coveredThreadIdsFor = ({
   thread,
   entries,
@@ -80,6 +112,36 @@ const coveredThreadIdsFor = ({
         entry.thread.threadId !== thread.threadId,
     )
     .map((entry) => entry.thread.threadId);
+};
+
+const deliveryFor = ({
+  item,
+  thread,
+  deliveryReceipts,
+}: {
+  readonly item: ResolveQueueItem;
+  readonly thread: ResolveThread;
+  readonly deliveryReceipts: ReadonlyArray<ResolvePublicationThread>;
+}): ResolveQueueDelivery | null => {
+  const receipts = resolveDeliveryReceiptsFor({ item, thread, deliveryReceipts });
+  const latest = receipts.reduce<ResolvePublicationThread | null>(
+    (best, receipt) =>
+      best === null || (receipt.replyAttemptedAt ?? 0) >= (best.replyAttemptedAt ?? 0)
+        ? receipt
+        : best,
+    null,
+  );
+  if (latest === null) {
+    return null;
+  }
+  return {
+    isReplyPosted: latest.replyPhase === 'posted',
+    replyPostedAt: latest.replyPostedAt,
+    isThreadResolved: latest.resolvePhase === 'resolved',
+    resolvedAt: latest.resolvedAt,
+    isComplete: isDeliveryComplete({ receipt: latest }),
+    replyBody: latest.replyBody,
+  };
 };
 
 export const buildResolveQueueRows = ({
@@ -107,7 +169,9 @@ export const buildResolveQueueRows = ({
       attempt,
       reviewerNote: notes.get(thread.threadId) ?? null,
       proposal: thread.replyDraft,
+      proposalKind: proposalKindFor({ item, thread }),
       coveredThreadIds: coveredThreadIdsFor({ thread, entries }),
+      delivery: deliveryFor({ item, thread, deliveryReceipts }),
     };
   });
 };

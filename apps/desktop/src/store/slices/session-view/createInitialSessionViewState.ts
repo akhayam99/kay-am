@@ -16,5 +16,6 @@ export const createInitialSessionViewState = ({}: Params) => ({
   diffMountPath: {},
   resolveQueueView: {},
   resolveDiffReturn: {},
+  resolveItemDrafts: {},
   sessionCreations: {},
 });

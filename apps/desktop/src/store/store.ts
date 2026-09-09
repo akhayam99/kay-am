@@ -80,6 +80,7 @@ import { buildProviderList, type ProviderStatus } from '../features/providers/pr
 import { type RewrittenHead } from '../features/worktree/worktree';
 import { type SkillUpsertArgs } from '../features/skills/skills';
 import type { ScriptRunResult } from '../features/scripts/scripts';
+import type { ResolveItemDraft } from '../features/resolve/resolveItemDraft';
 import { type WorkflowUpsertArgs, type StepDefUpsertArgs } from '../features/workflows/workflows';
 import { type AgentKind } from '../features/session/agent-kind';
 import type { TerminalTabId, TerminalTabStatus } from '../shared/types/terminal';
@@ -904,6 +905,11 @@ type AppActions = {
   setResolveQueueView(params: {
     readonly sessionId: SessionId;
     readonly patch: Partial<ResolveQueueView>;
+  }): void;
+  setResolveItemDraft(params: {
+    readonly sessionId: SessionId;
+    readonly threadId: string;
+    readonly patch: Partial<ResolveItemDraft>;
   }): void;
   openResolveDiff(params: {
     readonly sessionId: SessionId;

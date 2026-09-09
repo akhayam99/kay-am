@@ -1,7 +1,7 @@
-import { Activity } from 'lucide-react';
-import { Button, GhostActionButton, MetaRow, formatUsd } from '@goodboy/ui';
+import { Activity, Square } from 'lucide-react';
+import { CardAction, CardActionSlot, MetaRow, SectionHeader, cn, formatUsd } from '@goodboy/ui';
 import type { ResolveAttempt } from '@goodboy/types';
-import { RESOLVE_ITEM_LABEL } from '../../resolveItemCopy';
+import { RESOLVE_ITEM_LABEL, attemptPhaseLabel } from '../../resolveItemCopy';
 
 type Props = {
   readonly attempt: ResolveAttempt;
@@ -10,30 +10,54 @@ type Props = {
   readonly onViewWork: () => void;
 };
 
+const REVEAL_GROUP =
+  'group-hover/resolve-run:opacity-100 group-focus-within/resolve-run:opacity-100';
+
 export const RunCard = ({ attempt, costUsd, onStop, onViewWork }: Props) => {
-  const isRunning = attempt.phase === 'running' || attempt.phase === 'queued';
-  const meta = [
-    attempt.model,
-    attempt.provider,
-    attempt.effort === null ? null : `effort ${attempt.effort}`,
-    costUsd === null ? null : formatUsd(costUsd),
-  ];
+  const isRunning = attempt.phase === 'running';
   return (
-    <div className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-border-soft px-3 py-2">
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-2xs text-muted-foreground">
-          {isRunning ? 'Working now' : 'Finished run'}
-        </span>
-        <MetaRow items={meta} />
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <GhostActionButton icon={Activity} label="View work" onClick={onViewWork} />
-        {isRunning && (
-          <Button size="sm" variant="ghost" onClick={onStop}>
-            {RESOLVE_ITEM_LABEL.stop}
-          </Button>
+    <div className="group/resolve-run flex min-w-0 flex-col gap-2">
+      <SectionHeader
+        label={RESOLVE_ITEM_LABEL.run}
+        headingLevel={3}
+        action={
+          <CardActionSlot label="Run actions">
+            <CardAction
+              icon={Activity}
+              label={RESOLVE_ITEM_LABEL.viewWork}
+              reveal
+              revealGroup={REVEAL_GROUP}
+              onClick={onViewWork}
+            />
+            {isRunning && (
+              <CardAction icon={Square} label={RESOLVE_ITEM_LABEL.stop} onClick={onStop} />
+            )}
+          </CardActionSlot>
+        }
+      />
+      <p
+        className={cn(
+          'w-fit rounded-md text-xs leading-4 text-foreground',
+          isRunning && 'spin-border spin-border-info px-2 py-1',
         )}
-      </div>
+      >
+        {attemptPhaseLabel({ phase: attempt.phase })}
+      </p>
+      <MetaRow
+        className="text-3xs"
+        items={[
+          <span key="model" className="font-mono">
+            {attempt.model}
+          </span>,
+          attempt.provider,
+          attempt.effort === null ? null : `effort ${attempt.effort}`,
+          costUsd === null ? null : (
+            <span key="cost" className="tabular-nums">
+              {formatUsd(costUsd)}
+            </span>
+          ),
+        ]}
+      />
     </div>
   );
 };

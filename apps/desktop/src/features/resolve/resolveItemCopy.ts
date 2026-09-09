@@ -1,38 +1,66 @@
+import type { ResolveAttempt } from '@goodboy/types';
 import { decodeStateReason, type ResolveFailurePrefix } from '../review/stateReason';
 import type { ResolveChecksVerdict } from './checkReceipts';
 
 export const RESOLVE_ITEM_LABEL = {
-  reviewerSaid: 'The reviewer said',
-  alsoCovered: 'Also covered by this proposal',
-  proposal: 'What the agent says it did',
-  claim: 'Agent claim, not checked here',
-  change: 'The change',
+  comment: 'Comment',
+  agentQuestion: 'Agent question',
+  relatedComments: 'Related comments',
+  change: 'Changes',
   checks: 'Checks',
-  decision: 'Your decision',
-  replyPreview: 'This exact text goes back to the reviewer',
-  openInDiff: 'Open in diff',
+  reply: 'Reply',
+  replyPreview: 'Reply to reviewer',
+  replyPosted: 'Reply posted',
+  refusalReply: 'Reply the reviewer will read',
+  refusalNote: 'The reviewer thread stays open',
+  noProposal: 'No agent reply yet',
+  replyOnlyProposal: 'Reply only, no code change',
+  nothingToApprove: 'No fix and no reply to approve yet',
+  agentAnswer: 'Answer for agent',
+  run: 'Run',
+  openInDiff: 'Open diff',
   backToResolve: 'Back to Resolve',
-  runBothTrees: 'Run the check on the current code and on the proposal',
-  checkRunning: 'Running on both trees',
-  machineVerified: 'Machine verified',
+  runBothTrees: 'Run checks',
+  checkRunning: 'Checking both trees',
+  passed: 'Passed',
+  failed: 'Failed',
   stale: 'Stale',
   stop: 'Stop',
+  viewWork: 'View work',
+  reopen: 'Reopen',
+  fixingCommit: 'Fixing commit',
+  notRecorded: 'Not recorded',
+  candidate: 'Candidate',
+  recordedCommits: 'Recorded commits',
+  noCapturedChange: 'No captured change',
 } as const;
+
+const ATTEMPT_PHASE_LABEL: Record<ResolveAttempt['phase'], string> = {
+  queued: 'Queued',
+  running: 'Working',
+  waiting: 'Waiting',
+  finished: 'Finished',
+  failed: 'Failed',
+  cancelled: 'Stopped',
+};
+
+export const attemptPhaseLabel = ({ phase }: { readonly phase: ResolveAttempt['phase'] }): string =>
+  ATTEMPT_PHASE_LABEL[phase];
 
 export const checksHeadline = ({ verdict }: { readonly verdict: ResolveChecksVerdict }): string => {
   const headline: Record<ResolveChecksVerdict['kind'], string> = {
-    nothing_ran: 'Nothing ran against this proposal',
-    all_stale: 'Every run is stale, so nothing here is proven',
-    proves_the_fix: 'Fails on the current code, passes on the proposal',
-    passes_without_base_run: 'Passes on the proposal. It never ran on the current code',
-    passes_on_both: 'Passes on the proposal and on the current code, so it proves nothing',
-    fails_on_the_proposal: 'Fails on the proposal',
-    base_only: 'Only the current code was checked, never the proposal',
+    nothing_ran: 'No checks run',
+    all_stale: 'Checks out of date',
+    proves_the_fix: 'Fails on current code, passes on proposal',
+    passes_without_base_run: 'Passes on proposal; current code not checked',
+    passes_on_both: 'Passes on both; regression not demonstrated',
+    fails_on_the_proposal: 'Fails on proposal',
+    base_only: 'Current code checked; proposal not checked',
   };
   return headline[verdict.kind];
 };
 
-export const scopedRunNote = 'A scoped run, not the full suite.';
+export const scopedRunNote = 'Scoped checks';
 
 const FAILURE_NOTE: Record<ResolveFailurePrefix, string> = {
   dirty_tree: 'The worktree still held uncommitted changes when this run ended.',
@@ -55,19 +83,17 @@ export const runNote = ({
 
 export const receiptLine = ({
   tree,
-  command,
   testIdentity,
   durationMs,
 }: {
   readonly tree: 'base' | 'candidate';
-  readonly command: string;
   readonly testIdentity: string | null;
   readonly durationMs: number;
 }): string => {
   const where = tree === 'base' ? 'on the current code' : 'on the proposal';
   const seconds = Math.max(1, Math.round(durationMs / 1000));
-  const identity = testIdentity === null ? command : `${command} · ${testIdentity}`;
-  return `${identity} ${where}, ${seconds}s`;
+  const scope = testIdentity === null ? where : `${testIdentity} ${where}`;
+  return `${scope}, ${seconds}s`;
 };
 
 export const changeSummaryLine = ({
@@ -79,5 +105,4 @@ export const changeSummaryLine = ({
 }): string =>
   `${fileCount} ${fileCount === 1 ? 'file' : 'files'} · ${changedLines} changed ${changedLines === 1 ? 'line' : 'lines'}`;
 
-export const hiddenFilesLine = ({ count }: { readonly count: number }): string =>
-  count === 1 ? '1 more file is only in the diff' : `${count} more files are only in the diff`;
+export const shortSha = ({ sha }: { readonly sha: string }): string => sha.slice(0, 7);

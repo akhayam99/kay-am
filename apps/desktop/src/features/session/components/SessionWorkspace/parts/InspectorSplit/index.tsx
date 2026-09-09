@@ -7,10 +7,21 @@ type Props = {
   readonly open: boolean;
   readonly panel: ReactNode;
   readonly children: ReactNode;
+  readonly defaultWidth?: number;
 };
 
-export const InspectorSplit = ({ open, panel, children }: Props) => {
-  const [panelWidth, setPanelWidth] = useColumnWidth(STORAGE_KEYS.inspectorPanelWidth, 320);
+const INSPECTOR_DEFAULT_WIDTH = 320;
+
+export const InspectorSplit = ({
+  open,
+  panel,
+  children,
+  defaultWidth = INSPECTOR_DEFAULT_WIDTH,
+}: Props) => {
+  const [panelWidth, setPanelWidth] = useColumnWidth(
+    STORAGE_KEYS.inspectorPanelWidth,
+    defaultWidth,
+  );
 
   return (
     <div className="flex h-full min-h-0">
@@ -22,7 +33,7 @@ export const InspectorSplit = ({ open, panel, children }: Props) => {
             min={260}
             max={560}
             onChange={setPanelWidth}
-            onReset={() => setPanelWidth(320)}
+            onReset={() => setPanelWidth(defaultWidth)}
             side="right"
             ariaLabel="Resize inspector panel"
           />

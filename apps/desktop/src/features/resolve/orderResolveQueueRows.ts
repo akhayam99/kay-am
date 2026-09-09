@@ -18,25 +18,3 @@ export const orderResolveQueueRows = ({ rows, pinned }: Params): ReadonlyArray<R
   const appended = rows.filter((row) => !pinnedIds.has(row.thread.threadId));
   return [...kept, ...appended];
 };
-
-export const resolveQueueNeighbours = ({
-  rows,
-  threadId,
-}: {
-  readonly rows: ReadonlyArray<ResolveQueueRow>;
-  readonly threadId: string | null;
-}): {
-  readonly index: number;
-  readonly previousThreadId: string | null;
-  readonly nextThreadId: string | null;
-} => {
-  const index = rows.findIndex((row) => row.thread.threadId === threadId);
-  if (index === -1) {
-    return { index: -1, previousThreadId: null, nextThreadId: null };
-  }
-  return {
-    index,
-    previousThreadId: rows[index - 1]?.thread.threadId ?? null,
-    nextThreadId: rows[index + 1]?.thread.threadId ?? null,
-  };
-};

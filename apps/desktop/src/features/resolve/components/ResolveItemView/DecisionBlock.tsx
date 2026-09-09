@@ -1,77 +1,128 @@
-import { Button, Textarea } from '@goodboy/ui';
-import { RESOLVE_QUEUE_ACTION_LABEL, acceptFixLabel } from '../../resolveQueueCopy';
+import { Markdown, SectionHeader, Textarea } from '@goodboy/ui';
 import { RESOLVE_ITEM_LABEL } from '../../resolveItemCopy';
+import type { ResolveProposalKind } from '../../buildResolveQueueRows';
+import type { ResolveDecisionMode } from '../../resolveItemDraft';
+
+const INSTRUCTION_LABEL = 'Instructions for agent';
 
 type Props = {
-  readonly coveredCount: number;
+  readonly fieldId: string;
   readonly reply: string;
   readonly instruction: string;
+  readonly mode: ResolveDecisionMode;
+  readonly proposalKind: ResolveProposalKind;
+  readonly isAnswering: boolean;
+  readonly isDelivered: boolean;
+  readonly deliveredReply: string | null;
+  readonly deliverySupport: string | null;
   readonly isBusy: boolean;
-  readonly canAccept: boolean;
-  readonly error: string | null;
   readonly onChangeReply: (value: string) => void;
   readonly onChangeInstruction: (value: string) => void;
-  readonly onAccept: () => void;
-  readonly onAskForChanges: () => void;
-  readonly onLater: () => void;
+};
+
+const sectionLabel = ({
+  mode,
+  isDelivered,
+}: {
+  readonly mode: ResolveDecisionMode;
+  readonly isDelivered: boolean;
+}): string => {
+  if (isDelivered) {
+    return RESOLVE_ITEM_LABEL.replyPosted;
+  }
+  return mode === 'refuse' ? RESOLVE_ITEM_LABEL.refusalReply : RESOLVE_ITEM_LABEL.reply;
+};
+
+const proposalHint = ({
+  proposalKind,
+}: {
+  readonly proposalKind: ResolveProposalKind;
+}): string | undefined => {
+  if (proposalKind === 'none') {
+    return RESOLVE_ITEM_LABEL.noProposal;
+  }
+  if (proposalKind === 'reply_only') {
+    return RESOLVE_ITEM_LABEL.replyOnlyProposal;
+  }
+  return undefined;
+};
+
+const sectionHint = ({
+  mode,
+  isDelivered,
+  proposalKind,
+}: {
+  readonly mode: ResolveDecisionMode;
+  readonly isDelivered: boolean;
+  readonly proposalKind: ResolveProposalKind;
+}): string | undefined => {
+  if (mode === 'refuse') {
+    return RESOLVE_ITEM_LABEL.refusalNote;
+  }
+  if (isDelivered) {
+    return undefined;
+  }
+  return proposalHint({ proposalKind });
 };
 
 export const DecisionBlock = ({
-  coveredCount,
+  fieldId,
   reply,
   instruction,
+  mode,
+  proposalKind,
+  isAnswering,
+  isDelivered,
+  deliveredReply,
+  deliverySupport,
   isBusy,
-  canAccept,
-  error,
   onChangeReply,
   onChangeInstruction,
-  onAccept,
-  onAskForChanges,
-  onLater,
 }: Props) => (
   <div className="flex min-w-0 flex-col gap-2">
-    <p className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
-      {RESOLVE_ITEM_LABEL.decision}
-    </p>
-    <div className="flex min-w-0 flex-col gap-1">
-      <label className="text-2xs text-muted-foreground" htmlFor="resolve-item-reply">
-        {RESOLVE_ITEM_LABEL.replyPreview}
-      </label>
+    <SectionHeader
+      label={sectionLabel({ mode, isDelivered })}
+      hint={sectionHint({ mode, isDelivered, proposalKind })}
+      headingLevel={3}
+    />
+    {isDelivered ? (
+      <>
+        <Markdown
+          text={deliveredReply ?? reply}
+          variant="preview"
+          className="max-w-[65ch] text-sm text-foreground"
+        />
+        {deliverySupport !== null && (
+          <p className="text-2xs text-muted-foreground">{deliverySupport}</p>
+        )}
+      </>
+    ) : (
       <Textarea
-        id="resolve-item-reply"
+        id={`${fieldId}-reply`}
+        aria-label={RESOLVE_ITEM_LABEL.replyPreview}
         value={reply}
         rows={3}
+        disabled={isBusy}
+        className="max-h-48 text-sm"
         onChange={(event) => onChangeReply(event.target.value)}
       />
-    </div>
-    <div className="flex min-w-0 flex-col gap-1">
-      <label className="text-2xs text-muted-foreground" htmlFor="resolve-item-instruction">
-        {RESOLVE_QUEUE_ACTION_LABEL.askForChanges}
-      </label>
-      <Textarea
-        id="resolve-item-instruction"
-        value={instruction}
-        rows={2}
-        placeholder="Say what to do differently"
-        onChange={(event) => onChangeInstruction(event.target.value)}
-      />
-    </div>
-    {error !== null && <p className="text-2xs text-warning">{error}</p>}
-    <div className="flex flex-wrap items-center gap-2">
-      <Button size="sm" variant="success" disabled={isBusy || !canAccept} onClick={onAccept}>
-        {acceptFixLabel({ coveredCount })}
-      </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        disabled={isBusy || instruction.trim() === ''}
-        onClick={onAskForChanges}
-      >
-        {RESOLVE_QUEUE_ACTION_LABEL.askForChanges}
-      </Button>
-      <Button size="sm" variant="ghost" disabled={isBusy} onClick={onLater}>
-        {RESOLVE_QUEUE_ACTION_LABEL.later}
-      </Button>
-    </div>
+    )}
+    {mode === 'revise' && (
+      <div className="flex min-w-0 flex-col gap-2">
+        <SectionHeader
+          label={isAnswering ? RESOLVE_ITEM_LABEL.agentAnswer : INSTRUCTION_LABEL}
+          headingLevel={3}
+        />
+        <Textarea
+          id={`${fieldId}-instruction`}
+          aria-label={isAnswering ? RESOLVE_ITEM_LABEL.agentAnswer : INSTRUCTION_LABEL}
+          value={instruction}
+          rows={3}
+          disabled={isBusy}
+          className="max-h-48 text-sm"
+          onChange={(event) => onChangeInstruction(event.target.value)}
+        />
+      </div>
+    )}
   </div>
 );

@@ -1,8 +1,7 @@
-import { Button } from '@goodboy/ui';
+import { Button, SectionHeader, Skeleton } from '@goodboy/ui';
 import type { FileDiff } from '@goodboy/types';
 import { inlineChangePlan } from '../../inlineChangePlan';
-import { RESOLVE_ITEM_LABEL, changeSummaryLine, hiddenFilesLine } from '../../resolveItemCopy';
-import { CompactDiff } from './CompactDiff';
+import { RESOLVE_ITEM_LABEL, changeSummaryLine } from '../../resolveItemCopy';
 
 type Props = {
   readonly files: ReadonlyArray<FileDiff>;
@@ -15,33 +14,26 @@ export const ChangeBlock = ({ files, isLoading, error, onOpenInDiff }: Props) =>
   const plan = inlineChangePlan({ files });
   return (
     <div className="flex min-w-0 flex-col gap-2">
-      <div className="flex min-w-0 items-center justify-between gap-2">
-        <p className="text-3xs font-medium uppercase tracking-wide text-muted-foreground">
-          {RESOLVE_ITEM_LABEL.change}
-        </p>
-        <Button size="sm" variant="ghost" onClick={onOpenInDiff}>
-          {RESOLVE_ITEM_LABEL.openInDiff}
-        </Button>
-      </div>
-      {isLoading && <p className="text-2xs text-muted-foreground">Reading the change.</p>}
+      <SectionHeader
+        label={RESOLVE_ITEM_LABEL.change}
+        headingLevel={3}
+        action={
+          files.length === 0 ? null : (
+            <Button size="sm" variant="ghost" onClick={onOpenInDiff}>
+              {RESOLVE_ITEM_LABEL.openInDiff}
+            </Button>
+          )
+        }
+      />
+      {isLoading && <Skeleton className="h-3.5 w-40" />}
       {error !== null && <p className="text-2xs text-warning">{error}</p>}
       {!isLoading && error === null && files.length === 0 && (
-        <p className="text-2xs text-muted-foreground">This proposal carries no captured change.</p>
+        <p className="text-3xs text-muted-foreground">{RESOLVE_ITEM_LABEL.noCapturedChange}</p>
       )}
       {files.length > 0 && (
-        <>
-          <p className="text-2xs text-muted-foreground">
-            {changeSummaryLine({ fileCount: files.length, changedLines: plan.changedLines })}
-          </p>
-          {plan.files.map((file) => (
-            <CompactDiff key={file.path} file={file} />
-          ))}
-          {plan.hiddenFileCount > 0 && (
-            <p className="text-2xs text-muted-foreground/70">
-              {hiddenFilesLine({ count: plan.hiddenFileCount })}
-            </p>
-          )}
-        </>
+        <p className="text-3xs tabular-nums text-muted-foreground">
+          {changeSummaryLine({ fileCount: files.length, changedLines: plan.changedLines })}
+        </p>
       )}
     </div>
   );

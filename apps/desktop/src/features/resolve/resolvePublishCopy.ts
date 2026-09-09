@@ -20,48 +20,32 @@ const plural = ({
   readonly many: string;
 }): string => `${count} ${count === 1 ? one : many}`;
 
-export const publishButtonLabel = ({ counts }: { readonly counts: PublishCounts }): string => {
-  if (counts.commits > 0 && counts.replies > 0) {
-    return `Push ${counts.commits}, reply ${counts.replies}`;
-  }
-  if (counts.commits > 0) {
-    return `Push ${counts.commits}`;
-  }
-  if (counts.replies > 0) {
-    return `Reply ${counts.replies}`;
-  }
-  return counts.notes > 0 ? `Mark ${counts.notes} done` : 'Nothing to push';
+export const REVIEW_PUBLICATION = 'Review publication';
+export const PUBLISH = 'Publish';
+export const PUBLICATION_COMPLETE = 'Publication complete';
+
+export const publicationCountsLine = ({
+  preview,
+}: {
+  readonly preview: ResolvePublicationPreview;
+}): string | null => {
+  const resolutions = preview.replies.filter((reply) => reply.closes).length + preview.notes.length;
+  const parts = [
+    preview.commits.length === 0
+      ? null
+      : `${plural({ count: preview.commits.length, one: 'commit', many: 'commits' })} to push`,
+    preview.replies.length === 0
+      ? null
+      : `${plural({ count: preview.replies.length, one: 'reply', many: 'replies' })} to post`,
+    resolutions === 0
+      ? null
+      : `${plural({ count: resolutions, one: 'thread', many: 'threads' })} to resolve`,
+  ].flatMap((part) => (part === null ? [] : [part]));
+  return parts.length === 0 ? null : parts.join(' · ');
 };
 
 export const frozenAtLabel = ({ frozenAt }: { readonly frozenAt: number }): string =>
   `as of ${new Date(frozenAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-
-export const commitsLine = ({
-  preview,
-}: {
-  readonly preview: ResolvePublicationPreview;
-}): string | null =>
-  preview.commits.length === 0
-    ? null
-    : `Push ${plural({ count: preview.commits.length, one: 'commit', many: 'commits' })} to ${preview.branch}`;
-
-export const repliesLine = ({
-  preview,
-}: {
-  readonly preview: ResolvePublicationPreview;
-}): string | null =>
-  preview.replies.length === 0
-    ? null
-    : `Post ${plural({ count: preview.replies.length, one: 'reply', many: 'replies' })}`;
-
-export const notesLine = ({
-  preview,
-}: {
-  readonly preview: ResolvePublicationPreview;
-}): string | null =>
-  preview.notes.length === 0
-    ? null
-    : `Mark ${plural({ count: preview.notes.length, one: 'local note', many: 'local notes' })} done`;
 
 export const heldBackNote = ({
   preview,

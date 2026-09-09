@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatError } from '@goodboy/ui';
 import type { ResolveCheckRun, ResolveQueueItemWithThread, SessionId } from '@goodboy/types';
 import { useAppStore } from '../../../../store';
@@ -8,7 +8,9 @@ import { acceptedItemIds } from '../../acceptedItemIds';
 import { summariseResolveChecks } from '../../checkReceipts';
 import type { ResolveQueueRow } from '../../buildResolveQueueRows';
 import { useResolveCandidateDiff } from '../../hooks/useResolveCandidateDiff';
-import { resolveQueueNeighbours } from '../../orderResolveQueueRows';
+import { useResolveItemDraft } from '../../hooks/useResolveItemDraft';
+import { refuseBlockedReason } from '../../refuseBlockedReason';
+import { RESOLVE_ITEM_LABEL } from '../../resolveItemCopy';
 import { candidateHeadSha, selectResolveCandidate } from '../../selectResolveCandidate';
 import { selectResolveCheckScript } from '../../selectResolveCheckScript';
 import type { ResolveCandidateWithItems } from '../../../../store/slices/resolve/state';
@@ -18,7 +20,6 @@ type Props = {
   readonly sessionId: SessionId;
   readonly row: ResolveQueueRow;
   readonly allRows: ReadonlyArray<ResolveQueueRow>;
-  readonly orderedRows: ReadonlyArray<ResolveQueueRow>;
   readonly worktreePath: string | null;
   readonly onSelect: (threadId: string | null) => void;
   readonly onAskForChanges: (params: {
@@ -38,11 +39,38 @@ const EMPTY_CHECK_RUNS: ReadonlyArray<ResolveCheckRun> = [];
 const EMPTY_QUEUE_ITEMS: ReadonlyArray<ResolveQueueItemWithThread> = [];
 const EMPTY_SCRIPT_GROUPS: ReadonlyArray<ScriptGroup> = [];
 
+const approveBlockedReasonFor = ({
+  row,
+  isApprovable,
+}: {
+  readonly row: ResolveQueueRow;
+  readonly isApprovable: boolean;
+}): string | null => {
+  if (row.status === 'working') {
+    return 'The run has to stop first';
+  }
+  if (row.status === 'agent_asked') {
+    return 'Answer the agent question first';
+  }
+  if (row.status === 'run_failed') {
+    return 'The last run did not finish';
+  }
+  if (row.status === 'ready_to_push') {
+    return 'Already approved';
+  }
+  if (row.status === 'later') {
+    return 'Resume this comment first';
+  }
+  if (!isApprovable) {
+    return RESOLVE_ITEM_LABEL.nothingToApprove;
+  }
+  return null;
+};
+
 export const ResolveItemContainer = ({
   sessionId,
   row,
   allRows,
-  orderedRows,
   worktreePath,
   onSelect,
   onAskForChanges,
@@ -57,26 +85,33 @@ export const ResolveItemContainer = ({
       EMPTY_SCRIPT_GROUPS,
   );
   const acceptResolveQueueItem = useAppStore((s) => s.acceptResolveQueueItem);
+  const refuseResolveQueueItem = useAppStore((s) => s.refuseResolveQueueItem);
   const deferResolveQueueItem = useAppStore((s) => s.deferResolveQueueItem);
+  const reopenResolveQueueItem = useAppStore((s) => s.reopenResolveQueueItem);
   const runResolveCheck = useAppStore((s) => s.runResolveCheck);
   const forceCloseResolver = useAppStore((s) => s.forceCloseResolver);
   const selectAgent = useAppStore((s) => s.selectAgent);
   const loadDiscoveredScripts = useAppStore((s) => s.loadDiscoveredScripts);
   const metrics = useAgentMetrics({ sessionId });
 
-  const [reply, setReply] = useState(row.proposal ?? '');
-  const [instruction, setInstruction] = useState('');
+  const threadId = row.thread.threadId;
+  const { reply, instruction, mode, setReply, setInstruction, setMode } = useResolveItemDraft({
+    sessionId,
+    threadId,
+    proposal: row.proposal,
+  });
   const [isBusy, setIsBusy] = useState(false);
   const [isCheckRunning, setIsCheckRunning] = useState(false);
   const [unprovable, setUnprovable] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    setReply(row.proposal ?? '');
-    setInstruction('');
-    setError(null);
-    setUnprovable(null);
-  }, [row.proposal, row.thread.threadId]);
+  const currentThreadIdRef = useRef(threadId);
+  currentThreadIdRef.current = threadId;
+  const isStillSelected = useCallback(
+    ({ startedOn }: { readonly startedOn: string }): boolean =>
+      currentThreadIdRef.current === startedOn,
+    [],
+  );
 
   useEffect(() => {
     if (worktreePath === null) {
@@ -107,32 +142,35 @@ export const ResolveItemContainer = ({
       }),
     [allRows, row.coveredThreadIds],
   );
-  const neighbours = resolveQueueNeighbours({
-    rows: orderedRows,
-    threadId: row.thread.threadId,
-  });
   const checkScript = useMemo(
     () => selectResolveCheckScript({ groups: scriptGroups }),
     [scriptGroups],
   );
+  const proposalKind = candidate === null ? row.proposalKind : 'fix';
+  const isApprovable = proposalKind !== 'none' || reply.trim() !== '';
   const costUsd =
     row.attempt === null
       ? null
       : (metrics.aggregatesByAgentId.get(row.attempt.agentId)?.estimatedCostUsd ?? null);
 
   const guard = async ({ run }: { readonly run: () => Promise<void> }): Promise<void> => {
+    const startedOn = threadId;
     setIsBusy(true);
     setError(null);
     try {
       await run();
     } catch (caught) {
-      setError(formatError(caught));
+      if (isStillSelected({ startedOn })) {
+        setError(formatError(caught));
+      }
     } finally {
-      setIsBusy(false);
+      if (isStillSelected({ startedOn })) {
+        setIsBusy(false);
+      }
     }
   };
 
-  const onAccept = (): void => {
+  const onApprove = (): void => {
     void guard({
       run: () =>
         acceptResolveQueueItem({
@@ -141,6 +179,20 @@ export const ResolveItemContainer = ({
           revision: row.thread.revision,
           reply,
         }),
+    });
+  };
+
+  const onRefuse = (): void => {
+    void guard({
+      run: async () => {
+        await refuseResolveQueueItem({
+          sessionId,
+          itemId: row.item.id,
+          revision: row.thread.revision,
+          reply,
+        });
+        setMode('reply');
+      },
     });
   };
 
@@ -153,10 +205,22 @@ export const ResolveItemContainer = ({
     });
   };
 
+  const onReopen = (): void => {
+    void guard({
+      run: () =>
+        reopenResolveQueueItem({
+          sessionId,
+          itemId: row.item.id,
+          revision: row.thread.revision,
+        }),
+    });
+  };
+
   const onRunCheck = (): void => {
     if (candidate === null || checkScript === null || worktreePath === null) {
       return;
     }
+    const startedOn = threadId;
     setIsCheckRunning(true);
     setError(null);
     setUnprovable(null);
@@ -168,9 +232,21 @@ export const ResolveItemContainer = ({
       testIdentity: null,
       breadth: 'full',
     })
-      .then((pair) => setUnprovable(pair.unprovable))
-      .catch((caught: unknown) => setError(formatError(caught)))
-      .finally(() => setIsCheckRunning(false));
+      .then((pair) => {
+        if (isStillSelected({ startedOn })) {
+          setUnprovable(pair.unprovable);
+        }
+      })
+      .catch((caught: unknown) => {
+        if (isStillSelected({ startedOn })) {
+          setError(formatError(caught));
+        }
+      })
+      .finally(() => {
+        if (isStillSelected({ startedOn })) {
+          setIsCheckRunning(false);
+        }
+      });
   };
 
   return (
@@ -182,23 +258,39 @@ export const ResolveItemContainer = ({
       diffError={diff.error}
       checks={checks}
       costUsd={costUsd}
+      candidateSha={candidate === null ? null : candidate.candidateSha}
       reply={reply}
       instruction={instruction}
+      mode={mode}
       isBusy={isBusy}
-      canAccept={row.status === 'for_you' || row.status === 'changed_since_accepted'}
+      proposalKind={proposalKind}
+      canApprove={
+        (row.status === 'for_you' || row.status === 'changed_since_accepted') && isApprovable
+      }
+      approveBlockedReason={approveBlockedReasonFor({ row, isApprovable })}
+      refuseBlockedReason={refuseBlockedReason({ row })}
       canRunCheck={candidate !== null && checkScript !== null}
       isCheckRunning={isCheckRunning}
       checksNote={unprovable}
       error={error}
-      hasPrevious={neighbours.previousThreadId !== null}
-      hasNext={neighbours.nextThreadId !== null}
       onChangeReply={setReply}
       onChangeInstruction={setInstruction}
-      onAccept={onAccept}
-      onAskForChanges={() =>
-        onAskForChanges({ threadId: row.thread.threadId, instruction: instruction.trim() })
-      }
+      onApprove={onApprove}
+      onStartRevise={() => setMode('revise')}
+      onStartRefuse={() => setMode('refuse')}
+      onCancelRefuse={() => setMode('reply')}
+      onRefuse={onRefuse}
+      onCancelRevise={() => {
+        setInstruction('');
+        setMode('reply');
+      }}
+      onSendToAgent={() => {
+        onAskForChanges({ threadId: row.thread.threadId, instruction: instruction.trim() });
+        setInstruction('');
+        setMode('reply');
+      }}
       onLater={onLater}
+      onReopen={onReopen}
       onOpenInDiff={() => {
         if (candidate === null) {
           return;
@@ -210,6 +302,14 @@ export const ResolveItemContainer = ({
           line: row.reviewerNote?.line ?? null,
         });
       }}
+      onOpenCommit={({ sha }) =>
+        onOpenInDiff({
+          threadId: row.thread.threadId,
+          sha,
+          path: row.reviewerNote?.path ?? null,
+          line: row.reviewerNote?.line ?? null,
+        })
+      }
       onRunCheck={onRunCheck}
       onStopRun={() => {
         if (row.attempt !== null) {
@@ -221,9 +321,7 @@ export const ResolveItemContainer = ({
           void selectAgent(sessionId, row.attempt.agentId);
         }
       }}
-      onPrevious={() => onSelect(neighbours.previousThreadId)}
-      onNext={() => onSelect(neighbours.nextThreadId)}
-      onCollapse={() => onSelect(null)}
+      onSelectRelated={(threadId) => onSelect(threadId)}
     />
   );
 };

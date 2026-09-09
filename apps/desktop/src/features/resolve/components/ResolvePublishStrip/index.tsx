@@ -1,17 +1,25 @@
 import { useCallback, useState } from 'react';
 import { Button, GhostActionButton, formatError } from '@goodboy/ui';
-import { GitCommit } from 'lucide-react';
-import type { ResolvePublication, ResolveQueueItemWithThread, SessionId } from '@goodboy/types';
+import { Activity, GitCommit, RefreshCw, RotateCw } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import type {
+  ResolveAttempt,
+  ResolvePublication,
+  ResolveQueueItemWithThread,
+  SessionId,
+} from '@goodboy/types';
 import { useAppStore } from '../../../../store';
 import { useToast } from '../../../../app/components/Toast';
 import { acceptedPublishCounts, previewPublishCounts } from '../../publishCounts';
 import {
   CHECK_AND_RETRY,
+  PUBLICATION_COMPLETE,
+  PUBLISH,
+  REVIEW_PUBLICATION,
   UPDATE_AND_REVIEW,
   blockerCopy,
   driftSentence,
   frozenAtLabel,
-  publishButtonLabel,
 } from '../../resolvePublishCopy';
 import { PublishLines } from './PublishLines';
 
@@ -21,13 +29,23 @@ type Props = {
 
 const EMPTY_QUEUE_ITEMS: ReadonlyArray<ResolveQueueItemWithThread> = [];
 const EMPTY_PUBLICATIONS: ReadonlyArray<ResolvePublication> = [];
+const EMPTY_ATTEMPTS: ReadonlyArray<ResolveAttempt> = [];
 
-const BLOCKER_ACTION_LABEL = {
+type BlockerAction = 'open_diff' | 'view_work' | 'recheck_fix' | 'refresh';
+
+const BLOCKER_ACTION_LABEL: Record<BlockerAction, string> = {
   open_diff: 'Open diff',
   view_work: 'View work',
   recheck_fix: 'Recheck fix',
   refresh: 'Refresh',
-} as const;
+};
+
+const BLOCKER_ACTION_ICON: Record<BlockerAction, LucideIcon> = {
+  open_diff: GitCommit,
+  view_work: Activity,
+  recheck_fix: RefreshCw,
+  refresh: RotateCw,
+};
 
 export const ResolvePublishStrip = ({ sessionId }: Props) => {
   const { showToast } = useToast();
@@ -36,12 +54,14 @@ export const ResolvePublishStrip = ({ sessionId }: Props) => {
   const publications = useAppStore(
     (s) => s.sessionResolvePublications[sessionId] ?? EMPTY_PUBLICATIONS,
   );
+  const attempts = useAppStore((s) => s.sessionResolveAttempts[sessionId] ?? EMPTY_ATTEMPTS);
   const preparePublication = useAppStore((s) => s.preparePublication);
   const publishConversations = useAppStore((s) => s.publishConversations);
   const cancelPublication = useAppStore((s) => s.cancelPublication);
   const retryPublication = useAppStore((s) => s.retryPublication);
   const refreshSessionPrDetail = useAppStore((s) => s.refreshSessionPrDetail);
   const openDiffLens = useAppStore((s) => s.openDiffLens);
+  const selectAgent = useAppStore((s) => s.selectAgent);
   const [isBusy, setIsBusy] = useState(false);
 
   const counts =
@@ -53,6 +73,7 @@ export const ResolvePublishStrip = ({ sessionId }: Props) => {
     preview?.blocker == null
       ? null
       : blockerCopy({ blocker: preview.blocker, prNumber: preview.prNumber });
+  const recovery = blocker?.action ?? null;
   const drift = preview === null ? null : driftSentence({ drift: preview.drift });
   const needsRenewal =
     preview !== null &&
@@ -103,7 +124,7 @@ export const ResolvePublishStrip = ({ sessionId }: Props) => {
           result.failed > 0 ? 'error' : 'success',
           result.failed > 0
             ? `${result.closed} done, ${result.failed} left open`
-            : `${result.closed} done`,
+            : PUBLICATION_COMPLETE,
         );
       }
     });
@@ -115,6 +136,32 @@ export const ResolvePublishStrip = ({ sessionId }: Props) => {
     });
   }, [cancelPublication, preview, run, sessionId]);
 
+  const onRecover = useCallback(
+    ({ action }: { readonly action: BlockerAction }): void => {
+      if (action === 'refresh') {
+        void refreshSessionPrDetail(sessionId, { force: true });
+        return;
+      }
+      if (action === 'recheck_fix') {
+        onPrepare();
+        return;
+      }
+      if (action === 'view_work') {
+        const attempt = attempts.reduce<ResolveAttempt | null>(
+          (latest, candidate) =>
+            latest === null || candidate.createdAt >= latest.createdAt ? candidate : latest,
+          null,
+        );
+        if (attempt !== null) {
+          void selectAgent(sessionId, attempt.agentId);
+        }
+        return;
+      }
+      openDiffLens(sessionId, { kind: 'working', path: null });
+    },
+    [attempts, onPrepare, openDiffLens, refreshSessionPrDetail, selectAgent, sessionId],
+  );
+
   if (total === 0 && !isStuck && preview === null) {
     return null;
   }
@@ -123,7 +170,9 @@ export const ResolvePublishStrip = ({ sessionId }: Props) => {
     ? CHECK_AND_RETRY
     : needsRenewal
       ? UPDATE_AND_REVIEW
-      : publishButtonLabel({ counts });
+      : preview === null
+        ? REVIEW_PUBLICATION
+        : PUBLISH;
   const onPress = isStuck
     ? onCheckAndRetry
     : preview === null || needsRenewal
@@ -131,28 +180,22 @@ export const ResolvePublishStrip = ({ sessionId }: Props) => {
       : onConfirm;
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-1">
+    <div className="flex min-w-0 flex-1 flex-col gap-2">
       {preview !== null && <PublishLines preview={preview} />}
       {(blocker !== null || drift !== null) && (
         <div className="flex items-center gap-2">
           <span className="text-2xs text-warning">{blocker?.sentence ?? drift}</span>
-          {blocker?.action != null && (
+          {recovery !== null && (
             <GhostActionButton
-              icon={GitCommit}
-              label={BLOCKER_ACTION_LABEL[blocker.action]}
+              icon={BLOCKER_ACTION_ICON[recovery]}
+              label={BLOCKER_ACTION_LABEL[recovery]}
               tone="warning"
-              onClick={() => {
-                if (blocker.action === 'refresh') {
-                  void refreshSessionPrDetail(sessionId, { force: true });
-                  return;
-                }
-                openDiffLens(sessionId, { kind: 'working', path: null });
-              }}
+              onClick={() => onRecover({ action: recovery })}
             />
           )}
         </div>
       )}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-4">
         {preview !== null && (
           <span className="text-2xs tabular-nums text-muted-foreground">
             {frozenAtLabel({ frozenAt: preview.frozenAt })}

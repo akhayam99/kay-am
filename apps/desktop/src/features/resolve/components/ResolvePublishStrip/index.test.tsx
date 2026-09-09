@@ -14,6 +14,7 @@ const h = vi.hoisted(() => {
   const state = {
     sessionResolveQueueItems: {} as Record<string, ReadonlyArray<unknown>>,
     sessionResolvePublications: {} as Record<string, ReadonlyArray<unknown>>,
+    sessionResolveAttempts: {} as Record<string, ReadonlyArray<unknown>>,
     activePublicationPreview: {} as Record<string, unknown>,
     preparePublication: vi.fn(async () => null as unknown),
     publishConversations: vi.fn(
@@ -26,6 +27,7 @@ const h = vi.hoisted(() => {
     retryPublication: vi.fn(async () => null as unknown),
     refreshSessionPrDetail: vi.fn(async () => undefined),
     openDiffLens: vi.fn(),
+    selectAgent: vi.fn(async () => undefined),
   };
   const useAppStore = Object.assign(<T,>(selector: (s: typeof state) => T) => selector(state), {
     getState: () => state,
@@ -96,6 +98,7 @@ beforeEach(() => {
     ],
   };
   h.state.sessionResolvePublications = {};
+  h.state.sessionResolveAttempts = {};
   h.state.activePublicationPreview = {};
 });
 
@@ -109,13 +112,13 @@ describe('ResolvePublishStrip', () => {
     });
     const { rerender } = render(<ResolvePublishStrip sessionId={SESSION_ID} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reply 3' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Review publication' }));
     await waitFor(() => expect(h.state.preparePublication).toHaveBeenCalledTimes(1));
     rerender(<ResolvePublishStrip sessionId={SESSION_ID} />);
 
-    expect(screen.getByText('Post 3 replies')).toBeDefined();
+    expect(screen.getByText('3 replies to post · 3 threads to resolve')).toBeDefined();
     expect(screen.getByText(frozenAtLabel({ frozenAt: FROZEN_AT }))).toBeDefined();
-    fireEvent.click(screen.getByRole('button', { name: 'Reply 3' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
 
     await waitFor(() => expect(h.state.publishConversations).toHaveBeenCalledTimes(1));
     expect(h.state.publishConversations.mock.calls[0]?.[0]).toMatchObject({
@@ -145,7 +148,7 @@ describe('ResolvePublishStrip', () => {
     render(<ResolvePublishStrip sessionId={SESSION_ID} />);
 
     expect(screen.getByText('· 1 held back, the comment changed')).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Reply 1' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Publish' })).toBeDefined();
   });
 
   it('offers to check before retrying once a push is stuck', () => {
@@ -165,5 +168,35 @@ describe('ResolvePublishStrip', () => {
 
     expect(screen.getByText('The branch carries a commit you did not approve')).toBeDefined();
     expect(screen.getByRole('button', { name: 'Update branch and review again' })).toBeDefined();
+  });
+
+  it('sends View work to the attempt that made the commit, never to the working tree', () => {
+    h.state.sessionResolveAttempts = {
+      [SESSION_ID]: [
+        { id: 'attempt-old', agentId: 'agent-old', createdAt: 1 },
+        { id: 'attempt-new', agentId: 'agent-new', createdAt: 2 },
+      ],
+    };
+    h.state.activePublicationPreview = {
+      [SESSION_ID]: previewOf({ blocker: 'unapproved_commit' }),
+    };
+    render(<ResolvePublishStrip sessionId={SESSION_ID} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'View work' }));
+
+    expect(h.state.selectAgent).toHaveBeenCalledWith(SESSION_ID, 'agent-new');
+    expect(h.state.openDiffLens).not.toHaveBeenCalled();
+  });
+
+  it('sends Recheck fix back through the publication check, not to a diff', () => {
+    h.state.activePublicationPreview = {
+      [SESSION_ID]: previewOf({ blocker: 'missing_commit' }),
+    };
+    render(<ResolvePublishStrip sessionId={SESSION_ID} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Recheck fix' }));
+
+    expect(h.state.preparePublication).toHaveBeenCalledWith({ sessionId: SESSION_ID });
+    expect(h.state.openDiffLens).not.toHaveBeenCalled();
   });
 });

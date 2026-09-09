@@ -12,9 +12,12 @@ export type ResolveQueueStatus =
   | 'ready_to_push'
   | 'pushed'
   | 'later'
+  | 'changed_since_accepted'
+  | 'delivery_failed'
+  | 'confirm_delivery'
+  | 'run_failed'
   | 'wont_fix'
-  | 'wont_fix_sent'
-  | 'changed_since_accepted';
+  | 'wont_fix_sent';
 
 type Params = {
   readonly item: ResolveQueueItem;
@@ -23,16 +26,58 @@ type Params = {
   readonly deliveryReceipts: ReadonlyArray<ResolvePublicationThread>;
 };
 
-type ReceiptParams = Omit<Params, 'activeAttempt'>;
-
-const isDelivered = ({ item, thread, deliveryReceipts }: ReceiptParams): boolean =>
-  item.deliveredAt !== null &&
-  deliveryReceipts.some(
-    (receipt) =>
-      receipt.threadId === thread.threadId &&
-      receipt.revision === item.approvedRevision &&
-      (receipt.replyPostedAt !== null || receipt.resolvedAt !== null),
+export const resolveDeliveryReceiptsFor = ({
+  item,
+  thread,
+  deliveryReceipts,
+}: {
+  readonly item: ResolveQueueItem;
+  readonly thread: ResolveThread;
+  readonly deliveryReceipts: ReadonlyArray<ResolvePublicationThread>;
+}): ReadonlyArray<ResolvePublicationThread> =>
+  deliveryReceipts.filter(
+    (receipt) => receipt.threadId === thread.threadId && receipt.revision === item.approvedRevision,
   );
+
+export const isDeliveryComplete = ({
+  receipt,
+}: {
+  readonly receipt: ResolvePublicationThread;
+}): boolean =>
+  (receipt.replyPhase === 'posted' || receipt.replyPhase === 'skipped') &&
+  (receipt.resolvePhase === 'resolved' || receipt.resolvePhase === 'skipped');
+
+const isDeliveryUncertain = ({
+  receipt,
+}: {
+  readonly receipt: ResolvePublicationThread;
+}): boolean => receipt.replyPhase === 'uncertain' || receipt.resolvePhase === 'uncertain';
+
+const deriveDeliveryStatus = ({
+  item,
+  thread,
+  deliveryReceipts,
+  delivered,
+  undelivered,
+}: {
+  readonly item: ResolveQueueItem;
+  readonly thread: ResolveThread;
+  readonly deliveryReceipts: ReadonlyArray<ResolvePublicationThread>;
+  readonly delivered: ResolveQueueStatus;
+  readonly undelivered: ResolveQueueStatus;
+}): ResolveQueueStatus => {
+  const receipts = resolveDeliveryReceiptsFor({ item, thread, deliveryReceipts });
+  if (item.deliveredAt !== null && receipts.some((receipt) => isDeliveryComplete({ receipt }))) {
+    return delivered;
+  }
+  if (receipts.some((receipt) => receipt.error !== null)) {
+    return 'delivery_failed';
+  }
+  if (receipts.some((receipt) => isDeliveryUncertain({ receipt }))) {
+    return 'confirm_delivery';
+  }
+  return undelivered;
+};
 
 export const deriveResolveQueueStatus = ({
   item,
@@ -48,9 +93,15 @@ export const deriveResolveQueueStatus = ({
     if (isStale) {
       return 'changed_since_accepted';
     }
-    return isDelivered({ item, thread, deliveryReceipts }) ? 'wont_fix_sent' : 'wont_fix';
+    return deriveDeliveryStatus({
+      item,
+      thread,
+      deliveryReceipts,
+      delivered: 'wont_fix_sent',
+      undelivered: 'wont_fix',
+    });
   }
-  if (activeAttempt?.phase === 'running') {
+  if (activeAttempt?.phase === 'running' || activeAttempt?.phase === 'queued') {
     return 'working';
   }
   if (thread.question !== null && thread.state === 'needs_answer') {
@@ -60,7 +111,16 @@ export const deriveResolveQueueStatus = ({
     return 'changed_since_accepted';
   }
   if (item.approvalState === 'accepted') {
-    return isDelivered({ item, thread, deliveryReceipts }) ? 'pushed' : 'ready_to_push';
+    return deriveDeliveryStatus({
+      item,
+      thread,
+      deliveryReceipts,
+      delivered: 'pushed',
+      undelivered: 'ready_to_push',
+    });
+  }
+  if (activeAttempt?.phase === 'failed' || activeAttempt?.phase === 'cancelled') {
+    return 'run_failed';
   }
   return 'for_you';
 };
