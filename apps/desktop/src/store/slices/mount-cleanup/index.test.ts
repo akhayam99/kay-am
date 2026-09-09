@@ -370,6 +370,7 @@ describe('cleaning the mounts of a session', () => {
     expect(h.removeWorktreeChecked).toHaveBeenCalledWith({
       repoPath: REPO_ROOT,
       worktreePath: WORKTREE_PATH,
+      mode: 'safe',
     });
     expect(outcomes[0]?.decision).toMatchObject({ kind: 'removed' });
   });

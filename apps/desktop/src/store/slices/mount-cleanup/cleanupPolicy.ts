@@ -1,4 +1,10 @@
-import type { MountCleanupDecision, MountDiskState, MountId, SessionId } from '@goodboy/types';
+import type {
+  MountCleanupDecision,
+  MountDiskState,
+  MountId,
+  SessionId,
+  WorktreeRemovalMode,
+} from '@goodboy/types';
 import { formatError } from '@goodboy/ui';
 import { removeWorktreeChecked } from '../../../features/worktree/worktree';
 import type { AppState } from '../../types';
@@ -22,6 +28,7 @@ type CleanupParams = {
   readonly get: GetFn;
   readonly target: CleanupTarget;
   readonly keepDirectory?: boolean;
+  readonly mode?: WorktreeRemovalMode;
 };
 
 export const mountCleanupBlockers = ({
@@ -49,6 +56,7 @@ export const cleanupMountDirectory = async ({
   get,
   target,
   keepDirectory = false,
+  mode = 'safe',
 }: CleanupParams): Promise<MountCleanupResult> => {
   const path = target.worktreePath;
   const kept = (reason: string): MountCleanupResult => ({
@@ -71,7 +79,11 @@ export const cleanupMountDirectory = async ({
     return kept(blockers.join(', '));
   }
   try {
-    const result = await removeWorktreeChecked({ repoPath: target.repoRoot, worktreePath: path });
+    const result = await removeWorktreeChecked({
+      repoPath: target.repoRoot,
+      worktreePath: path,
+      mode,
+    });
     if (result.kind === 'kept') {
       return {
         decision: { kind: 'kept', path, reason: result.reasons.join(', ') },
@@ -83,6 +95,9 @@ export const cleanupMountDirectory = async ({
       diskState: result.kind === 'missing' ? 'missing' : 'removed',
     };
   } catch (error) {
-    return kept(formatError(error));
+    return {
+      decision: { kind: 'failed', path, reason: formatError(error) },
+      diskState: 'present',
+    };
   }
 };

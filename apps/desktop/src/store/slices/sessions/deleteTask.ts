@@ -172,7 +172,7 @@ export const deleteTask = (set: SetFn, get: GetFn) => {
           isRepoProject: true,
         },
       });
-      if (result.decision.kind === 'kept') {
+      if (result.decision.kind === 'kept' || result.decision.kind === 'failed') {
         keep(new Error(`${worktreePath}: ${result.decision.reason}`), result.diskState);
         continue;
       }

@@ -110,18 +110,19 @@ const makeStore = () => ({
 
 type Store = ReturnType<typeof makeStore>;
 
-const runDetach = async (store: Store) => {
+const runDetach = async (store: Store, disposition?: string) => {
   const set = vi.fn((updater: unknown) => {
     const patch =
       typeof updater === 'function' ? (updater as (s: Store) => object)(store) : updater;
     Object.assign(store, patch);
   });
-  await detachProject(
+  return detachProject(
     set as never,
     (() => store) as never,
   )({
     sessionId: SESSION_ID,
     projectId: PROJECT_ID,
+    ...(disposition === undefined ? {} : { disposition: disposition as never }),
   });
 };
 
@@ -144,10 +145,12 @@ describe('detachProject', () => {
     expect(removeWorktreeChecked).toHaveBeenCalledWith({
       repoPath: '/repos/api',
       worktreePath: '/container/api',
+      mode: 'safe',
     });
     expect(removeWorktreeChecked).toHaveBeenCalledWith({
       repoPath: '/repos/api',
       worktreePath: '/container/api-2',
+      mode: 'safe',
     });
     expect(markSessionMountRemoved).toHaveBeenCalledWith({
       db: {},
@@ -205,17 +208,46 @@ describe('detachProject', () => {
     expect(store.sessionProjectMounts['sess-1'].map((m) => m.projectId)).toEqual(['project-web']);
   });
 
-  it('treats a removal failure as a keep', async () => {
+  it('reports a removal failure and keeps the mount attached', async () => {
     const store = makeStore();
     removeWorktreeChecked.mockRejectedValue(new Error('not a git repository'));
 
-    await runDetach(store);
+    const outcomes = await runDetach(store);
 
+    expect(outcomes.map((outcome) => outcome.kind)).toEqual(['failed', 'failed', 'failed']);
     expect(markSessionMountRemoved).not.toHaveBeenCalled();
     expect(markSessionMountRemovedByPath).not.toHaveBeenCalled();
-    expect(store.recordSessionEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ payload: expect.objectContaining({ kept: true }) }),
-    );
+    expect(updateSessionMountLifecycle).not.toHaveBeenCalled();
+    expect(store.recordSessionEvent).not.toHaveBeenCalled();
+    expect(store.sessionProjectMounts['sess-1'].map((m) => m.projectId)).toEqual([
+      'project-api',
+      'project-api',
+      'project-api',
+      'project-web',
+    ]);
+    expect(store.sessionActiveProject['sess-1']).toBe('project-api');
+  });
+
+  it('forces removal only when the user confirmed the risky path', async () => {
+    const store = makeStore();
+
+    await runDetach(store, 'delete-files');
+
+    expect(removeWorktreeChecked).toHaveBeenCalledWith({
+      repoPath: '/repos/api',
+      worktreePath: '/container/api',
+      mode: 'confirmed',
+    });
+  });
+
+  it('keeps every directory when the user asked to keep files', async () => {
+    const store = makeStore();
+
+    const outcomes = await runDetach(store, 'keep-files');
+
+    expect(removeWorktreeChecked).not.toHaveBeenCalled();
+    expect(outcomes.map((outcome) => outcome.kind)).toEqual(['kept', 'kept', 'kept']);
+    expect(store.sessionProjectMounts['sess-1'].map((m) => m.projectId)).toEqual(['project-web']);
   });
 
   it('keeps the directory when a terminal still uses the mount', async () => {
