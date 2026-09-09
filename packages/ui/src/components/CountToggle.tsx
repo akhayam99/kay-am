@@ -10,7 +10,7 @@ export type Props = {
   readonly onChange: (isShown: boolean) => void;
 };
 
-export const CountToggle = ({ label, count, isShown, icon, itemsLabel, onChange }: Props) => {
+export const CountToggle = ({ label, count, isShown, icon, onChange }: Props) => {
   if (count === 0) {
     return null;
   }
@@ -22,7 +22,6 @@ export const CountToggle = ({ label, count, isShown, icon, itemsLabel, onChange 
       type="button"
       onClick={() => onChange(!isShown)}
       aria-pressed={isShown}
-      title={`${isShown ? 'hide' : 'show'} ${label.toLowerCase()} ${itemsLabel}`}
       className={cn(
         'flex h-7 items-center gap-1 rounded-md px-1.5 text-2xs font-medium transition-colors',
         isShown

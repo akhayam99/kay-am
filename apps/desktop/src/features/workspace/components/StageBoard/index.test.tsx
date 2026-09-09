@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { Project, Session, Workspace, WorkspaceGitStatus, WorkspaceId } from '@goodboy/types';
@@ -97,6 +98,16 @@ vi.mock('../../../session/components/DeleteSessionConfirm', () => ({
   DeleteSessionConfirm: () => null,
 }));
 vi.mock('../../../../shared/components/DogMascot', () => ({ DogMascot: () => <div /> }));
+
+vi.mock('@goodboy/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@goodboy/ui')>();
+  return {
+    ...actual,
+    Tooltip: ({ content, children }: { content: string; children: ReactElement }) => (
+      <span data-tooltip={content}>{children}</span>
+    ),
+  };
+});
 
 import { StageBoard } from './index';
 
@@ -213,7 +224,9 @@ describe('StageBoard empty-projects gate', () => {
     render(<StageBoard workspaceId={wsId} sessions={[session]} />);
     const button = screen.getByRole('button', { name: 'New session' });
     expect(button.hasAttribute('disabled')).toBe(true);
-    expect(button.getAttribute('title')).toBe('Link a project first');
+    expect(button.closest('[data-tooltip]')?.getAttribute('data-tooltip')).toBe(
+      'Link a project first',
+    );
     expect(screen.queryByTestId('projects-step')).toBeNull();
   });
 
@@ -269,7 +282,7 @@ describe('StageBoard git gate', () => {
     render(<StageBoard workspaceId={wsId} sessions={[session]} />);
     const button = screen.getByRole('button', { name: 'New session' });
     expect(button.hasAttribute('disabled')).toBe(true);
-    expect(button.getAttribute('title')).toBe(
+    expect(button.closest('[data-tooltip]')?.getAttribute('data-tooltip')).toBe(
       'This project needs a git repository with one commit first',
     );
   });
@@ -278,9 +291,9 @@ describe('StageBoard git gate', () => {
     state.projects = [projectOf({ id: 'proj-1' }), projectOf({ id: 'proj-2' })];
     gitStatuses.current = { 'proj-1': statusOf('ready'), 'proj-2': statusOf('missing') };
     render(<StageBoard workspaceId={wsId} sessions={[session]} />);
-    expect(screen.getByRole('button', { name: 'New session' }).hasAttribute('disabled')).toBe(
-      false,
-    );
+    const button = screen.getByRole('button', { name: 'New session' });
+    expect(button.hasAttribute('disabled')).toBe(false);
+    expect(button.closest('[data-tooltip]')).toBeNull();
   });
 
   it('enables New session when a folder project is available', () => {
@@ -296,15 +309,20 @@ describe('StageBoard git gate', () => {
     render(<StageBoard workspaceId={wsId} sessions={[session]} />);
     const button = screen.getByRole('button', { name: 'New session' });
     expect(button.hasAttribute('disabled')).toBe(true);
-    expect(button.getAttribute('title')).toBe('Reading git status');
+    expect(button.closest('[data-tooltip]')?.getAttribute('data-tooltip')).toBe(
+      'Reading git status',
+    );
   });
 
   it('uses the unreachable reason when all repo projects are missing', () => {
     gitStatuses.current = { 'proj-1': statusOf('missing') };
     render(<StageBoard workspaceId={wsId} sessions={[session]} />);
-    expect(screen.getByRole('button', { name: 'New session' }).getAttribute('title')).toBe(
-      'The project folder is unreachable',
-    );
+    expect(
+      screen
+        .getByRole('button', { name: 'New session' })
+        .closest('[data-tooltip]')
+        ?.getAttribute('data-tooltip'),
+    ).toBe('The project folder is unreachable');
   });
 });
 
@@ -343,19 +361,13 @@ describe('StageBoard selection', () => {
   const other = { id: 's-2' } as Session;
   const shelved = { id: 's-9' } as Session;
 
-  it('offers the alt-click hint only once the board holds more than one session', () => {
+  it('never renders a standing selection hint', () => {
     groups.current = [{ key: 'building', sessions: [session] }];
     render(<StageBoard workspaceId={wsId} sessions={[session]} />);
     expect(screen.queryByText(/lasso/)).toBeNull();
 
     cleanup();
     groups.current = [{ key: 'building', sessions: [session, other] }];
-    render(<StageBoard workspaceId={wsId} sessions={[session, other]} />);
-    expect(screen.getByText('⌥click to select · drag to lasso')).toBeDefined();
-  });
-
-  it('hides the alt-click hint when the project filter leaves one visible session', () => {
-    groups.current = [{ key: 'building', sessions: [session] }];
     render(<StageBoard workspaceId={wsId} sessions={[session, other]} />);
     expect(screen.queryByText(/lasso/)).toBeNull();
   });
