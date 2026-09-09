@@ -12,7 +12,11 @@ import { deriveResolveQueueStatus } from './deriveResolveQueueStatus';
 import { makeTestDatabase } from '@goodboy/db/test-helpers';
 import type { ResolveQueueItem, ResolveThread, SessionId } from '@goodboy/types';
 import { createResolveSlice } from './index';
-import { EMPTY_REFUSAL_REPLY, REFUSAL_AFTER_INTEGRATION } from './refuseResolveQueueItem';
+import {
+  EMPTY_REFUSAL_REPLY,
+  REFUSAL_AFTER_INTEGRATION,
+  REFUSAL_REPLY_OUT_OF_DATE,
+} from './refuseResolveQueueItem';
 import { resolveInitialState } from './state';
 import type { GetFn, SetFn } from './types';
 
@@ -142,7 +146,7 @@ describe('resolve queue actions', () => {
       sessionId,
       itemId: item.id,
       revision: 2,
-      reply: 'We are keeping this as it is',
+      reply: 'Reply',
     });
     expect((await listResolveQueueItems({ db, sessionId }))[0]?.item).toMatchObject({
       approvalState: 'wont_fix',
@@ -151,6 +155,19 @@ describe('resolve queue actions', () => {
     expect((await listResolveQueueItems({ db, sessionId }))[0]?.item.approvedReplyHash).not.toBe(
       null,
     );
+  });
+
+  it('refuses to refuse with a reply that drifted from the saved draft', async () => {
+    const live = createHarness();
+    await expect(
+      live.actions.refuseResolveQueueItem({
+        sessionId,
+        itemId: item.id,
+        revision: 2,
+        reply: 'We are keeping this as it is',
+      }),
+    ).rejects.toThrow(REFUSAL_REPLY_OUT_OF_DATE);
+    expect((await listResolveQueueItems({ db, sessionId }))[0]?.item.approvalState).toBe('none');
   });
 
   it('will not refuse a comment whose fix is already on the branch', async () => {
@@ -163,7 +180,7 @@ describe('resolve queue actions', () => {
         sessionId,
         itemId: item.id,
         revision: 2,
-        reply: 'We are keeping this as it is',
+        reply: 'Reply',
       }),
     ).rejects.toThrow(REFUSAL_AFTER_INTEGRATION);
     expect(REFUSAL_AFTER_INTEGRATION).toBe('Fix already integrated');
@@ -176,7 +193,7 @@ describe('resolve queue actions', () => {
       sessionId,
       itemId: item.id,
       revision: 2,
-      reply: 'We are keeping this as it is',
+      reply: 'Reply',
     });
     expect([...(await approvedPublicationScope({ sessionId })).refusedThreadIds]).toEqual([
       'thread',
@@ -206,7 +223,7 @@ describe('resolve queue actions', () => {
       sessionId,
       itemId: item.id,
       revision: 2,
-      reply: 'We are keeping this as it is',
+      reply: 'Reply',
     });
     await live.actions.takeUpResolveQueueItem({ sessionId, itemId: item.id });
     expect((await listResolveQueueItems({ db, sessionId }))[0]?.item).toMatchObject({
