@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import type { KeyboardEvent, MouseEvent } from 'react';
-import { History } from 'lucide-react';
+import { History, Plus } from 'lucide-react';
 import { Button, ClampedProse, SectionHeader, Skeleton, Textarea, Tooltip, cn } from '@goodboy/ui';
 import type { SessionId } from '@goodboy/types';
 import { useAppStore } from '../../../../store';
 import { GoalAttachmentsStrip } from '../../../context/components/ContextPanel/strips/GoalAttachmentsStrip';
 import { ICON_SIZE } from '../../../../shared/components/conceptIcons';
+import { VITAL_CHIP } from './vitalChip';
 
 type Props = {
   readonly sessionId: SessionId;
@@ -78,30 +79,52 @@ export const GoalOverviewRegion = ({
   const hasValue = value !== '';
   const isSameAsTitle = hasValue && value.trim() === sessionTitle.trim();
   const hasOwnText = hasValue && !isSameAsTitle;
+  const isQuiet = !isLoading && !isEditing && !hasOwnText;
+  const historyAction =
+    historyCount === 0 ? null : (
+      <Tooltip content={`${historyCount} previous ${historyCount === 1 ? 'version' : 'versions'}`}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onOpenHistory}
+          aria-label={`View ${historyCount} previous ${historyCount === 1 ? 'version' : 'versions'} of Goal`}
+        >
+          <History size={ICON_SIZE.row} aria-hidden />
+          History
+        </Button>
+      </Tooltip>
+    );
+
+  if (isQuiet) {
+    return (
+      <section aria-label="Goal" className="flex min-w-0 flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Tooltip content={isSameAsTitle ? 'The title is the whole goal so far' : 'No goal yet'}>
+            <button
+              type="button"
+              disabled={isSummarizing}
+              onClick={startEditing}
+              aria-label={isSameAsTitle ? 'Detail the goal' : 'Add a goal'}
+              className={cn(
+                VITAL_CHIP,
+                'border-dashed border-border bg-transparent px-2',
+                'disabled:cursor-not-allowed disabled:opacity-50',
+              )}
+            >
+              <Plus size={11} aria-hidden />
+              {isSameAsTitle ? 'Detail the goal' : 'Add a goal'}
+            </button>
+          </Tooltip>
+          {historyAction}
+        </div>
+        <GoalAttachmentsStrip owner={{ type: 'session', id: sessionId }} />
+      </section>
+    );
+  }
 
   return (
     <section aria-label="Goal" className="flex min-w-0 flex-col gap-2">
-      <SectionHeader
-        label="Goal"
-        className="px-0.5"
-        action={
-          historyCount > 0 ? (
-            <Tooltip
-              content={`${historyCount} previous ${historyCount === 1 ? 'version' : 'versions'}`}
-            >
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onOpenHistory}
-                aria-label={`View ${historyCount} previous ${historyCount === 1 ? 'version' : 'versions'} of Goal`}
-              >
-                <History size={ICON_SIZE.row} aria-hidden />
-                History
-              </Button>
-            </Tooltip>
-          ) : null
-        }
-      />
+      <SectionHeader label="Goal" className="px-0.5" action={historyAction} />
       {isLoading ? (
         <div role="status" aria-label="Loading goal">
           <Skeleton className="h-4 w-2/3" />
@@ -140,20 +163,13 @@ export const GoalOverviewRegion = ({
             startEditing();
           }}
           onKeyDown={onKeyDown}
-          aria-label={hasValue ? 'Edit goal' : 'Add a goal'}
+          aria-label="Edit goal"
           className={cn(
-            'min-w-0 max-w-full rounded-md motion-safe:transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-focus-ring)]',
-            hasOwnText ? 'text-foreground' : 'cursor-text text-sm text-muted-foreground',
+            'min-w-0 max-w-full rounded-md text-foreground motion-safe:transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-focus-ring)]',
             isSummarizing ? 'cursor-default' : 'cursor-text hover:bg-foreground/[0.03]',
           )}
         >
-          {hasOwnText ? (
-            <ClampedProse text={value} lines={4} className="text-sm text-foreground" />
-          ) : isSameAsTitle ? (
-            'Same as the title'
-          ) : (
-            'No goal yet'
-          )}
+          <ClampedProse text={value} lines={4} className="text-sm text-foreground" />
         </div>
       )}
       <GoalAttachmentsStrip owner={{ type: 'session', id: sessionId }} />

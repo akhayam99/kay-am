@@ -162,13 +162,48 @@ describe('GoalOverviewRegion', () => {
     expect(store.upsertSessionSlot).toHaveBeenCalledWith(SESSION_ID, 'goal', 'Ship the parser');
   });
 
-  it('states the goal once when it still repeats the session title', () => {
-    renderRegion({ value: 'Ship the parser rewrite', sessionTitle: 'Ship the parser rewrite' });
+  it('collapses to one quiet action while the goal only repeats the title', () => {
+    renderRegion({
+      value: 'Ship the parser rewrite',
+      sessionTitle: 'Ship the parser rewrite',
+      historyCount: 0,
+    });
 
     expect(screen.queryByText('Ship the parser rewrite')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Edit goal' }).textContent).toContain(
-      'Same as the title',
-    );
+    expect(screen.queryByText('Goal')).toBeNull();
+    const action = screen.getByRole('button', { name: 'Detail the goal' });
+    expect(action.textContent).toBe('Detail the goal');
+  });
+
+  it('opens the editor on the current value from the quiet action', () => {
+    renderRegion({
+      value: 'Ship the parser rewrite',
+      sessionTitle: 'Ship the parser rewrite',
+      historyCount: 0,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Detail the goal' }));
+    const input = screen.getByRole('textbox', { name: 'Goal' });
+    expect((input as HTMLTextAreaElement).value).toBe('Ship the parser rewrite');
+  });
+
+  it('offers a goal on a session that has none', () => {
+    renderRegion({ value: '', historyCount: 0 });
+
+    expect(screen.queryByText('Goal')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Add a goal' }).textContent).toBe('Add a goal');
+  });
+
+  it('keeps previous versions reachable from the quiet row', () => {
+    renderRegion({
+      value: 'Ship the parser rewrite',
+      sessionTitle: 'Ship the parser rewrite',
+      historyCount: 2,
+    });
+
+    expect(screen.queryByText('Goal')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Detail the goal' })).toBeDefined();
+    expect(screen.getByRole('button', { name: /2 previous versions of Goal/i })).toBeDefined();
   });
 
   it('shows the goal as soon as it says more than the title', () => {
