@@ -79,6 +79,13 @@ export const ProjectMountGroup = ({
           </Tooltip>
         )}
         <div className="ml-auto flex shrink-0 items-center gap-1">
+          <CountToggle
+            label="Completed"
+            count={group.completedRows.length}
+            isShown={isCompletedShown}
+            icon={ChevronDown}
+            onChange={setIsCompletedShown}
+          />
           {canFork ? (
             <NewBranchMountAction
               sessionId={sessionId}
@@ -98,27 +105,7 @@ export const ProjectMountGroup = ({
       </div>
       <ul aria-label={`${group.projectName} branch mounts`} className="flex flex-col gap-1 pl-2">
         {group.rows.map(renderRow)}
-        {group.completedRows.length === 0 ? null : (
-          <li className="flex flex-col gap-1">
-            <div className="flex px-2">
-              <CountToggle
-                label="Completed"
-                count={group.completedRows.length}
-                isShown={isCompletedShown}
-                icon={ChevronDown}
-                onChange={setIsCompletedShown}
-              />
-            </div>
-            {isCompletedShown ? (
-              <ul
-                aria-label={`${group.projectName} completed branch mounts`}
-                className="flex flex-col gap-1"
-              >
-                {group.completedRows.map(renderRow)}
-              </ul>
-            ) : null}
-          </li>
-        )}
+        {isCompletedShown ? group.completedRows.map(renderRow) : null}
       </ul>
     </div>
   );
