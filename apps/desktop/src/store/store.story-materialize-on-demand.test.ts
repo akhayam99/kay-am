@@ -520,6 +520,7 @@ describe('story: the user detaches a project from the mounted strip', () => {
     expect(storySpies.removeWorktreeChecked).toHaveBeenCalledWith({
       repoPath: '/tmp/web',
       worktreePath: WEB_MOUNT_PATH,
+      mode: 'safe',
     });
     expect(storySpies.markSessionMountRemovedByPath).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: SESSION_ID, worktreePath: WEB_MOUNT_PATH }),

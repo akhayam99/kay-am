@@ -14,7 +14,10 @@ import {
   worktreeStatus,
   worktreeWriterStatus,
 } from '../../worktree/worktree';
-import { mountCleanupBlockers } from '../../../store/slices/mount-cleanup/cleanupPolicy';
+import {
+  MOUNT_CLEANUP_BLOCKER_REASON,
+  mountCleanupBlockers,
+} from '../../../store/slices/mount-cleanup/cleanupPolicy';
 import {
   mountContinuationRefusal,
   queueMountContinuation,
@@ -158,7 +161,7 @@ const inspect = async ({ request }: InspectParams): Promise<MountBridgeOutcome> 
             sessionId: request.sessionId,
             mountId: request.mountId,
             worktreePath: path,
-          }),
+          }).map((blocker) => MOUNT_CLEANUP_BLOCKER_REASON[blocker]),
           ...(lease !== null && lease.isGranted && !lease.hasExited
             ? ['a writer lease still holds the worktree']
             : []),

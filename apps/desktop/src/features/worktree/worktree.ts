@@ -3,9 +3,11 @@ import type {
   BranchCommit,
   SessionId,
   WorkspaceId,
+  WorktreeDetachAssessment,
   WorktreeDirectorySize,
   WorktreeDiffScope,
   WorktreeInspection,
+  WorktreeRemovalMode,
   WorktreeRemovalResult,
   WorktreeStatus,
 } from '@goodboy/types';
@@ -237,11 +239,30 @@ export const inspectWorktree = async ({
   return invoke<WorktreeInspection>('worktree_inspect', { repoPath, worktreePath });
 };
 
+type RemoveWorktreeCheckedParams = WorktreePathParams & {
+  readonly mode: WorktreeRemovalMode;
+};
+
 export const removeWorktreeChecked = async ({
   repoPath,
   worktreePath,
-}: WorktreePathParams): Promise<WorktreeRemovalResult> => {
-  return invoke<WorktreeRemovalResult>('worktree_remove_checked', { repoPath, worktreePath });
+  mode,
+}: RemoveWorktreeCheckedParams): Promise<WorktreeRemovalResult> => {
+  return invoke<WorktreeRemovalResult>('worktree_remove_checked', {
+    repoPath,
+    worktreePath,
+    mode,
+  });
+};
+
+type DetachAssessmentParams = {
+  readonly worktreePath: string;
+};
+
+export const worktreeDetachAssessment = async ({
+  worktreePath,
+}: DetachAssessmentParams): Promise<WorktreeDetachAssessment> => {
+  return invoke<WorktreeDetachAssessment>('worktree_detach_assessment', { worktreePath });
 };
 
 export const gitCommonDirectory = async ({

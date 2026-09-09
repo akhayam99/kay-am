@@ -489,6 +489,7 @@ describe('story: a repo-backed session keeps its git lifecycle', () => {
     expect(removeWorktreeChecked).toHaveBeenCalledWith({
       repoPath: API_REPO_ROOT,
       worktreePath: API_WORKTREE_PATH,
+      mode: 'safe',
     });
     expect(removeSessionDirectory).toHaveBeenCalledWith({
       basePath: '/tmp/sessions',
@@ -580,10 +581,12 @@ describe('story: a two-project session routes git work through the active mount'
     expect(removeWorktreeChecked).toHaveBeenNthCalledWith(1, {
       repoPath: API_REPO_ROOT,
       worktreePath: API_WORKTREE_PATH,
+      mode: 'safe',
     });
     expect(removeWorktreeChecked).toHaveBeenNthCalledWith(2, {
       repoPath: WEB_REPO_ROOT,
       worktreePath: WEB_WORKTREE_PATH,
+      mode: 'safe',
     });
     expect(tidyRepoGoodboyDir).toHaveBeenCalledWith({ repoPath: API_REPO_ROOT });
     expect(tidyRepoGoodboyDir).toHaveBeenCalledWith({ repoPath: WEB_REPO_ROOT });
@@ -639,6 +642,7 @@ describe('story: deleting a session created before project mounts existed', () =
     expect(removeWorktreeChecked).toHaveBeenCalledWith({
       repoPath: API_REPO_ROOT,
       worktreePath: API_WORKTREE_PATH,
+      mode: 'safe',
     });
     expect(removeSessionDirectory).toHaveBeenCalledWith({
       basePath: '/tmp/sessions',

@@ -202,7 +202,7 @@ describe('removeArchivedWorktrees', () => {
     const result = await removeArchivedWorktrees(vi.fn(), makeGet(loadStats))();
 
     expect(removeWorktreeChecked.mock.calls).toEqual([
-      [{ repoPath: '/repo', worktreePath: archivedWorktree.worktreePath }],
+      [{ repoPath: '/repo', worktreePath: archivedWorktree.worktreePath, mode: 'safe' }],
     ]);
     expect(updateSessionMountLifecycle).toHaveBeenCalledWith(
       expect.objectContaining({

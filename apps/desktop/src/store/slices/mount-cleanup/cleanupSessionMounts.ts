@@ -43,7 +43,8 @@ export const cleanupSessionMounts = (set: SetFn, get: GetFn) => {
         target: toTarget({ get, view, worktreePath }),
         keepDirectory: keepDirectories,
       });
-      if (result.decision.kind === 'kept') {
+      const isRetained = result.decision.kind === 'kept' || result.decision.kind === 'failed';
+      if (isRetained) {
         const proposal = await buildCleanupProposal({ get, view, reason, request: null });
         if (proposal !== null && (await saveCleanupProposal({ proposal }))) {
           publishCleanupProposal({ set, sessionId, proposal });

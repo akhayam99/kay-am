@@ -127,7 +127,8 @@ export type MountCleanupDisposition = 'removed' | 'missing' | 'kept';
 export type MountCleanupDecision =
   | { readonly kind: 'removed'; readonly path: string }
   | { readonly kind: 'missing'; readonly path: string }
-  | { readonly kind: 'kept'; readonly path: string; readonly reason: string };
+  | { readonly kind: 'kept'; readonly path: string; readonly reason: string }
+  | { readonly kind: 'failed'; readonly path: string; readonly reason: string };
 
 export type MountCleanupProposal = Readonly<{
   requestId: string;
