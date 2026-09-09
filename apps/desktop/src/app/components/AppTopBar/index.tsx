@@ -12,10 +12,9 @@ import { ICON_SIZE } from '../../../shared/components/conceptIcons';
 
 type Props = {
   onOpenSpend: () => void;
-  showWorkspaceIdentity?: boolean;
 };
 
-export const AppTopBar = ({ onOpenSpend, showWorkspaceIdentity = false }: Props) => {
+export const AppTopBar = ({ onOpenSpend }: Props) => {
   const theme = useThemeStore((s) => s.theme);
   const toggleTheme = useThemeStore((s) => s.toggleTheme);
   const themeActionLabel = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
@@ -24,44 +23,39 @@ export const AppTopBar = ({ onOpenSpend, showWorkspaceIdentity = false }: Props)
     <>
       <div
         data-tauri-drag-region
-        className="relative flex h-9 shrink-0 items-center gap-2 bg-background px-3"
+        className="grid h-9 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 bg-background px-3"
       >
+        <div className="flex min-w-0 max-w-56 items-center">
+          <WorkspaceIdentityRow />
+        </div>
+
         <BrandBadge />
 
-        {showWorkspaceIdentity ? (
-          <>
-            <Divider orientation="vertical" className="h-4 shrink-0 self-center" />
-            <div className="min-w-0 max-w-56 shrink">
-              <WorkspaceIdentityRow />
-            </div>
-          </>
-        ) : null}
+        <div className="flex min-w-0 items-center justify-end gap-2">
+          <WorkspaceRollupStrip onOpenSpend={onOpenSpend} />
 
-        <div className="min-w-0 flex-1" />
+          <Divider orientation="vertical" className="h-4 shrink-0 self-center" />
 
-        <WorkspaceRollupStrip onOpenSpend={onOpenSpend} />
-
-        <Divider orientation="vertical" className="h-4 shrink-0 self-center" />
-
-        <div className="flex shrink-0 items-center gap-0.5">
-          <RunningScriptsIndicator />
-          <ReportIssuePopover />
-          <NotificationCenter />
-          <Tooltip content={themeActionLabel}>
-            <button
-              type="button"
-              onClick={toggleTheme}
-              aria-label={themeActionLabel}
-              className="flex items-center justify-center rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-            >
-              {theme === 'dark' ? (
-                <Moon size={ICON_SIZE.control} aria-hidden />
-              ) : (
-                <Sun size={ICON_SIZE.control} aria-hidden />
-              )}
-            </button>
-          </Tooltip>
-          <OnboardingChip />
+          <div className="flex shrink-0 items-center gap-0.5">
+            <RunningScriptsIndicator />
+            <ReportIssuePopover />
+            <NotificationCenter />
+            <Tooltip content={themeActionLabel}>
+              <button
+                type="button"
+                onClick={toggleTheme}
+                aria-label={themeActionLabel}
+                className="flex items-center justify-center rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+              >
+                {theme === 'dark' ? (
+                  <Moon size={ICON_SIZE.control} aria-hidden />
+                ) : (
+                  <Sun size={ICON_SIZE.control} aria-hidden />
+                )}
+              </button>
+            </Tooltip>
+            <OnboardingChip />
+          </div>
         </div>
       </div>
       <Divider />

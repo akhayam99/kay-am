@@ -105,16 +105,10 @@ const ATTENTION_SESSION = {
 
 type BarOverrides = {
   readonly onOpenSpend?: () => void;
-  readonly showWorkspaceIdentity?: boolean;
 };
 
 const renderBar = (overrides: BarOverrides = {}) =>
-  render(
-    <AppTopBar
-      onOpenSpend={overrides.onOpenSpend ?? vi.fn()}
-      showWorkspaceIdentity={overrides.showWorkspaceIdentity ?? false}
-    />,
-  );
+  render(<AppTopBar onOpenSpend={overrides.onOpenSpend ?? vi.fn()} />);
 
 describe('AppTopBar', () => {
   it('mounts the onboarding reopen chip, which the card tooltip points at', () => {
@@ -144,12 +138,12 @@ describe('AppTopBar', () => {
     expect(screen.queryByRole('button', { name: /getting started/i })).toBeNull();
   });
 
-  it('leaves settings and the update control to the footer', () => {
+  it('leaves settings and the update control to the footer, keeping workspace preferences', () => {
     renderBar({ onOpenSpend: vi.fn() });
 
     expect(screen.queryByRole('button', { name: /^open settings/i })).toBeNull();
     expect(screen.queryByTestId('update-indicator')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Preferences' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Preferences' })).toBeDefined();
   });
 
   it('flips the real theme state from the top bar', () => {
@@ -163,17 +157,31 @@ describe('AppTopBar', () => {
     expect(screen.getByRole('button', { name: 'Switch to dark mode' })).toBeDefined();
   });
 
-  it('carries the brand badge and leaves workspace identity to the sidebar', () => {
+  it('names the brand once for assistive technology and never as a destination', () => {
     renderBar();
 
-    expect(screen.getByText('Goodboy')).toBeDefined();
-    expect(screen.queryByLabelText('Switch or open a workspace')).toBeNull();
+    const brand = screen.getByRole('img', { name: 'Goodboy' });
+    expect(brand.tagName).toBe('SPAN');
+    expect(brand.closest('button')).toBeNull();
+    expect(brand.closest('a')).toBeNull();
   });
 
-  it('mounts the workspace switcher on the board, where no sidebar carries it', () => {
-    renderBar({ showWorkspaceIdentity: true });
+  it('pins workspace identity at the left in every state, board or session', () => {
+    renderBar();
 
-    expect(screen.getByLabelText('Switch or open a workspace')).toBeDefined();
+    expect(screen.getByLabelText('Switch workspace: Test WS')).toBeDefined();
+  });
+
+  it('seats identity, brand and signals in one three column grid on the window', () => {
+    const { container } = renderBar();
+    const bar = container.querySelector('[data-tauri-drag-region]');
+    const children = Array.from(bar?.children ?? []);
+
+    expect(bar?.className).toContain('grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]');
+    expect(children.length).toBe(3);
+    expect(children[0]?.contains(screen.getByLabelText('Switch workspace: Test WS'))).toBe(true);
+    expect(children[1]).toBe(screen.getByRole('img', { name: 'Goodboy' }));
+    expect(children[2]?.contains(screen.getByTestId('onboarding-chip'))).toBe(true);
   });
 
   it('leaves the column control to the sidebar', () => {
@@ -182,13 +190,25 @@ describe('AppTopBar', () => {
     expect(screen.queryByRole('button', { name: /session sidebar/i })).toBeNull();
   });
 
-  it('keeps a single spacer holding the rollup strip to the right', () => {
+  it('centres the brand with grid tracks, never a spacer or absolute positioning', () => {
     const { container } = renderBar();
     const bar = container.querySelector('[data-tauri-drag-region]');
     const children = Array.from(bar?.children ?? []);
 
-    expect(children.filter((child) => child.className.includes('flex-1')).length).toBe(1);
+    expect(children.some((child) => child.className.includes('flex-1'))).toBe(false);
     expect(children.some((child) => child.className.includes('absolute'))).toBe(false);
+  });
+
+  it('drops the wordmark before the mascot and the mascot before identity gives way', () => {
+    renderBar();
+
+    const brand = screen.getByRole('img', { name: 'Goodboy' });
+    const wordmark = screen.getByText('Goodboy');
+
+    expect(brand.className).toContain('hidden');
+    expect(brand.className).toContain('brand-mark:inline-flex');
+    expect(wordmark.className).toContain('hidden');
+    expect(wordmark.className).toContain('brand-word:inline');
   });
 
   it('leaves session breadcrumbs to the page, not the drag strip', () => {

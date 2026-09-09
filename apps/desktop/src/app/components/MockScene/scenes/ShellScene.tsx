@@ -15,6 +15,7 @@ import { ToastProvider } from '../../Toast';
 import { SessionNavSidebar } from '../../../../features/session/components/SessionNavSidebar';
 import { SessionOverviewPane } from '../../../../features/session/components/SessionOverviewPane';
 import { useAppStore } from '../../../../store';
+import { shellArrangement } from '../../../shellArrangement';
 import { NOW, SESSION, WORKSPACE_ID, seedWorkflowScene } from './workflowSeed';
 
 const noop = () => undefined;
@@ -230,6 +231,12 @@ export const ShellScene = () => {
     setIsReady(true);
   }, []);
 
+  const arrangement = shellArrangement({
+    hasWorkspace: true,
+    hasActiveSession: true,
+    isSidebarCollapsed: false,
+  });
+
   if (!isReady) {
     return null;
   }
@@ -237,34 +244,40 @@ export const ShellScene = () => {
   return (
     <ToastProvider>
       <AppShell
-        topBar={<AppTopBar onOpenSpend={noop} showWorkspaceIdentity={false} />}
-        leftHidden={false}
-        leftSidebarCollapsed={false}
-        leftSidebar={<SessionNavSidebar session={SESSION} onCollapse={noop} />}
+        topBar={<AppTopBar onOpenSpend={noop} />}
+        leftHidden={arrangement.leftHidden}
+        leftSidebarCollapsed={arrangement.leftSidebarCollapsed}
+        leftSidebar={
+          arrangement.leftSlot === 'sessions' ? (
+            <SessionNavSidebar session={SESSION} onCollapse={noop} />
+          ) : undefined
+        }
         footer={
-          <AppFooter
-            activeStudio={null}
-            githubEnabled
-            linearEnabled
-            jiraEnabled={false}
-            sentryEnabled={false}
-            gitlabEnabled={false}
-            bitbucketEnabled={false}
-            slackEnabled={false}
-            onOpenWorkflows={noop}
-            onOpenProviders={noop}
-            onOpenSettings={noop}
-            onOpenImpact={noop}
-            onOpenChangelog={noop}
-            onOpenGithub={noop}
-            onOpenLinear={noop}
-            onOpenJira={noop}
-            onOpenSentry={noop}
-            onOpenGitlab={noop}
-            onOpenBitbucket={noop}
-            onOpenInbox={noop}
-            onOpenSlack={noop}
-          />
+          arrangement.hasFooter ? (
+            <AppFooter
+              activeStudio={null}
+              githubEnabled
+              linearEnabled
+              jiraEnabled={false}
+              sentryEnabled={false}
+              gitlabEnabled={false}
+              bitbucketEnabled={false}
+              slackEnabled={false}
+              onOpenWorkflows={noop}
+              onOpenProviders={noop}
+              onOpenSettings={noop}
+              onOpenImpact={noop}
+              onOpenChangelog={noop}
+              onOpenGithub={noop}
+              onOpenLinear={noop}
+              onOpenJira={noop}
+              onOpenSentry={noop}
+              onOpenGitlab={noop}
+              onOpenBitbucket={noop}
+              onOpenInbox={noop}
+              onOpenSlack={noop}
+            />
+          ) : undefined
         }
         main={<SessionOverviewPane session={SESSION} onSelectLens={noop} />}
         rightSidebar={null}

@@ -389,12 +389,11 @@ invariants and live in [DESIGN.md](../../DESIGN.md).
 **A column holds its width.** A chip repeated down a list takes a fixed width;
 in a right-aligned cluster variable text comes first, glyphs last.
 
-**Truncation order is authored, not emergent.** In the strip the crumb region
-is the only `flex-1` child, so it absorbs every shortfall before any control
-moves, and explicit caps fix the order inside it: session title first, then
-trailing crumbs, then workspace identity. In the rail the label truncates and
-the count is `shrink-0`, so a long label loses characters before a count
-disappears.
+**Truncation order is authored, not emergent.** In the top bar the identity
+column carries the only cap and truncates first, and everything to its right is
+`shrink-0`, so signals and controls keep their hit areas while the name gives
+way. In the rail the label truncates and the count is `shrink-0`, so a long
+label loses characters before a count disappears.
 
 **A repeated row is read down a column, not across a line**, so anything whose
 width follows its content breaks the column for every row under it.

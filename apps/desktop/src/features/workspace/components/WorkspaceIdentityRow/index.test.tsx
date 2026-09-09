@@ -49,14 +49,14 @@ describe('WorkspaceIdentityRow', () => {
   it('carries the linked project count and the switcher shortcut in the title', () => {
     render(<WorkspaceIdentityRow />);
 
-    expect(screen.getByLabelText('Switch or open a workspace').getAttribute('title')).toBe(
+    expect(screen.getByLabelText('Switch workspace: Acme').getAttribute('title')).toBe(
       `Acme, 1 linked project (${shortcutGlyphs('workspace.switcher')})`,
     );
   });
 
   it('opens the selector as a popover, not a full-screen layer', () => {
     render(<WorkspaceIdentityRow />);
-    const trigger = screen.getByLabelText('Switch or open a workspace');
+    const trigger = screen.getByLabelText('Switch workspace: Acme');
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
 
     fireEvent.click(trigger);

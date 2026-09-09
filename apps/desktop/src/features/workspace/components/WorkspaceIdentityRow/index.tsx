@@ -40,7 +40,7 @@ export const WorkspaceIdentityRow = () => {
             type="button"
             onClick={dropdown.toggle}
             data-tauri-drag-region="false"
-            aria-label="Switch or open a workspace"
+            aria-label={`Switch workspace: ${currentWorkspace.name}`}
             aria-expanded={dropdown.open}
             className="group flex w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-muted/50"
             title={`${currentWorkspace.name}, ${subtitle} (${shortcutGlyphs('workspace.switcher')})`}

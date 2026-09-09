@@ -3,7 +3,6 @@ import { Kanban, PanelLeft, Plus } from 'lucide-react';
 import { Tooltip, cn, tintClasses } from '@goodboy/ui';
 import { useAppStore } from '../../../../../store';
 import { shortcutGlyphs } from '../../../../../shared/keyboard/registry';
-import { WorkspaceRailBadge } from './WorkspaceRailBadge';
 import { ICON_SIZE } from '../../../../../shared/components/conceptIcons';
 
 type Props = {
@@ -38,7 +37,6 @@ export const CollapsedRail = ({ onExpand }: Props) => {
           <PanelLeft size={ICON_SIZE.control} aria-hidden />
         </button>
       </Tooltip>
-      <WorkspaceRailBadge />
       <Tooltip content={`Back to board (${shortcutGlyphs('session.board')})`} side="right">
         <button
           type="button"
