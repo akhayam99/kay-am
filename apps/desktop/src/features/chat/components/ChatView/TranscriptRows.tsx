@@ -26,6 +26,7 @@ type Props = {
 };
 
 const RUN_BEARING_KINDS = new Set<TranscriptItem['kind']>([
+  'decision_note',
   'error',
   'permission_request',
   'permission_decision',

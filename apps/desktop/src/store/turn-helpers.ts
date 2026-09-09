@@ -67,7 +67,7 @@ import type { SessionNudge } from './types';
 import type { SetFn, GetFn } from './slice-types';
 import { decisionsDelta } from './slices/session-events';
 import {
-  deferredMaterializeMessage,
+  deferredMaterializeNote,
   materializationGate,
   priorMountCount,
   proposeMaterialization,
@@ -692,6 +692,14 @@ export const captureMaterializeRequestsFromTurn = async ({
       at: new Date().toISOString() as IsoDateTime,
     });
   };
+  const decisionNote = (message: string) => {
+    get().appendTurnEvent(agentId, sessionId, {
+      kind: 'decision_note',
+      runId,
+      message,
+      at: new Date().toISOString() as IsoDateTime,
+    });
+  };
   await runMaterializationBatch({
     sessionId,
     run: async () => {
@@ -733,7 +741,7 @@ export const captureMaterializeRequestsFromTurn = async ({
             agentId,
             turnRunId: runId,
           });
-          note(deferredMaterializeMessage({ projectName: project.name, cause: decision.cause }));
+          decisionNote(deferredMaterializeNote({ projectName: project.name }));
           continue;
         }
         try {

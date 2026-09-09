@@ -66,7 +66,11 @@ const harness = ({
   );
   const recordSessionEvent = vi.fn(async (_event: RecordedEvent) => undefined);
   const appendTurnEvent = vi.fn(
-    (_agentId: AgentId, _sessionId: SessionId, _event: { readonly message: string }) => undefined,
+    (
+      _agentId: AgentId,
+      _sessionId: SessionId,
+      _event: { readonly kind: string; readonly message: string },
+    ) => undefined,
   );
   const state = {
     sessions: [session],
@@ -196,10 +200,8 @@ describe('captureMaterializeRequestsFromTurn', () => {
       turnRunId: RUN_ID,
     });
     const note = appendTurnEvent.mock.calls[0]?.[2];
-    expect(note?.message).toBe(
-      "Mount deferred for web: adding an unnamed project beyond this session's two-project allowance requires approval. A mount suggestion is available in this session's projects section or the requesting agent's conversation.",
-    );
-    expect(note?.message).not.toContain('end your turn');
+    expect(note?.kind).toBe('decision_note');
+    expect(note?.message).toBe('Mount deferred for web.');
   });
 
   it('caps a turn at two immediate mounts and proposes the rest', async () => {

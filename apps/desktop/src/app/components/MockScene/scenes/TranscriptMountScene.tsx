@@ -145,10 +145,9 @@ const TRANSCRIPT = [
     at: NOW,
   },
   {
-    kind: 'error' as const,
+    kind: 'decision_note' as const,
     runId: RUN_ID,
-    message:
-      "Mount deferred for app-web: adding an unnamed project beyond this session's two-project allowance requires approval. A mount suggestion is available in this session's projects section or the requesting agent's conversation.",
+    message: 'Mount deferred for app-web.',
     at: NOW,
   },
   {

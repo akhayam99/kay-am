@@ -142,6 +142,12 @@ export const proposeMaterialization = async ({
 const DEFERRAL_TAIL =
   "A mount suggestion is available in this session's projects section or the requesting agent's conversation.";
 
+export const deferredMaterializeNote = ({
+  projectName,
+}: {
+  readonly projectName: string;
+}): string => `Mount deferred for ${projectName}.`;
+
 type DeferredMessageParams = {
   readonly projectName: string;
   readonly cause: MaterializationDeferralCause;
