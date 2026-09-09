@@ -93,6 +93,7 @@ export type PublishParams = SessionParams & {
 
 export type ResolveActions = {
   readonly acceptResolveQueueItem: (params: ItemRevisionParams) => Promise<void>;
+  readonly refuseResolveQueueItem: (params: ItemRevisionParams) => Promise<void>;
   readonly deferResolveQueueItem: (params: ItemParams) => Promise<void>;
   readonly takeUpResolveQueueItem: (params: ItemParams) => Promise<void>;
   readonly reopenResolveQueueItem: (params: Omit<ItemRevisionParams, 'reply'>) => Promise<void>;

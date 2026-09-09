@@ -12,6 +12,8 @@ export type ResolveQueueStatus =
   | 'ready_to_push'
   | 'pushed'
   | 'later'
+  | 'wont_fix'
+  | 'wont_fix_sent'
   | 'changed_since_accepted';
 
 type Params = {
@@ -20,6 +22,17 @@ type Params = {
   readonly activeAttempt: ResolveAttempt | null;
   readonly deliveryReceipts: ReadonlyArray<ResolvePublicationThread>;
 };
+
+type ReceiptParams = Omit<Params, 'activeAttempt'>;
+
+const isDelivered = ({ item, thread, deliveryReceipts }: ReceiptParams): boolean =>
+  item.deliveredAt !== null &&
+  deliveryReceipts.some(
+    (receipt) =>
+      receipt.threadId === thread.threadId &&
+      receipt.revision === item.approvedRevision &&
+      (receipt.replyPostedAt !== null || receipt.resolvedAt !== null),
+  );
 
 export const deriveResolveQueueStatus = ({
   item,
@@ -30,30 +43,24 @@ export const deriveResolveQueueStatus = ({
   if (item.approvalState === 'deferred') {
     return 'later';
   }
+  const isStale = item.approvedRevision !== null && thread.revision > item.approvedRevision;
+  if (item.approvalState === 'wont_fix') {
+    if (isStale) {
+      return 'changed_since_accepted';
+    }
+    return isDelivered({ item, thread, deliveryReceipts }) ? 'wont_fix_sent' : 'wont_fix';
+  }
   if (activeAttempt?.phase === 'running') {
     return 'working';
   }
   if (thread.question !== null && thread.state === 'needs_answer') {
     return 'agent_asked';
   }
-  if (
-    item.approvalState === 'accepted' &&
-    item.approvedRevision !== null &&
-    thread.revision > item.approvedRevision
-  ) {
+  if (item.approvalState === 'accepted' && isStale) {
     return 'changed_since_accepted';
   }
   if (item.approvalState === 'accepted') {
-    const hasReceipt = deliveryReceipts.some(
-      (receipt) =>
-        receipt.threadId === thread.threadId &&
-        receipt.revision === item.approvedRevision &&
-        (receipt.replyPostedAt !== null || receipt.resolvedAt !== null),
-    );
-    if (item.deliveredAt !== null && hasReceipt) {
-      return 'pushed';
-    }
-    return 'ready_to_push';
+    return isDelivered({ item, thread, deliveryReceipts }) ? 'pushed' : 'ready_to_push';
   }
   return 'for_you';
 };

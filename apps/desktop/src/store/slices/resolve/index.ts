@@ -13,6 +13,7 @@ import { reconcileResolveDrains } from './reconcileResolveDrains';
 import { updateResolveThreads } from './updateResolveThreads';
 import { updateResolveThread } from './updateResolveThread';
 import { acceptResolveQueueItem } from './acceptResolveQueueItem';
+import { refuseResolveQueueItem } from './refuseResolveQueueItem';
 import { beginResolveCandidate } from './beginResolveCandidate';
 import { captureResolveCandidate } from './captureResolveCandidate';
 import { runResolveCheck } from './runResolveCheck';
@@ -53,6 +54,8 @@ export const createResolveSlice = ({ set, get }: SliceParams): ResolveActions =>
   return {
     acceptResolveQueueItem: (params: ItemRevisionParams) =>
       serialize({ run: () => acceptResolveQueueItem({ set, get, ...params }) }),
+    refuseResolveQueueItem: (params: ItemRevisionParams) =>
+      serialize({ run: () => refuseResolveQueueItem({ set, get, ...params }) }),
     deferResolveQueueItem: (params: ItemParams) =>
       serialize({ run: () => deferResolveQueueItem({ set, get, ...params }) }),
     takeUpResolveQueueItem: (params: ItemParams) =>

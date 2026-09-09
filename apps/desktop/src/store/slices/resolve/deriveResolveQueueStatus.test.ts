@@ -129,6 +129,49 @@ describe('deriveResolveQueueStatus', () => {
       attempt: null,
       receipts: [],
     },
+    {
+      status: 'wont_fix',
+      item: { ...item, approvalState: 'wont_fix', approvedRevision: 2 },
+      thread,
+      attempt: null,
+      receipts: [],
+    },
+    {
+      status: 'wont_fix',
+      item: { ...item, approvalState: 'wont_fix', approvedRevision: 2, deliveredAt: 5 },
+      thread,
+      attempt: null,
+      receipts: [],
+    },
+    {
+      status: 'wont_fix_sent',
+      item: { ...item, approvalState: 'wont_fix', approvedRevision: 2, deliveredAt: 5 },
+      thread,
+      attempt: null,
+      receipts: [
+        {
+          ...receipt,
+          replyPhase: 'posted',
+          replyPostedAt: 6,
+          resolvePhase: 'skipped',
+          resolvedAt: null,
+        },
+      ],
+    },
+    {
+      status: 'changed_since_accepted',
+      item: { ...item, approvalState: 'wont_fix', approvedRevision: 2 },
+      thread: { ...thread, revision: 3 },
+      attempt: null,
+      receipts: [],
+    },
+    {
+      status: 'wont_fix',
+      item: { ...item, approvalState: 'wont_fix', approvedRevision: 2 },
+      thread,
+      attempt,
+      receipts: [],
+    },
   ])(
     'returns $status',
     ({ status, item: candidate, thread: row, attempt: activeAttempt, receipts }) => {

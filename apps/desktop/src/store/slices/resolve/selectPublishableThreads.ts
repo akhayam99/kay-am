@@ -3,6 +3,7 @@ import type { ResolvePublicationExclusion, ResolveThread } from '@goodboy/types'
 type Params = {
   readonly rows: ReadonlyArray<ResolveThread>;
   readonly threadIds?: ReadonlyArray<string>;
+  readonly refusedThreadIds?: ReadonlySet<string>;
 };
 
 export type PublishableSelection = {
@@ -12,15 +13,25 @@ export type PublishableSelection = {
 
 const PUBLICATION_FAILED = 'publication_failed:';
 
-const isSettled = ({ row }: { readonly row: ResolveThread }): boolean =>
-  row.state === 'fixed' || row.state === 'answered';
+type SettledParams = {
+  readonly row: ResolveThread;
+  readonly refusedThreadIds: ReadonlySet<string>;
+};
+
+const isSettled = ({ row, refusedThreadIds }: SettledParams): boolean =>
+  row.state === 'fixed' || row.state === 'answered' || refusedThreadIds.has(row.threadId);
 
 const exclusionReason = ({
   row,
 }: {
   readonly row: ResolveThread;
 }): ResolvePublicationExclusion['reason'] => {
-  if (isSettled({ row }) || row.state === 'needs_answer' || row.state === 'failed') {
+  if (
+    row.state === 'fixed' ||
+    row.state === 'answered' ||
+    row.state === 'needs_answer' ||
+    row.state === 'failed'
+  ) {
     return 'needs_you';
   }
   if (row.state === 'working' || row.state === 'publishing') {
@@ -29,7 +40,11 @@ const exclusionReason = ({
   return 'not_ready';
 };
 
-export const selectPublishableThreads = ({ rows, threadIds }: Params): PublishableSelection => {
+export const selectPublishableThreads = ({
+  rows,
+  threadIds,
+  refusedThreadIds = new Set<string>(),
+}: Params): PublishableSelection => {
   const requested = threadIds === undefined ? null : new Set(threadIds);
   const publishable: Array<ResolveThread> = [];
   const excluded: Array<ResolvePublicationExclusion> = [];
@@ -38,7 +53,7 @@ export const selectPublishableThreads = ({ rows, threadIds }: Params): Publishab
       continue;
     }
     const hasFailedPublication = row.stateReason?.startsWith(PUBLICATION_FAILED) === true;
-    if (isSettled({ row }) && (requested !== null || !hasFailedPublication)) {
+    if (isSettled({ row, refusedThreadIds }) && (requested !== null || !hasFailedPublication)) {
       publishable.push(row);
       continue;
     }

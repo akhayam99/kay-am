@@ -3,7 +3,7 @@ import {
   listResolveCandidates,
   listResolveQueueItems,
 } from '@goodboy/db';
-import type { SessionId } from '@goodboy/types';
+import type { ResolveQueueItemWithThread, SessionId } from '@goodboy/types';
 import { tauriDatabase } from '../../../shared/lib/db';
 
 export type ApprovedRange = Readonly<{
@@ -14,6 +14,7 @@ export type ApprovedRange = Readonly<{
 
 export type ApprovedPublicationScope = Readonly<{
   threadIds: ReadonlySet<string>;
+  refusedThreadIds: ReadonlySet<string>;
   itemIds: ReadonlyArray<string>;
   candidateIds: ReadonlyArray<string>;
   shas: ReadonlySet<string>;
@@ -27,14 +28,19 @@ export const approvedPublicationScope = async ({
 }: Params): Promise<ApprovedPublicationScope> => {
   const db = tauriDatabase;
   const entries = await listResolveQueueItems({ db, sessionId });
+  const isCurrent = ({ item, thread }: ResolveQueueItemWithThread): boolean =>
+    item.approvedRevision === thread.revision &&
+    item.candidateRevision === item.approvedRevision &&
+    item.deliveredAt === null;
   const approved = entries.filter(
-    ({ item, thread }) =>
-      item.approvalState === 'accepted' &&
-      item.approvedRevision === thread.revision &&
-      item.candidateRevision === item.approvedRevision &&
-      item.deliveredAt === null,
+    (entry) => entry.item.approvalState === 'accepted' && isCurrent(entry),
   );
-  const itemIds = approved.map(({ item }) => item.id);
+  const refused = entries.filter(
+    (entry) => entry.item.approvalState === 'wont_fix' && isCurrent(entry),
+  );
+  const decided = [...approved, ...refused];
+  const acceptedItemIds = approved.map(({ item }) => item.id);
+  const itemIds = [...acceptedItemIds, ...refused.map(({ item }) => item.id)];
   const shas = new Set(
     approved.flatMap(({ item, thread }) => [
       ...(thread.disposition === 'fix' ? (thread.commitShas ?? []) : []),
@@ -42,7 +48,7 @@ export const approvedPublicationScope = async ({
     ]),
   );
   const candidates = await listResolveCandidates({ db, sessionId }).catch(() => []);
-  const approvedItemIds = new Set(itemIds);
+  const approvedItemIds = new Set(acceptedItemIds);
   const covering = await Promise.all(
     candidates.map(async (candidate) => {
       if (candidate.integratedSha === null) {
@@ -63,7 +69,8 @@ export const approvedPublicationScope = async ({
   );
   const ranges = covering.flatMap((range) => (range === null ? [] : [range]));
   return {
-    threadIds: new Set(approved.map(({ thread }) => thread.threadId)),
+    threadIds: new Set(decided.map(({ thread }) => thread.threadId)),
+    refusedThreadIds: new Set(refused.map(({ thread }) => thread.threadId)),
     itemIds,
     candidateIds: ranges.map((range) => range.candidateId),
     shas,

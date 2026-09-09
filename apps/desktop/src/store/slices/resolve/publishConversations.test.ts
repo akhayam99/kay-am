@@ -7,6 +7,7 @@ import { createStore } from 'zustand/vanilla';
 import {
   insertResolveQueueItem,
   listResolvePublicationThreads,
+  listResolveQueueItems,
   listResolveThreads,
   setResolveQueueItemApproval,
 } from '@goodboy/db';
@@ -379,6 +380,54 @@ const seedAnswerRow = async ({
   await approveThread({ sessionId, threadId });
 };
 
+const seedRefusedRow = async ({
+  actions,
+  sessionId = SESSION_ID,
+  threadId,
+  reply,
+}: Omit<SeedParams, 'shas'>): Promise<void> => {
+  await actions.updateResolveThread({
+    sessionId,
+    threadId,
+    prNumber: 248,
+    patch: { state: 'open', disposition: null, replyDraft: reply },
+  });
+  const row = (await listResolveThreads({ db: tauriDatabase, sessionId })).find(
+    (candidate) => candidate.threadId === threadId,
+  );
+  if (row === undefined) {
+    throw new Error('Resolve thread was not seeded');
+  }
+  const now = Date.now();
+  const itemId = `item-${sessionId}-${threadId}`;
+  await insertResolveQueueItem({
+    db: tauriDatabase,
+    item: {
+      id: itemId,
+      sessionId,
+      threadId,
+      generation: 0,
+      reopenedFromItemId: null,
+      candidateRevision: row.revision,
+      approvalState: 'none',
+      approvedRevision: null,
+      approvedReplyHash: null,
+      integratedSha: null,
+      deferredAt: null,
+      deliveredAt: null,
+      supersededAt: null,
+      createdAt: now,
+      updatedAt: now,
+    },
+  });
+  await actions.refuseResolveQueueItem({
+    sessionId,
+    itemId,
+    revision: row.revision,
+    reply,
+  });
+};
+
 beforeEach(async () => {
   const db = (await import('@goodboy/db')) as unknown as {
     readonly resetResolveQueryMocks: () => void;
@@ -563,6 +612,53 @@ describe('publishConversations over a real git repository', () => {
 
     expect(result).toMatchObject({ kind: 'done', pushed: false, closed: 1 });
     expect(git(worktreePath, ['rev-parse', 'origin/feature/retry'])).toBe(before);
+  });
+
+  it('plans a refused comment as a reply with no fix and no thread resolution', async () => {
+    const { actions } = makeStore();
+    await seedRefusedRow({ actions, threadId: 'PRRT_1', reply: 'We are keeping this as it is' });
+
+    const preview = await actions.preparePublication({ sessionId: SESSION_ID });
+
+    expect(preview.blocker).toBeNull();
+    expect(preview.requiresPush).toBe(false);
+    expect(preview.commits).toEqual([]);
+    expect(preview.replies).toHaveLength(1);
+    expect(preview.replies[0]).toMatchObject({ threadId: 'PRRT_1', revision: 0, closes: false });
+    expect(preview.replies[0]?.body).toContain('We are keeping this as it is');
+    const frozen = await listResolvePublicationThreads({
+      db: tauriDatabase,
+      publicationId: preview.publicationId ?? '',
+    });
+    expect(frozen).toHaveLength(1);
+    expect(frozen[0]).toMatchObject({
+      threadId: 'PRRT_1',
+      replyPhase: 'pending',
+      resolvePhase: 'skipped',
+    });
+    expect(frozen[0]?.replyBody).toContain('We are keeping this as it is');
+  });
+
+  it('posts the refusal reply and leaves the reviewer thread open', async () => {
+    const before = git(worktreePath, ['rev-parse', 'origin/feature/retry']);
+    const { actions, get } = makeStore();
+    await seedRefusedRow({ actions, threadId: 'PRRT_1', reply: 'We are keeping this as it is' });
+
+    const preview = await actions.preparePublication({ sessionId: SESSION_ID });
+    const result = await actions.publishConversations({
+      sessionId: SESSION_ID,
+      publicationId: preview.publicationId ?? '',
+    });
+
+    expect(result).toMatchObject({ kind: 'done', pushed: false, closed: 0, replied: 1, failed: 0 });
+    expect(h.run.mock.calls.flatMap(([args]) => args).join(' ')).not.toContain(
+      'resolveReviewThread',
+    );
+    expect(git(worktreePath, ['rev-parse', 'origin/feature/retry'])).toBe(before);
+    expect(get().sessionResolveThreads[SESSION_ID]?.[0]?.state).not.toBe('closed');
+    const entries = await listResolveQueueItems({ db: tauriDatabase, sessionId: SESSION_ID });
+    expect(entries[0]?.item.approvalState).toBe('wont_fix');
+    expect(entries[0]?.item.deliveredAt).not.toBeNull();
   });
 
   it('closes the healthy threads and marks only the failing one as a failed publication', async () => {

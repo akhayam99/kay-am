@@ -8,5 +8,7 @@ export const BADGE_TONE_BY_STATUS: Record<ResolveQueueStatus, Tone> = {
   ready_to_push: 'success',
   pushed: 'merged',
   later: 'neutral',
+  wont_fix: 'neutral',
+  wont_fix_sent: 'merged',
   changed_since_accepted: 'warning',
 };

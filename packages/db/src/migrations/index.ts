@@ -9,6 +9,7 @@ import { m147ResolveQueueItems } from './m147-resolve-queue-items';
 import { m148ResolveCandidates } from './m148-resolve-candidates';
 import { m149ResolveCheckRuns } from './m149-resolve-check-runs';
 import { m150ResolvePublicationProvenance } from './m150-resolve-publication-provenance';
+import { m151ResolveQueueItemRefusal } from './m151-resolve-queue-item-refusal';
 import { m001Initial } from './m001-initial';
 import { m002TelemetryKind } from './m002-telemetry-kind';
 import { m003SessionProvider } from './m003-session-provider';
@@ -305,4 +306,5 @@ export const migrations: ReadonlyArray<Migration> = [
   { version: 148, sql: m148ResolveCandidates },
   { version: 149, sql: m149ResolveCheckRuns },
   { version: 150, sql: m150ResolvePublicationProvenance },
+  { version: 151, sql: m151ResolveQueueItemRefusal },
 ];
