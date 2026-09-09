@@ -53,20 +53,39 @@ describe('executeMaterializeRequest', () => {
     });
   });
 
-  it('defers a second project the goal does not name and records the proposal', async () => {
+  it('adds a second project the goal does not name', async () => {
     state.sessionProjectMounts = { 'session-1': [{ projectId: 'p-api' }] };
 
     const result = await executeMaterializeRequest(
       request({ projectId: 'p-web', projectName: 'web' }),
     );
 
+    expect(result.ok).toBe(true);
+    expect(state.recordSessionEvent).not.toHaveBeenCalled();
+  });
+
+  it('defers a third project the goal does not name and records the proposal', async () => {
+    state.sessionProjectMounts = {
+      'session-1': [{ projectId: 'p-api' }, { projectId: 'p-docs' }],
+    };
+
+    const result = await executeMaterializeRequest(
+      request({ projectId: 'p-web', projectName: 'web' }),
+    );
+
     expect(result.ok).toBe(false);
-    expect(result.error).toContain('materialize deferred: mounting web');
+    expect(result.error).toContain('Mount deferred for web');
+    expect(result.error).not.toContain('end your turn');
     expect(state.materializeProject).not.toHaveBeenCalled();
     expect(state.recordSessionEvent).toHaveBeenCalledWith({
       sessionId: 'session-1',
       kind: 'project_materialization_proposed',
-      payload: { projectId: 'p-web', projectName: 'web', reason: 'needs a patch' },
+      payload: {
+        projectId: 'p-web',
+        projectName: 'web',
+        reason: 'needs a patch',
+        deferralCause: 'scope',
+      },
     });
   });
 

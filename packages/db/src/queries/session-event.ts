@@ -1,11 +1,13 @@
 import type {
   IsoDateTime,
+  MaterializationDeferralCause,
   SessionEvent,
   SessionEventId,
   SessionEventKind,
   SessionEventPayload,
   SessionId,
 } from '@goodboy/types';
+import { MATERIALIZATION_DEFERRAL_CAUSES } from '@goodboy/types';
 import type { Database } from '../client';
 
 type SessionEventRow = {
@@ -34,6 +36,11 @@ const numberAt = ({ source, key }: FieldParams): number | null => {
 const booleanAt = ({ source, key }: FieldParams): boolean | null => {
   const value = source[key];
   return typeof value === 'boolean' ? value : null;
+};
+
+const deferralCauseAt = ({ source, key }: FieldParams): MaterializationDeferralCause | null => {
+  const value = stringAt({ source, key });
+  return MATERIALIZATION_DEFERRAL_CAUSES.find((candidate) => candidate === value) ?? null;
 };
 
 type DecodePayloadParams = {
@@ -83,6 +90,9 @@ const parsePayload = ({ raw }: ParsePayloadParams): SessionEventPayload | null =
   const number = numberAt({ source, key: 'number' });
   const added = numberAt({ source, key: 'added' });
   const removed = numberAt({ source, key: 'removed' });
+  const behind = numberAt({ source, key: 'behind' });
+  const turnRunId = stringAt({ source, key: 'turnRunId' });
+  const deferralCause = deferralCauseAt({ source, key: 'deferralCause' });
   return {
     ...(worktreePath != null ? { worktreePath } : {}),
     ...(branch != null ? { branch } : {}),
@@ -106,6 +116,9 @@ const parsePayload = ({ raw }: ParsePayloadParams): SessionEventPayload | null =
     ...(number != null ? { number } : {}),
     ...(added != null ? { added } : {}),
     ...(removed != null ? { removed } : {}),
+    ...(behind != null ? { behind } : {}),
+    ...(turnRunId != null ? { turnRunId } : {}),
+    ...(deferralCause != null ? { deferralCause } : {}),
   };
 };
 

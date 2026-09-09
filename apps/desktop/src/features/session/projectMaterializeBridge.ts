@@ -5,7 +5,9 @@ import type { MountId, ProjectId, SessionId } from '@goodboy/types';
 import {
   deferredMaterializeMessage,
   materializationGate,
+  priorMountCount,
   proposeMaterialization,
+  runMaterializationBatch,
 } from '../../store/materializationGate';
 import { useAppStore } from '../../store/store';
 import { isMainWindow } from '../workspace/window';
@@ -38,37 +40,51 @@ export const executeMaterializeRequest = async (
   if (project === null) {
     return { ok: false, error: `unknown project: ${request.projectName}` };
   }
-  const gate = materializationGate({
-    get,
+  return runMaterializationBatch({
     sessionId: request.sessionId,
-    project,
-    immediateCount: 0,
+    run: async () => {
+      const decision = materializationGate({
+        get,
+        sessionId: request.sessionId,
+        project,
+        priorMounts: priorMountCount({ get, sessionId: request.sessionId }),
+        immediateCount: 0,
+      });
+      if (decision.kind === 'deferred') {
+        await proposeMaterialization({
+          get,
+          sessionId: request.sessionId,
+          project,
+          reason: request.reason,
+          cause: decision.cause,
+          agentId: null,
+          turnRunId: null,
+        });
+        return {
+          ok: false,
+          error: deferredMaterializeMessage({
+            projectName: project.name,
+            cause: decision.cause,
+          }),
+        };
+      }
+      try {
+        const mount = await get().materializeProject({
+          sessionId: request.sessionId,
+          projectId: request.projectId,
+          reason: request.reason,
+        });
+        return {
+          ok: true,
+          ...(mount.mountId === undefined ? {} : { mountId: mount.mountId }),
+          mountPath: mount.worktreePath,
+          branch: mount.branch,
+        };
+      } catch (error) {
+        return { ok: false, error: formatError(error) };
+      }
+    },
   });
-  if (gate === 'deferred') {
-    await proposeMaterialization({
-      get,
-      sessionId: request.sessionId,
-      project,
-      reason: request.reason,
-      agentId: null,
-    });
-    return { ok: false, error: deferredMaterializeMessage({ projectName: project.name }) };
-  }
-  try {
-    const mount = await get().materializeProject({
-      sessionId: request.sessionId,
-      projectId: request.projectId,
-      reason: request.reason,
-    });
-    return {
-      ok: true,
-      ...(mount.mountId === undefined ? {} : { mountId: mount.mountId }),
-      mountPath: mount.worktreePath,
-      branch: mount.branch,
-    };
-  } catch (error) {
-    return { ok: false, error: formatError(error) };
-  }
 };
 
 export const listenProjectMaterializeRequests = async (): Promise<UnlistenFn> => {

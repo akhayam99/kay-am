@@ -163,10 +163,25 @@ describe('captureMaterializeRequestsFromTurn', () => {
     expect(materializeProject).toHaveBeenCalledTimes(1);
   });
 
-  it('defers a mount nothing in the session names, and tells the agent why', async () => {
-    const { get, materializeProject, recordSessionEvent, appendTurnEvent } = harness({
+  it('adds one unnamed project while the session footprint stays inside the allowance', async () => {
+    const { get, materializeProject, recordSessionEvent } = harness({
       goal: 'ship the app rename',
       mounts: [mount({ projectId: APP_ID, name: 'app' })],
+    });
+
+    await capture({ get, assistantText: '<<materialize: web | reading the router>>' });
+
+    expect(materializeProject).toHaveBeenCalledTimes(1);
+    expect(proposals(recordSessionEvent)).toHaveLength(0);
+  });
+
+  it('defers an unnamed project beyond the allowance, and tells the agent why', async () => {
+    const { get, materializeProject, recordSessionEvent, appendTurnEvent } = harness({
+      goal: 'ship the app rename',
+      mounts: [
+        mount({ projectId: APP_ID, name: 'app' }),
+        mount({ projectId: DOCS_ID, name: 'docs' }),
+      ],
     });
 
     await capture({ get, assistantText: '<<materialize: web | reading the router>>' });
@@ -176,12 +191,15 @@ describe('captureMaterializeRequestsFromTurn', () => {
       projectId: WEB_ID,
       projectName: 'web',
       reason: 'reading the router',
+      deferralCause: 'scope',
       agentId: AGENT_ID,
+      turnRunId: RUN_ID,
     });
     const note = appendTurnEvent.mock.calls[0]?.[2];
     expect(note?.message).toBe(
-      "materialize deferred: mounting web needs the owner's approval (reason recorded). Continue with the mounted projects or end your turn.",
+      "Mount deferred for web: adding an unnamed project beyond this session's two-project allowance requires approval. A mount suggestion is available in this session's projects section or the requesting agent's conversation.",
     );
+    expect(note?.message).not.toContain('end your turn');
   });
 
   it('caps a turn at two immediate mounts and proposes the rest', async () => {

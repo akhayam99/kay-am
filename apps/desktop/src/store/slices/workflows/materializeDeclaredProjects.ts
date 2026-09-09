@@ -1,5 +1,10 @@
 import type { Project, SessionId } from '@goodboy/types';
-import { materializationGate, proposeMaterialization } from '../../materializationGate';
+import {
+  materializationGate,
+  priorMountCount,
+  proposeMaterialization,
+  runMaterializationBatch,
+} from '../../materializationGate';
 import type { GetFn } from './types';
 
 type Params = {
@@ -63,20 +68,43 @@ export const materializeDeclaredProjects = async ({
       declared.push({ project, mentionLine });
     }
   }
-  let immediateCount = 0;
-  for (const { project, mentionLine } of declared) {
-    const reason = reasonFor({ stepName, mentionLine });
-    const gate = materializationGate({ get, sessionId, project, immediateCount });
-    if (gate === 'mounted') {
-      continue;
-    }
-    if (gate === 'deferred') {
-      await proposeMaterialization({ get, sessionId, project, reason, agentId: null });
-      continue;
-    }
-    immediateCount += 1;
-    await get()
-      .materializeProject({ sessionId, projectId: project.id, reason })
-      .catch(() => undefined);
-  }
+  await runMaterializationBatch({
+    sessionId,
+    run: async () => {
+      const priorMounts = priorMountCount({ get, sessionId });
+      let immediateCount = 0;
+      for (const { project, mentionLine } of declared) {
+        const reason = reasonFor({ stepName, mentionLine });
+        const decision = materializationGate({
+          get,
+          sessionId,
+          project,
+          priorMounts,
+          immediateCount,
+        });
+        if (decision.kind === 'mounted') {
+          continue;
+        }
+        if (decision.kind === 'deferred') {
+          await proposeMaterialization({
+            get,
+            sessionId,
+            project,
+            reason,
+            cause: decision.cause,
+            agentId: null,
+            turnRunId: null,
+          });
+          continue;
+        }
+        const mounted = await get()
+          .materializeProject({ sessionId, projectId: project.id, reason })
+          .then(() => true)
+          .catch(() => false);
+        if (mounted) {
+          immediateCount += 1;
+        }
+      }
+    },
+  });
 };

@@ -122,7 +122,7 @@ describe('materializeDeclaredProjects', () => {
     expect(materializeProject).not.toHaveBeenCalled();
   });
 
-  it('proposes instead of mounting once a mount exists and the goal does not name the project', async () => {
+  it('adds one unnamed project next to a single existing mount', async () => {
     const { get, materializeProject, recordSessionEvent } = harness({
       projects: [project('p-api', 'api'), project('p-web', 'web')],
       mounts: [{ projectId: 'p-api' as ProjectId }],
@@ -135,15 +135,36 @@ describe('materializeDeclaredProjects', () => {
       declarationText: 'api and web both change',
     });
 
-    expect(materializeProject).not.toHaveBeenCalled();
+    expect(materializeProject).toHaveBeenCalledTimes(1);
+    expect(materializeProject).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: 'p-web' }),
+    );
+    expect(recordSessionEvent).not.toHaveBeenCalled();
+  });
+
+  it('proposes a second unnamed project with the scope cause', async () => {
+    const { get, materializeProject, recordSessionEvent } = harness({
+      projects: [project('p-api', 'api'), project('p-web', 'web'), project('p-docs', 'docs')],
+      mounts: [{ projectId: 'p-api' as ProjectId }],
+    });
+
+    await materializeDeclaredProjects({
+      get,
+      sessionId: SESSION_ID,
+      stepName: 'Implement',
+      declarationText: 'api, web and docs all change',
+    });
+
+    expect(materializeProject).toHaveBeenCalledTimes(1);
     expect(recordSessionEvent).toHaveBeenCalledTimes(1);
     expect(recordSessionEvent).toHaveBeenCalledWith({
       sessionId: SESSION_ID,
       kind: 'project_materialization_proposed',
       payload: {
-        projectId: 'p-web',
-        projectName: 'web',
-        reason: 'step "Implement": api and web both change',
+        projectId: 'p-docs',
+        projectName: 'docs',
+        reason: 'step "Implement": api, web and docs all change',
+        deferralCause: 'scope',
       },
     });
   });
