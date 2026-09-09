@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "clsx": "^2.1.1",
-    "lucide-react": "^1.27.0",
+    "lucide-react": "^1.41.0",
     "tailwind-merge": "^3.6.0"
   },
   "peerDependencies": {
@@ -23,10 +23,10 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@testing-library/react": "^16.1.0",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.0.0",
-    "happy-dom": "^20.11.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "happy-dom": "^20.14.0",
     "typescript": "^5.6.3",
     "vitest": "4.1.10"
   }
