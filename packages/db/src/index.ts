@@ -192,6 +192,7 @@ export {
   deleteWorktreesForSession,
   deleteSessionMount,
   deleteSessionWorktreeForProject,
+  markSessionMountsRemoved,
   updateSessionWorktreeBranch,
   updateSessionMountBranch,
   updateSessionMountLifecycle,

@@ -12,6 +12,7 @@ import {
   listMountPathOwnership,
   listSessionMounts,
   listWorktreesForSession,
+  markSessionMountsRemoved,
   updateSessionMountBranch,
   updateSessionWorktreeRepoSlug,
 } from './session-worktree';
@@ -205,6 +206,61 @@ describe('deleteWorktreesForSession', () => {
       diskState: 'removed',
     });
     expect(sessions[0]?.active_mount_id).toBeNull();
+  });
+});
+
+describe('markSessionMountsRemoved', () => {
+  it('releases only the addressed mounts of a project sharing a session', async () => {
+    const db = await seed();
+    for (const [index, id] of ['mount-a', 'mount-b', 'mount-c'].entries()) {
+      await insertSessionWorktree(db, {
+        id,
+        sessionId,
+        worktreePath: `/tmp/wt/${id}`,
+        branch: `feature/${id}`,
+        parallelIndex: index,
+        createdAt: Date.now(),
+      });
+    }
+    await db.execute('UPDATE sessions SET active_mount_id = ? WHERE id = ?', [
+      'mount-b',
+      sessionId,
+    ]);
+
+    await markSessionMountsRemoved({
+      db,
+      sessionId,
+      mountIds: ['mount-a' as MountId, 'mount-b' as MountId],
+    });
+
+    const mounts = await listSessionMounts({ db, sessionId });
+    const sessions = await db.select<{ readonly active_mount_id: string | null }>(
+      'SELECT active_mount_id FROM sessions WHERE id = ?',
+      [sessionId],
+    );
+    expect(mounts.map((mount) => [mount.id, mount.diskState, mount.worktreePath])).toEqual([
+      ['mount-a', 'removed', null],
+      ['mount-b', 'removed', null],
+      ['mount-c', 'unchecked', '/tmp/wt/mount-c'],
+    ]);
+    expect(sessions[0]?.active_mount_id).toBeNull();
+  });
+
+  it('writes nothing when no mount is addressed', async () => {
+    const db = await seed();
+    await insertSessionWorktree(db, {
+      id: 'mount-a',
+      sessionId,
+      worktreePath: '/tmp/wt/mount-a',
+      branch: 'feature/a',
+      parallelIndex: 0,
+      createdAt: Date.now(),
+    });
+
+    await markSessionMountsRemoved({ db, sessionId, mountIds: [] });
+
+    const mounts = await listSessionMounts({ db, sessionId });
+    expect(mounts[0]).toMatchObject({ worktreePath: '/tmp/wt/mount-a', diskState: 'unchecked' });
   });
 });
 

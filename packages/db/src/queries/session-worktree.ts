@@ -408,6 +408,43 @@ export const deleteSessionWorktreeForProject = async ({
   }
 };
 
+type MarkSessionMountsRemovedParams = {
+  readonly db: Database;
+  readonly sessionId: SessionId;
+  readonly mountIds: ReadonlyArray<MountId>;
+};
+
+export const markSessionMountsRemoved = async ({
+  db,
+  sessionId,
+  mountIds,
+}: MarkSessionMountsRemovedParams): Promise<void> => {
+  if (mountIds.length === 0) {
+    return;
+  }
+  const now = Date.now();
+  await db.exec('BEGIN IMMEDIATE');
+  try {
+    for (const mountId of mountIds) {
+      await db.execute(
+        'UPDATE sessions SET active_mount_id = NULL WHERE id = ? AND active_mount_id = ?',
+        [sessionId, mountId],
+      );
+      await db.execute(
+        `UPDATE session_worktrees
+         SET last_worktree_path = COALESCE(worktree_path, last_worktree_path), worktree_path = NULL,
+             is_attached = 0, disk_state = 'removed', revision = revision + 1, updated_at = ?
+         WHERE session_id = ? AND id = ?`,
+        [now, sessionId, mountId],
+      );
+    }
+    await db.exec('COMMIT');
+  } catch (error) {
+    await db.exec('ROLLBACK');
+    throw error;
+  }
+};
+
 export const updateSessionWorktreeBranch = async (
   db: Database,
   sessionId: SessionId,
