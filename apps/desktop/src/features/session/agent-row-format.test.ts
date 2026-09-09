@@ -43,9 +43,9 @@ describe('formatCost', () => {
     expect(formatCost(0.0099)).toBe('<$0.01');
   });
 
-  it('shows 3 decimals between 1 cent and 1 dollar', () => {
-    expect(formatCost(0.012)).toBe('$0.012');
-    expect(formatCost(0.999)).toBe('$0.999');
+  it('shows 2 decimals from a cent up', () => {
+    expect(formatCost(0.012)).toBe('$0.01');
+    expect(formatCost(0.999)).toBe('$1.00');
   });
 
   it('shows 2 decimals at or above 1 dollar', () => {
