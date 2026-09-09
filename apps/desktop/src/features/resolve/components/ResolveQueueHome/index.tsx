@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Button, Divider, SectionHeader, Skeleton, Tooltip, formatError } from '@goodboy/ui';
+import {
+  Button,
+  Divider,
+  ErrorStrip,
+  SectionHeader,
+  Skeleton,
+  Tooltip,
+  formatError,
+} from '@goodboy/ui';
 import type {
   PrCheckRun,
   PrComment,
@@ -31,8 +39,10 @@ import {
 } from '../../buildResolveQueueRows';
 import { groupResolveQueue, groupSharedRuns } from '../../groupResolveQueue';
 import { orderResolveQueueRows } from '../../orderResolveQueueRows';
+import { resolveQueueErrorPlacement } from '../../resolveQueueErrorPlacement';
 import {
   RESOLVE_QUEUE_ACTION_LABEL,
+  RESOLVE_QUEUE_REFRESH_LABEL,
   RESOLVE_QUEUE_TITLE,
   RESOLVE_RUN_IN_PROGRESS,
   sharedRunHeading,
@@ -283,11 +293,17 @@ export const ResolveQueueHome = ({ session }: Props) => {
     );
   }
 
-  if (github.detailError != null) {
+  const refreshError = github.detailError ?? null;
+  const errorPlacement = resolveQueueErrorPlacement({
+    error: refreshError,
+    hasLoadedComments: github.detail !== null,
+  });
+
+  if (errorPlacement === 'whole_surface' && refreshError !== null) {
     return (
       <PaneShell title={RESOLVE_QUEUE_TITLE}>
         <ResolveQueueErrorState
-          message={github.detailError}
+          message={refreshError}
           onRetry={() => void refreshSessionPrDetail(sessionId, { force: true })}
         />
       </PaneShell>
@@ -304,6 +320,7 @@ export const ResolveQueueHome = ({ session }: Props) => {
       panel={
         selectedRow === null ? null : (
           <ResolveItemContainer
+            key={selectedRow.thread.threadId}
             sessionId={sessionId}
             row={selectedRow}
             allRows={rows}
@@ -346,6 +363,13 @@ export const ResolveQueueHome = ({ session }: Props) => {
           />
         ) : (
           <div className="flex min-w-0 flex-col gap-4" ref={listRef}>
+            {errorPlacement === 'inline' && refreshError !== null && (
+              <ErrorStrip
+                label={RESOLVE_QUEUE_REFRESH_LABEL}
+                error={new Error(refreshError)}
+                onRetry={() => void refreshSessionPrDetail(sessionId, { force: true })}
+              />
+            )}
             <QueueFilterChips
               filter={view.filter}
               needsReviewCount={groups.needsReview.length}
