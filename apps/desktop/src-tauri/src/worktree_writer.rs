@@ -91,6 +91,17 @@ fn is_abandoned_before_spawn(current: &LeaseHolder, now: Instant) -> bool {
         && now.saturating_duration_since(current.granted_at) >= UNBOUND_LEASE_STEAL_AFTER
 }
 
+pub fn is_lease_live(registry: &WriterLeaseRegistry, path: &str) -> bool {
+    is_lease_live_at(&lock(registry), path, Instant::now())
+}
+
+fn is_lease_live_at(map: &LeaseMap, path: &str, now: Instant) -> bool {
+    map.get(path)
+        .and_then(|slot| slot.holder.as_ref())
+        .map(|holder| !holder.has_exited && !is_abandoned_before_spawn(holder, now))
+        .unwrap_or(false)
+}
+
 fn acquire_at(
     map: &mut LeaseMap,
     path: &str,

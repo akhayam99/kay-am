@@ -356,6 +356,28 @@ describe('cleaning the mounts of a session', () => {
     expect(h.rows.get(MOUNT_ID)?.['worktreePath']).toBe(WORKTREE_PATH);
   });
 
+  it('keeps a directory whose lease the status command reports without a grant', async () => {
+    seedMount();
+    h.worktreeWriterStatus.mockResolvedValue({
+      path: WORKTREE_PATH,
+      holder: 'run-2',
+      token: null,
+      runId: 'run-2',
+      isGranted: false,
+      hasExited: false,
+      waiting: [],
+    });
+    const { slice } = makeSlice();
+
+    const outcomes = await slice.cleanupSessionMounts({ sessionId: SESSION_ID, reason: 'archive' });
+
+    expect(h.removeWorktreeChecked).not.toHaveBeenCalled();
+    expect(outcomes[0]?.decision).toMatchObject({
+      kind: 'kept',
+      reason: 'a writer lease still holds the worktree',
+    });
+  });
+
   it('never deletes a local branch or the pull request ownership of a mount', async () => {
     seedMount();
     const { slice } = makeSlice();

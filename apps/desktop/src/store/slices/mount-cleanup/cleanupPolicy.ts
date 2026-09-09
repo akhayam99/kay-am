@@ -71,7 +71,7 @@ export const cleanupMountDirectory = async ({
     return kept(blockers.join(', '));
   }
   const lease = await worktreeWriterStatus({ path });
-  if (lease.isGranted && !lease.hasExited) {
+  if (lease.holder !== null && !lease.hasExited) {
     return kept('a writer lease still holds the worktree');
   }
   try {
