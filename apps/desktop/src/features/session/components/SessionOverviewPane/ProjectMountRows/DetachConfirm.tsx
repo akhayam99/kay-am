@@ -47,7 +47,9 @@ export const DetachConfirm = ({
     return null;
   }
   const isRisky = plan.kind === 'risky';
-  const lines = isRisky ? plan.lines : [plan.sentence];
+  const details =
+    plan.kind === 'risky' || plan.kind === 'keep' ? plan.details : { totals: [], worktrees: [] };
+  const hasDetails = details.totals.length > 0 || details.worktrees.length > 0;
   const isUnavailable = plan.kind === 'keep' && plan.reason === 'unavailable';
 
   return (
@@ -65,20 +67,20 @@ export const DetachConfirm = ({
           : {})}
       >
         <div className="flex min-w-0 flex-col gap-1 text-muted-foreground">
-          {lines.map((line) => (
+          {plan.lines.map((line) => (
             <p key={line} className="break-words">
               {line}
             </p>
           ))}
         </div>
-        {isRisky ? (
+        {!hasDetails ? null : (
           <DetachDetails
             projectName={projectName}
-            details={plan.details}
+            details={details}
             isBusy={isBusy}
-            onKeepFiles={() => onConfirm({ disposition: 'keep-files' })}
+            {...(isRisky ? { onKeepFiles: () => onConfirm({ disposition: 'keep-files' }) } : {})}
           />
-        ) : null}
+        )}
         {stage === null ? null : (
           <p role="status" aria-live="polite" className="text-2xs text-muted-foreground">
             {stage}

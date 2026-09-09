@@ -1,18 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { AnchoredPopover, Button, IconButton, cn, formatError, useDropdown } from '@goodboy/ui';
-import type {
-  MountId,
-  ProjectId,
-  SessionId,
-  WorktreeDetachAssessment,
-  WorktreeStatus,
-  WorkspaceId,
-} from '@goodboy/types';
+import type { MountId, ProjectId, SessionId, WorktreeStatus, WorkspaceId } from '@goodboy/types';
 import { useToast } from '../../../../../app/components/Toast';
 import { useAppStore } from '../../../../../store';
 import { isWorkingTreeClean } from '../../../../../shared/lib/gitStatus';
 import { worktreeDetachAssessment } from '../../../../worktree/worktree';
-import { mountCleanupBlockers } from '../../../../../store/slices/mount-cleanup/cleanupPolicy';
+import {
+  mountCleanupBlockers,
+  type MountCleanupBlocker,
+} from '../../../../../store/slices/mount-cleanup/cleanupPolicy';
 import type { DetachDisposition } from '../../../../../store/slices/project-mounts/detachProject';
 import { CONCEPT_ICONS, ICON_SIZE } from '../../../../../shared/components/conceptIcons';
 import { DetachConfirm } from './DetachConfirm';
@@ -21,6 +18,7 @@ import {
   buildDetachPlan,
   detachOutcomeMessage,
   summarizeDetachOutcomes,
+  type MountAssessment,
 } from './detachPlan';
 
 type Props = {
@@ -38,6 +36,11 @@ type Props = {
 };
 
 type Confirming = 'detach' | 'unmount' | null;
+
+const BLOCKER_CODES = [
+  'agent-running',
+  'terminal-open',
+] satisfies ReadonlyArray<MountCleanupBlocker>;
 
 export const ProjectDetachMenu = ({
   sessionId,
@@ -59,20 +62,35 @@ export const ProjectDetachMenu = ({
   const isRepoProject = useAppStore(
     (state) => state.projects.find((candidate) => candidate.id === projectId)?.kind === 'repo',
   );
-  const isBlocked = useAppStore(
-    (state) =>
-      mountCleanupBlockers({
-        state,
-        sessionId,
-        mountId: mountId ?? null,
-        worktreePath,
-      }).length > 0,
+  const detachTargets = useAppStore(
+    useShallow((state) =>
+      (state.sessionProjectMounts[sessionId] ?? []).filter(
+        (candidate) => candidate.projectId === projectId,
+      ),
+    ),
   );
+  const blockerKey = useAppStore((state) =>
+    [
+      ...new Set(
+        detachTargets.flatMap((target) =>
+          mountCleanupBlockers({
+            state,
+            sessionId,
+            mountId: target.mountId ?? null,
+            worktreePath: target.worktreePath,
+          }),
+        ),
+      ),
+    ]
+      .sort()
+      .join(','),
+  );
+  const blockers = BLOCKER_CODES.filter((code) => blockerKey.split(',').includes(code));
   const { showToast } = useToast();
   const [confirming, setConfirming] = useState<Confirming>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [stage, setStage] = useState<string | null>(null);
-  const [assessment, setAssessment] = useState<WorktreeDetachAssessment | null>(null);
+  const [assessments, setAssessments] = useState<ReadonlyArray<MountAssessment> | null>(null);
   const requestRef = useRef(0);
   const isClean =
     worktreeStatus != null && isWorkingTreeClean({ workingTree: worktreeStatus.workingTree });
@@ -88,27 +106,40 @@ export const ProjectDetachMenu = ({
   const assess = () => {
     const token = requestRef.current + 1;
     requestRef.current = token;
-    setAssessment(null);
-    if (!isRepoProject || isBlocked) {
+    setAssessments(null);
+    if (!isRepoProject || blockers.length > 0) {
       return;
     }
-    if (worktreePath === '') {
-      setAssessment({ kind: 'unavailable', path: worktreePath, branch: null });
-      return;
-    }
-    void worktreeDetachAssessment({ worktreePath })
-      .then((result) => {
-        if (requestRef.current !== token) {
-          return;
+    const targets =
+      detachTargets.length > 0
+        ? detachTargets.map((target) => ({ path: target.worktreePath, branch: target.branch }))
+        : [{ path: worktreePath, branch }];
+    void Promise.all(
+      targets.map(async (target): Promise<MountAssessment> => {
+        const unavailable = {
+          worktreePath: target.path,
+          branch: target.branch,
+          assessment: { kind: 'unavailable', path: target.path, branch: null },
+        } satisfies MountAssessment;
+        if (target.path === '') {
+          return unavailable;
         }
-        setAssessment(result);
-      })
-      .catch(() => {
-        if (requestRef.current !== token) {
-          return;
+        try {
+          return {
+            worktreePath: target.path,
+            branch: target.branch,
+            assessment: await worktreeDetachAssessment({ worktreePath: target.path }),
+          };
+        } catch {
+          return unavailable;
         }
-        setAssessment({ kind: 'unavailable', path: worktreePath, branch: null });
-      });
+      }),
+    ).then((results) => {
+      if (requestRef.current !== token) {
+        return;
+      }
+      setAssessments(results);
+    });
   };
 
   useEffect(() => {
@@ -117,7 +148,7 @@ export const ProjectDetachMenu = ({
     }
     requestRef.current = requestRef.current + 1;
     setConfirming(null);
-    setAssessment(null);
+    setAssessments(null);
     setStage(null);
   }, [dropdown.open]);
 
@@ -225,10 +256,9 @@ export const ProjectDetachMenu = ({
           plan={buildDetachPlan({
             projectName,
             worktreePath,
-            branch,
             isRepoProject,
-            isBlocked,
-            assessment,
+            blockers,
+            assessments,
           })}
           isBusy={isBusy}
           stage={stage}

@@ -5,128 +5,290 @@ import {
   detachActionFor,
   detachOutcomeMessage,
   summarizeDetachOutcomes,
+  type MountAssessment,
 } from './detachPlan';
 
 const plan = ({
-  assessment,
+  assessments,
   isRepoProject = true,
-  isBlocked = false,
-  branch = 'ak/feat',
+  blockers = [],
 }: {
-  readonly assessment: WorktreeDetachAssessment | null;
+  readonly assessments: ReadonlyArray<MountAssessment> | null;
   readonly isRepoProject?: boolean;
-  readonly isBlocked?: boolean;
-  readonly branch?: string;
+  readonly blockers?: ReadonlyArray<'agent-running' | 'terminal-open'>;
 }) =>
   buildDetachPlan({
     projectName: 'api',
     worktreePath: '/worktrees/api',
-    branch,
     isRepoProject,
-    isBlocked,
-    assessment,
+    blockers,
+    assessments,
   });
 
-const assessed = ({
+const mount = ({
+  path = '/worktrees/api',
+  branch = 'ak/feat',
   affectedFiles,
   localOnlyCommits,
   hasUpstream,
-  branch = 'ak/feat',
 }: {
+  readonly path?: string;
+  readonly branch?: string;
   readonly affectedFiles: number;
   readonly localOnlyCommits: number;
   readonly hasUpstream: boolean;
-  readonly branch?: string | null;
-}): WorktreeDetachAssessment => ({
-  kind: 'assessed',
-  path: '/worktrees/api',
+}): MountAssessment => ({
+  worktreePath: path,
   branch,
-  hasUpstream,
-  affectedFiles,
-  localOnlyCommits,
+  assessment: {
+    kind: 'assessed',
+    path,
+    branch,
+    hasUpstream,
+    affectedFiles,
+    localOnlyCommits,
+  } satisfies WorktreeDetachAssessment,
 });
 
 describe('buildDetachPlan', () => {
   it('waits for the assessment before proposing any disposition', () => {
-    expect(plan({ assessment: null })).toEqual({ kind: 'checking' });
+    expect(plan({ assessments: null })).toEqual({ kind: 'checking' });
     expect(detachActionFor({ plan: { kind: 'checking' } })).toBeNull();
   });
 
   it('keeps a folder project ahead of every other row', () => {
-    const result = plan({ assessment: null, isRepoProject: false });
-
-    expect(result).toEqual({
+    expect(plan({ assessments: null, isRepoProject: false })).toEqual({
       kind: 'keep',
       reason: 'folder',
-      sentence: 'Detach api from this session; its folder at /worktrees/api will stay on disk.',
+      lines: ['Detach api from this session; its folder at /worktrees/api will stay on disk.'],
+      details: { totals: [], worktrees: [] },
     });
   });
 
-  it('uses singular wording for a single file and a single commit', () => {
-    const result = plan({
-      assessment: assessed({ affectedFiles: 1, localOnlyCommits: 1, hasUpstream: true }),
-    });
+  it('names each distinct blocker it found', () => {
+    expect(plan({ assessments: null, blockers: ['agent-running', 'terminal-open'] })).toMatchObject(
+      {
+        kind: 'keep',
+        reason: 'blocked',
+        lines: [
+          'Work is still running in api; stop it before removing this worktree.',
+          'A terminal is open in api; close it before removing this worktree.',
+        ],
+      },
+    );
+  });
 
-    expect(result).toMatchObject({
+  it('states the loss once, without repeating the path', () => {
+    expect(
+      plan({ assessments: [mount({ affectedFiles: 1, localOnlyCommits: 1, hasUpstream: true })] }),
+    ).toMatchObject({
       kind: 'risky',
       lines: [
-        'Remove /worktrees/api for ak/feat; it has 1 uncommitted file and 1 unpushed commit.',
-        '1 uncommitted file at /worktrees/api will be deleted.',
+        'Remove the worktree at /worktrees/api for ak/feat, which has 1 unpushed commit.',
+        '1 uncommitted file will be deleted.',
         'The branch and its commits stay in the repository.',
       ],
-      details: ['Files affected (1)', 'Unpushed commits (1)'],
+      details: {
+        totals: ['Files affected (1)', 'Unpushed commits (1)'],
+        worktrees: ['ak/feat at /worktrees/api: 1 uncommitted file, 1 unpushed commit'],
+      },
     });
   });
 
-  it('shows the zero commit count when only files are at risk', () => {
-    const result = plan({
-      assessment: assessed({ affectedFiles: 2, localOnlyCommits: 0, hasUpstream: true }),
-    });
-
-    expect(result).toMatchObject({
+  it('shows the zero deletion explicitly when only history is at risk', () => {
+    expect(
+      plan({ assessments: [mount({ affectedFiles: 0, localOnlyCommits: 0, hasUpstream: false })] }),
+    ).toMatchObject({
       lines: [
-        'Remove /worktrees/api for ak/feat; it has 2 uncommitted files and 0 unpushed commits.',
-        '2 uncommitted files at /worktrees/api will be deleted.',
+        'Remove the worktree at /worktrees/api for ak/feat, which has no upstream.',
+        'No uncommitted files will be deleted.',
         'The branch and its commits stay in the repository.',
       ],
+      details: {
+        totals: ['Files affected (0)', 'Local-only commits (0)'],
+        worktrees: ['ak/feat at /worktrees/api: 0 uncommitted files, 0 local-only commits'],
+      },
     });
   });
 
-  it('names local-only commits and omits the deletion line when nothing is uncommitted', () => {
-    const result = plan({
-      assessment: assessed({ affectedFiles: 0, localOnlyCommits: 3, hasUpstream: false }),
-    });
-
-    expect(result).toMatchObject({
+  it('aggregates every mount the detach will touch and breaks them down', () => {
+    expect(
+      plan({
+        assessments: [
+          mount({
+            path: '/worktrees/api-one',
+            branch: 'ak/one',
+            affectedFiles: 2,
+            localOnlyCommits: 0,
+            hasUpstream: true,
+          }),
+          mount({
+            path: '/worktrees/api-two',
+            branch: 'ak/two',
+            affectedFiles: 1,
+            localOnlyCommits: 3,
+            hasUpstream: false,
+          }),
+        ],
+      }),
+    ).toMatchObject({
+      kind: 'risky',
       lines: [
-        'Remove /worktrees/api for ak/feat, which has no upstream; it has 0 uncommitted files and 3 local-only commits.',
-        'The branch and its commits stay in the repository.',
+        'Remove 2 worktrees for api, which have 3 local-only commits and 1 branch without an upstream.',
+        '3 uncommitted files will be deleted.',
+        'The branches and their commits stay in the repository.',
       ],
-      details: ['Files affected (0)', 'Local-only commits (3)'],
+      details: {
+        totals: ['Files affected (3)', 'Local-only commits (3)'],
+        worktrees: [
+          'ak/one at /worktrees/api-one: 2 uncommitted files, 0 unpushed commits',
+          'ak/two at /worktrees/api-two: 1 uncommitted file, 3 local-only commits',
+        ],
+      },
     });
   });
 
-  it('falls back to the mounted branch name when the assessment has none', () => {
+  it('makes the whole confirmation risky when one of several mounts is risky', () => {
+    expect(
+      plan({
+        assessments: [
+          mount({
+            path: '/a',
+            branch: 'ak/a',
+            affectedFiles: 0,
+            localOnlyCommits: 0,
+            hasUpstream: true,
+          }),
+          mount({
+            path: '/b',
+            branch: 'ak/b',
+            affectedFiles: 0,
+            localOnlyCommits: 2,
+            hasUpstream: true,
+          }),
+        ],
+      }),
+    ).toMatchObject({
+      kind: 'risky',
+      lines: [
+        'Remove 2 worktrees for api, which have 2 unpushed commits.',
+        'No uncommitted files will be deleted.',
+        'The branches and their commits stay in the repository.',
+      ],
+    });
+  });
+
+  it('removes several clean worktrees under one concise confirmation', () => {
+    expect(
+      plan({
+        assessments: [
+          mount({
+            path: '/a',
+            branch: 'ak/a',
+            affectedFiles: 0,
+            localOnlyCommits: 0,
+            hasUpstream: true,
+          }),
+          mount({
+            path: '/b',
+            branch: 'ak/b',
+            affectedFiles: 0,
+            localOnlyCommits: 0,
+            hasUpstream: true,
+          }),
+        ],
+      }),
+    ).toEqual({
+      kind: 'safe',
+      lines: [
+        'Remove 2 clean worktrees for api; every branch is published, with 0 uncommitted files and 0 unpushed commits, and every branch will remain.',
+      ],
+    });
+  });
+
+  it('refuses to promise safety for a set it could not fully read', () => {
+    expect(
+      plan({
+        assessments: [
+          mount({
+            path: '/a',
+            branch: 'ak/a',
+            affectedFiles: 0,
+            localOnlyCommits: 0,
+            hasUpstream: true,
+          }),
+          {
+            worktreePath: '/b',
+            branch: 'ak/b',
+            assessment: { kind: 'unavailable', path: '/b', branch: null },
+          },
+        ],
+      }),
+    ).toEqual({
+      kind: 'keep',
+      reason: 'unavailable',
+      lines: [
+        'The safety of 1 of 2 worktrees in api could not be verified; detach will keep every directory.',
+      ],
+      details: { totals: [], worktrees: ['ak/b at /b: not verified'] },
+    });
+  });
+
+  it('keeps the single unverified worktree wording and offers a recheck', () => {
     const result = plan({
-      assessment: { kind: 'unavailable', path: '/worktrees/api', branch: null },
+      assessments: [
+        {
+          worktreePath: '/worktrees/api',
+          branch: 'ak/feat',
+          assessment: { kind: 'unavailable', path: '/worktrees/api', branch: null },
+        },
+      ],
     });
 
     expect(result).toEqual({
       kind: 'keep',
       reason: 'unavailable',
-      sentence:
+      lines: [
         'The safety of ak/feat at /worktrees/api could not be verified; detach will keep the directory.',
+      ],
+      details: { totals: [], worktrees: [] },
     });
+    expect(detachActionFor({ plan: result })).toMatchObject({ disposition: 'keep-files' });
   });
 
-  it('never proposes removal while another writer holds the worktree', () => {
-    const result = plan({
-      assessment: assessed({ affectedFiles: 0, localOnlyCommits: 0, hasUpstream: true }),
-      isBlocked: true,
+  it('treats an absent directory beside a dirty one as no extra loss', () => {
+    expect(
+      plan({
+        assessments: [
+          {
+            worktreePath: '/gone',
+            branch: 'ak/gone',
+            assessment: { kind: 'missing', path: '/gone' },
+          },
+          mount({
+            path: '/b',
+            branch: 'ak/b',
+            affectedFiles: 2,
+            localOnlyCommits: 0,
+            hasUpstream: true,
+          }),
+        ],
+      }),
+    ).toMatchObject({
+      kind: 'risky',
+      lines: [
+        'Remove 2 worktrees for api.',
+        '2 uncommitted files will be deleted.',
+        'The branches and their commits stay in the repository.',
+      ],
+      details: {
+        totals: ['Files affected (2)', 'Unpushed commits (0)'],
+        worktrees: [
+          'ak/gone at /gone: directory already absent',
+          'ak/b at /b: 2 uncommitted files, 0 unpushed commits',
+        ],
+      },
     });
-
-    expect(result).toMatchObject({ kind: 'keep', reason: 'blocked' });
-    expect(detachActionFor({ plan: result })).toMatchObject({ disposition: 'keep-files' });
   });
 });
 

@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from '@goodboy/ui';
+import type { DetachDetails as Details } from './detachPlan';
 
 type Props = {
   readonly projectName: string;
-  readonly details: ReadonlyArray<string>;
+  readonly details: Details;
   readonly isBusy: boolean;
-  readonly onKeepFiles: () => void;
+  readonly onKeepFiles?: () => void;
 };
 
 export const DetachDetails = ({ projectName, details, isBusy, onKeepFiles }: Props) => {
@@ -26,22 +27,35 @@ export const DetachDetails = ({ projectName, details, isBusy, onKeepFiles }: Pro
         Details
       </button>
       {isOpen ? (
-        <div className="flex min-w-0 flex-col gap-1.5">
-          <ul className="flex min-w-0 flex-col gap-0.5 text-2xs text-muted-foreground">
-            {details.map((detail) => (
-              <li key={detail}>{detail}</li>
-            ))}
-          </ul>
-          <Button
-            size="sm"
-            variant="secondary"
-            emphasis="outline"
-            disabled={isBusy}
-            className="w-fit"
-            onClick={onKeepFiles}
-          >
-            Detach and keep files
-          </Button>
+        <div className="flex min-w-0 flex-col gap-2">
+          {details.totals.length === 0 ? null : (
+            <ul className="flex min-w-0 flex-col gap-0.5 text-2xs text-foreground">
+              {details.totals.map((detail) => (
+                <li key={detail}>{detail}</li>
+              ))}
+            </ul>
+          )}
+          {details.worktrees.length === 0 ? null : (
+            <ul className="flex min-w-0 flex-col gap-1 border-t border-border pt-2 text-2xs text-muted-foreground">
+              {details.worktrees.map((detail) => (
+                <li key={detail} className="break-words">
+                  {detail}
+                </li>
+              ))}
+            </ul>
+          )}
+          {onKeepFiles === undefined ? null : (
+            <Button
+              size="sm"
+              variant="secondary"
+              emphasis="outline"
+              disabled={isBusy}
+              className="w-fit"
+              onClick={onKeepFiles}
+            >
+              Detach and keep files
+            </Button>
+          )}
         </div>
       ) : null}
     </div>

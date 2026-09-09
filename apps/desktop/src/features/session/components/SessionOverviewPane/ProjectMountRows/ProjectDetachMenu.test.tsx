@@ -12,6 +12,16 @@ const { state, showToast, worktreeDetachAssessment } = vi.hoisted(() => ({
     projects: [{ id: 'project-1', kind: 'repo' }],
     sessions: [{ id: 'session-1', state: { kind: 'idle' } }],
     terminalTabs: {},
+    sessionProjectMounts: {
+      'session-1': [
+        {
+          mountId: 'mount-1',
+          projectId: 'project-1',
+          worktreePath: '/worktrees/api',
+          branch: 'ak/feat',
+        },
+      ],
+    },
   },
   showToast: vi.fn(),
   worktreeDetachAssessment: vi.fn(),
@@ -20,6 +30,8 @@ const { state, showToast, worktreeDetachAssessment } = vi.hoisted(() => ({
 vi.mock('../../../../../store', () => ({
   useAppStore: <T,>(selector: (store: typeof state) => T) => selector(state),
 }));
+
+vi.mock('zustand/react/shallow', () => ({ useShallow: <T,>(selector: T) => selector }));
 
 vi.mock('../../../../../app/components/Toast', () => ({
   useToast: () => ({ showToast }),
@@ -74,6 +86,16 @@ beforeEach(() => {
   state.projects = [{ id: 'project-1', kind: 'repo' }];
   state.sessions = [{ id: 'session-1', state: { kind: 'idle' } }];
   state.terminalTabs = {};
+  state.sessionProjectMounts = {
+    'session-1': [
+      {
+        mountId: 'mount-1',
+        projectId: 'project-1',
+        worktreePath: '/worktrees/api',
+        branch: 'ak/feat',
+      },
+    ],
+  };
   state.detachProject.mockResolvedValue([{ worktreePath: '/worktrees/api', kind: 'removed' }]);
   worktreeDetachAssessment.mockResolvedValue(
     assessed({ affectedFiles: 0, localOnlyCommits: 0, hasUpstream: true }),
@@ -122,11 +144,75 @@ describe('ProjectDetachMenu', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Detach and delete files' })));
     expect(
       screen.getByText(
-        'Remove /worktrees/api for ak/feat; it has 1 uncommitted file and 2 unpushed commits.',
+        'Remove the worktree at /worktrees/api for ak/feat, which has 2 unpushed commits.',
       ),
     ).toBeDefined();
-    expect(screen.getByText('1 uncommitted file at /worktrees/api will be deleted.')).toBeDefined();
+    expect(screen.getByText('1 uncommitted file will be deleted.')).toBeDefined();
     expect(screen.getByText('The branch and its commits stay in the repository.')).toBeDefined();
+  });
+
+  it('assesses every mount of the project and speaks for all of them', async () => {
+    state.sessionProjectMounts = {
+      'session-1': [
+        {
+          mountId: 'mount-1',
+          projectId: 'project-1',
+          worktreePath: '/worktrees/api-one',
+          branch: 'ak/one',
+        },
+        {
+          mountId: 'mount-2',
+          projectId: 'project-1',
+          worktreePath: '/worktrees/api-two',
+          branch: 'ak/two',
+        },
+        {
+          mountId: 'mount-3',
+          projectId: 'project-other',
+          worktreePath: '/worktrees/web',
+          branch: 'ak/web',
+        },
+      ],
+    };
+    worktreeDetachAssessment.mockImplementation(
+      async ({ worktreePath }: { worktreePath: string }) =>
+        worktreePath === '/worktrees/api-one'
+          ? {
+              kind: 'assessed',
+              path: worktreePath,
+              branch: 'ak/one',
+              hasUpstream: true,
+              affectedFiles: 2,
+              localOnlyCommits: 0,
+            }
+          : {
+              kind: 'assessed',
+              path: worktreePath,
+              branch: 'ak/two',
+              hasUpstream: false,
+              affectedFiles: 1,
+              localOnlyCommits: 3,
+            },
+    );
+    renderMenu();
+    openConfirm();
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Detach and delete files' })));
+    expect(worktreeDetachAssessment).toHaveBeenCalledTimes(2);
+    expect(worktreeDetachAssessment).not.toHaveBeenCalledWith({ worktreePath: '/worktrees/web' });
+    expect(
+      screen.getByText(
+        'Remove 2 worktrees for api, which have 3 local-only commits and 1 branch without an upstream.',
+      ),
+    ).toBeDefined();
+    expect(screen.getByText('3 uncommitted files will be deleted.')).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Detach details for api' }));
+    expect(
+      screen.getByText('ak/one at /worktrees/api-one: 2 uncommitted files, 0 unpushed commits'),
+    ).toBeDefined();
+    expect(
+      screen.getByText('ak/two at /worktrees/api-two: 1 uncommitted file, 3 local-only commits'),
+    ).toBeDefined();
   });
 
   it('reports a branch without an upstream as local-only work', async () => {
@@ -138,11 +224,9 @@ describe('ProjectDetachMenu', () => {
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Detach and delete files' })));
     expect(
-      screen.getByText(
-        'Remove /worktrees/api for ak/feat, which has no upstream; it has 0 uncommitted files and 0 local-only commits.',
-      ),
+      screen.getByText('Remove the worktree at /worktrees/api for ak/feat, which has no upstream.'),
     ).toBeDefined();
-    expect(screen.queryByText(/will be deleted/)).toBeNull();
+    expect(screen.getByText('No uncommitted files will be deleted.')).toBeDefined();
   });
 
   it('hides the keep alternative behind the details disclosure', async () => {
@@ -228,6 +312,20 @@ describe('ProjectDetachMenu', () => {
       screen.getByText('Work is still running in api; stop it before removing this worktree.'),
     ).toBeDefined();
     expect(screen.getByRole('button', { name: 'Detach and keep files' })).toBeDefined();
+  });
+
+  it('names an open terminal as the blocker it actually is', () => {
+    state.terminalTabs = {
+      'session-1': [{ id: 'tab-1', sessionId: 'session-1', cwd: '/worktrees/api' }],
+    };
+    renderMenu();
+    openConfirm();
+
+    expect(worktreeDetachAssessment).not.toHaveBeenCalled();
+    expect(
+      screen.getByText('A terminal is open in api; close it before removing this worktree.'),
+    ).toBeDefined();
+    expect(screen.queryByText(/Work is still running/)).toBeNull();
   });
 
   it('keeps the confirmation open and reports a removal failure', async () => {
