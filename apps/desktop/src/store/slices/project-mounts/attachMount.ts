@@ -9,7 +9,7 @@ import {
   sessionDirExists,
 } from '../../../features/worktree/worktree';
 import { mountDirName } from './mountDirName';
-import { mountError } from './mountErrors';
+import { branchInUseError, mountError } from './mountErrors';
 import { withRepositoryAndMountLock } from './mountLocks';
 import {
   beginMountOperation,
@@ -115,7 +115,14 @@ export const attachMount = (set: SetFn, get: GetFn) => {
             });
             return created.worktreePath;
           } catch (error) {
-            await failMountOperation({ operation, errorCode: 'unknown-state' });
+            const branchInUse = branchInUseError({ error, mountId });
+            await failMountOperation({
+              operation,
+              errorCode: branchInUse === null ? 'unknown-state' : 'branch-taken',
+            });
+            if (branchInUse !== null) {
+              throw branchInUse;
+            }
             throw mountError({
               code: 'unknown-state',
               message: `could not recreate the worktree: ${formatError(error)}`,

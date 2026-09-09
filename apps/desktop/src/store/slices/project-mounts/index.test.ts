@@ -59,7 +59,12 @@ const h = vi.hoisted(() => {
   };
 });
 
-vi.mock('@goodboy/ui', () => ({ formatError: (error: unknown) => String(error) }));
+vi.mock('@goodboy/ui', () => ({
+  formatError: (error: unknown) =>
+    typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { readonly message: unknown }).message)
+      : String(error),
+}));
 
 vi.mock('../../../features/settings/settings', () => ({ DEFAULT_BRANCH_PREFIX: 'ak' }));
 
@@ -279,6 +284,11 @@ beforeEach(() => {
   );
 });
 
+const BRANCH_IN_USE = {
+  kind: 'branch_in_use',
+  message: 'branch ak/taken is already checked out at /repos/api/.goodboy/worktrees/holder',
+};
+
 describe('project mount lifecycle', () => {
   it('forks the same project twice into two mounts with distinct paths and branches', async () => {
     const { slice, state } = makeSlice();
@@ -381,12 +391,7 @@ describe('project mount lifecycle', () => {
   it('names the worktree that holds a branch when adoption collides with it', async () => {
     const { slice } = makeSlice();
     h.branchNames = ['ak/base', 'ak/taken'];
-    h.createWorktree.mockRejectedValue(
-      Object.assign(
-        new Error('branch ak/taken is already checked out at /repos/api/.goodboy/worktrees/holder'),
-        { kind: 'branch_in_use' },
-      ),
-    );
+    h.createWorktree.mockRejectedValue(BRANCH_IN_USE);
 
     const failure = await slice
       .forkMount({
@@ -397,9 +402,10 @@ describe('project mount lifecycle', () => {
       })
       .catch((error: unknown) => error);
 
-    expect(failure).toMatchObject({ code: 'branch-taken' });
-    expect((failure as Error).message).toContain(
-      'already checked out at /repos/api/.goodboy/worktrees/holder',
+    expect(failure).toMatchObject({ code: 'branch-taken', recoverable: true });
+    expect((failure as Error).message).toBe(BRANCH_IN_USE.message);
+    expect([...h.operations.values()].map((operation) => operation.errorCode)).toContain(
+      'branch-taken',
     );
   });
 
@@ -582,6 +588,21 @@ describe('project mount lifecycle', () => {
     expect(h.createWorktree).toHaveBeenCalledWith(
       expect.objectContaining({ existingBranch: 'ak/first' }),
     );
+  });
+
+  it('names the holding worktree when attaching hits a branch checked out elsewhere', async () => {
+    const { slice } = makeSlice();
+    seedMount({ id: 'mount-1', branch: 'ak/first', worktreePath: null, revision: 2 });
+    h.branchNames = ['ak/base', 'ak/first'];
+    h.inspectWorktree.mockResolvedValue({ kind: 'missing' });
+    h.createWorktree.mockRejectedValue(BRANCH_IN_USE);
+
+    const failure = await slice
+      .attachMount({ sessionId: SESSION_ID, mountId: 'mount-1' as MountId })
+      .catch((error: unknown) => error);
+
+    expect(failure).toMatchObject({ code: 'branch-taken', mountId: 'mount-1' });
+    expect((failure as Error).message).toBe(BRANCH_IN_USE.message);
   });
 
   it('refuses to attach a mount whose branch is gone', async () => {
