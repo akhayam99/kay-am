@@ -533,7 +533,7 @@ describe('StageBoardCard footer', () => {
     expect(slot?.closest('[data-tooltip]')?.getAttribute('data-tooltip')).toBe('gateway');
   });
 
-  it('collapses several projects into one count naming them', () => {
+  it('degrades several projects to a glyphed count that names them, never a mid-word clip', () => {
     state.projects = [{}, {}];
     state.sessionProjectMounts = {
       [SESSION_ID]: [
@@ -545,10 +545,11 @@ describe('StageBoardCard footer', () => {
     expect(screen.queryByText('core-api')).toBeNull();
     expect(screen.getByLabelText('2 projects: core-api, web-console')).toBeDefined();
     const chip = screen.getByLabelText('2 projects: core-api, web-console');
-    expect(chip.textContent).toBe('2 projects');
+    expect(chip.textContent).toBe('2');
+    expect(chip.querySelector('svg')).not.toBeNull();
     expect(chip.className).not.toContain('w-24');
     expect(chip.closest('[data-tooltip]')?.getAttribute('data-tooltip')).toBe(
-      'core-api, web-console',
+      '2 projects: core-api, web-console',
     );
   });
 
