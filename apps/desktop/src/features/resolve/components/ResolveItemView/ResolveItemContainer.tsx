@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatError } from '@goodboy/ui';
 import type { ResolveCheckRun, ResolveQueueItemWithThread, SessionId } from '@goodboy/types';
 import { useAppStore } from '../../../../store';
@@ -8,11 +8,12 @@ import { acceptedItemIds } from '../../acceptedItemIds';
 import { summariseResolveChecks } from '../../checkReceipts';
 import type { ResolveQueueRow } from '../../buildResolveQueueRows';
 import { useResolveCandidateDiff } from '../../hooks/useResolveCandidateDiff';
+import { useResolveItemDraft } from '../../hooks/useResolveItemDraft';
 import { refuseBlockedReason } from '../../refuseBlockedReason';
+import { RESOLVE_ITEM_LABEL } from '../../resolveItemCopy';
 import { candidateHeadSha, selectResolveCandidate } from '../../selectResolveCandidate';
 import { selectResolveCheckScript } from '../../selectResolveCheckScript';
 import type { ResolveCandidateWithItems } from '../../../../store/slices/resolve/state';
-import type { ResolveDecisionMode } from './DecisionBlock';
 import { ResolveItemView } from './index';
 
 type Props = {
@@ -38,18 +39,30 @@ const EMPTY_CHECK_RUNS: ReadonlyArray<ResolveCheckRun> = [];
 const EMPTY_QUEUE_ITEMS: ReadonlyArray<ResolveQueueItemWithThread> = [];
 const EMPTY_SCRIPT_GROUPS: ReadonlyArray<ScriptGroup> = [];
 
-const approveBlockedReasonFor = ({ row }: { readonly row: ResolveQueueRow }): string | null => {
+const approveBlockedReasonFor = ({
+  row,
+  isApprovable,
+}: {
+  readonly row: ResolveQueueRow;
+  readonly isApprovable: boolean;
+}): string | null => {
   if (row.status === 'working') {
     return 'The run has to stop first';
   }
   if (row.status === 'agent_asked') {
     return 'Answer the agent question first';
   }
+  if (row.status === 'run_failed') {
+    return 'The last run did not finish';
+  }
   if (row.status === 'ready_to_push') {
     return 'Already approved';
   }
   if (row.status === 'later') {
     return 'Resume this comment first';
+  }
+  if (!isApprovable) {
+    return RESOLVE_ITEM_LABEL.nothingToApprove;
   }
   return null;
 };
@@ -81,21 +94,24 @@ export const ResolveItemContainer = ({
   const loadDiscoveredScripts = useAppStore((s) => s.loadDiscoveredScripts);
   const metrics = useAgentMetrics({ sessionId });
 
-  const [reply, setReply] = useState(row.proposal ?? '');
-  const [instruction, setInstruction] = useState('');
-  const [mode, setMode] = useState<ResolveDecisionMode>('reply');
+  const threadId = row.thread.threadId;
+  const { reply, instruction, mode, setReply, setInstruction, setMode } = useResolveItemDraft({
+    sessionId,
+    threadId,
+    proposal: row.proposal,
+  });
   const [isBusy, setIsBusy] = useState(false);
   const [isCheckRunning, setIsCheckRunning] = useState(false);
   const [unprovable, setUnprovable] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    setReply(row.proposal ?? '');
-    setInstruction('');
-    setMode('reply');
-    setError(null);
-    setUnprovable(null);
-  }, [row.proposal, row.thread.threadId]);
+  const currentThreadIdRef = useRef(threadId);
+  currentThreadIdRef.current = threadId;
+  const isStillSelected = useCallback(
+    ({ startedOn }: { readonly startedOn: string }): boolean =>
+      currentThreadIdRef.current === startedOn,
+    [],
+  );
 
   useEffect(() => {
     if (worktreePath === null) {
@@ -130,20 +146,27 @@ export const ResolveItemContainer = ({
     () => selectResolveCheckScript({ groups: scriptGroups }),
     [scriptGroups],
   );
+  const proposalKind = candidate === null ? row.proposalKind : 'fix';
+  const isApprovable = proposalKind !== 'none' || reply.trim() !== '';
   const costUsd =
     row.attempt === null
       ? null
       : (metrics.aggregatesByAgentId.get(row.attempt.agentId)?.estimatedCostUsd ?? null);
 
   const guard = async ({ run }: { readonly run: () => Promise<void> }): Promise<void> => {
+    const startedOn = threadId;
     setIsBusy(true);
     setError(null);
     try {
       await run();
     } catch (caught) {
-      setError(formatError(caught));
+      if (isStillSelected({ startedOn })) {
+        setError(formatError(caught));
+      }
     } finally {
-      setIsBusy(false);
+      if (isStillSelected({ startedOn })) {
+        setIsBusy(false);
+      }
     }
   };
 
@@ -197,6 +220,7 @@ export const ResolveItemContainer = ({
     if (candidate === null || checkScript === null || worktreePath === null) {
       return;
     }
+    const startedOn = threadId;
     setIsCheckRunning(true);
     setError(null);
     setUnprovable(null);
@@ -208,9 +232,21 @@ export const ResolveItemContainer = ({
       testIdentity: null,
       breadth: 'full',
     })
-      .then((pair) => setUnprovable(pair.unprovable))
-      .catch((caught: unknown) => setError(formatError(caught)))
-      .finally(() => setIsCheckRunning(false));
+      .then((pair) => {
+        if (isStillSelected({ startedOn })) {
+          setUnprovable(pair.unprovable);
+        }
+      })
+      .catch((caught: unknown) => {
+        if (isStillSelected({ startedOn })) {
+          setError(formatError(caught));
+        }
+      })
+      .finally(() => {
+        if (isStillSelected({ startedOn })) {
+          setIsCheckRunning(false);
+        }
+      });
   };
 
   return (
@@ -227,8 +263,11 @@ export const ResolveItemContainer = ({
       instruction={instruction}
       mode={mode}
       isBusy={isBusy}
-      canApprove={row.status === 'for_you' || row.status === 'changed_since_accepted'}
-      approveBlockedReason={approveBlockedReasonFor({ row })}
+      proposalKind={proposalKind}
+      canApprove={
+        (row.status === 'for_you' || row.status === 'changed_since_accepted') && isApprovable
+      }
+      approveBlockedReason={approveBlockedReasonFor({ row, isApprovable })}
       refuseBlockedReason={refuseBlockedReason({ row })}
       canRunCheck={candidate !== null && checkScript !== null}
       isCheckRunning={isCheckRunning}
@@ -239,10 +278,7 @@ export const ResolveItemContainer = ({
       onApprove={onApprove}
       onStartRevise={() => setMode('revise')}
       onStartRefuse={() => setMode('refuse')}
-      onCancelRefuse={() => {
-        setReply(row.proposal ?? '');
-        setMode('reply');
-      }}
+      onCancelRefuse={() => setMode('reply')}
       onRefuse={onRefuse}
       onCancelRevise={() => {
         setInstruction('');

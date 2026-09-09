@@ -13,7 +13,7 @@ import {
 import type { OverflowMenuItem } from '@goodboy/ui';
 import type { FileDiff } from '@goodboy/types';
 import type { ResolveChecksSummary } from '../../checkReceipts';
-import type { ResolveQueueRow } from '../../buildResolveQueueRows';
+import type { ResolveProposalKind, ResolveQueueRow } from '../../buildResolveQueueRows';
 import { EMPTY_REFUSAL_REPLY } from '../../../../store/slices/resolve/refuseResolveQueueItem';
 import { RESOLVE_ITEM_LABEL, runNote } from '../../resolveItemCopy';
 import {
@@ -26,7 +26,8 @@ import { deliverySupportLine } from '../../resolveDeliverySupport';
 import { BADGE_TONE_BY_STATUS } from '../ResolveQueueHome/statusTone';
 import { ChangeBlock } from './ChangeBlock';
 import { ChecksBlock } from './ChecksBlock';
-import { DecisionBlock, type ResolveDecisionMode } from './DecisionBlock';
+import type { ResolveDecisionMode } from '../../resolveItemDraft';
+import { DecisionBlock } from './DecisionBlock';
 import { ResolveCommitIdentity } from './ResolveCommitIdentity';
 import { ReviewerCommentBlock } from './ReviewerCommentBlock';
 import { RunCard } from './RunCard';
@@ -43,6 +44,7 @@ type Props = {
   readonly reply: string;
   readonly instruction: string;
   readonly mode: ResolveDecisionMode;
+  readonly proposalKind: ResolveProposalKind;
   readonly isBusy: boolean;
   readonly canApprove: boolean;
   readonly approveBlockedReason: string | null;
@@ -82,6 +84,7 @@ export const ResolveItemView = ({
   reply,
   instruction,
   mode,
+  proposalKind,
   isBusy,
   canApprove,
   approveBlockedReason,
@@ -112,7 +115,19 @@ export const ResolveItemView = ({
   const isDelivered = row.status === 'pushed' || row.status === 'wont_fix_sent';
   const isReplyBlank = reply.trim() === '';
   const question = row.thread.question;
+  const isAnswering = row.status === 'agent_asked';
   const fieldId = `resolve-item-${row.thread.threadId}`;
+  const reviseItems: ReadonlyArray<OverflowMenuItem> = isAnswering
+    ? []
+    : [
+        {
+          kind: 'item',
+          key: 'revise',
+          label: RESOLVE_QUEUE_ACTION_LABEL.askForChanges,
+          disabled: isBusy,
+          onClick: onStartRevise,
+        },
+      ];
   const menuItems: ReadonlyArray<OverflowMenuItem> = isDelivered
     ? [
         {
@@ -124,13 +139,7 @@ export const ResolveItemView = ({
         },
       ]
     : [
-        {
-          kind: 'item',
-          key: 'revise',
-          label: RESOLVE_QUEUE_ACTION_LABEL.askForChanges,
-          disabled: isBusy,
-          onClick: onStartRevise,
-        },
+        ...reviseItems,
         {
           kind: 'item',
           key: 'wont-fix',
@@ -161,8 +170,13 @@ export const ResolveItemView = ({
           tone={BADGE_TONE_BY_STATUS[row.status]}
           label={RESOLVE_QUEUE_STATUS_LABEL[row.status]}
         />
-        <span className="ml-auto flex shrink-0 items-center gap-2">
-          {mode === 'reply' && !isDelivered && (
+        <span className="flex flex-1 items-center justify-end gap-2">
+          {mode === 'reply' && !isDelivered && isAnswering && (
+            <Button size="sm" variant="primary" disabled={isBusy} onClick={onStartRevise}>
+              {RESOLVE_QUEUE_ACTION_LABEL.answerAgent}
+            </Button>
+          )}
+          {mode === 'reply' && !isDelivered && !isAnswering && (
             <Tooltip content={approveBlockedReason ?? RESOLVE_QUEUE_ACTION_LABEL.approveFix}>
               <Button
                 size="sm"
@@ -196,6 +210,8 @@ export const ResolveItemView = ({
             reply={reply}
             instruction={instruction}
             mode={mode}
+            proposalKind={proposalKind}
+            isAnswering={isAnswering}
             isDelivered={isDelivered}
             deliveredReply={row.delivery?.replyBody ?? null}
             deliverySupport={deliverySupportLine({ row })}
@@ -259,19 +275,23 @@ export const ResolveItemView = ({
       {mode === 'refuse' && (
         <>
           <Divider />
-          <div className="flex shrink-0 items-center justify-end gap-3 px-3 py-2">
-            {isReplyBlank && <p className="mr-auto text-2xs text-warning">{EMPTY_REFUSAL_REPLY}</p>}
-            <Button size="sm" variant="ghost" disabled={isBusy} onClick={onCancelRefuse}>
-              {RESOLVE_QUEUE_ACTION_LABEL.cancel}
-            </Button>
-            <Button
-              size="sm"
-              variant="primary"
-              disabled={isBusy || isReplyBlank}
-              onClick={onRefuse}
-            >
-              {RESOLVE_QUEUE_ACTION_LABEL.wontFix}
-            </Button>
+          <div className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2">
+            <p className="min-w-0 text-2xs text-warning">
+              {isReplyBlank ? EMPTY_REFUSAL_REPLY : ''}
+            </p>
+            <div className="flex items-center gap-3">
+              <Button size="sm" variant="ghost" disabled={isBusy} onClick={onCancelRefuse}>
+                {RESOLVE_QUEUE_ACTION_LABEL.cancel}
+              </Button>
+              <Button
+                size="sm"
+                variant="primary"
+                disabled={isBusy || isReplyBlank}
+                onClick={onRefuse}
+              >
+                {RESOLVE_QUEUE_ACTION_LABEL.wontFix}
+              </Button>
+            </div>
           </div>
         </>
       )}

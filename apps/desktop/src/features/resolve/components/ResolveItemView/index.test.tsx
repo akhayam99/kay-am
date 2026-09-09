@@ -111,6 +111,7 @@ const renderView = (overrides: Partial<Parameters<typeof ResolveItemView>[0]> = 
       reply="Added the early return."
       instruction=""
       mode="reply"
+      proposalKind="fix"
       isBusy={false}
       canApprove
       approveBlockedReason={null}
@@ -398,6 +399,47 @@ describe('the resolve item view', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Will not fix' }));
 
     expect(onRefuse).toHaveBeenCalledOnce();
+  });
+
+  it('says what is missing instead of offering the approval of nothing', () => {
+    renderView({
+      proposalKind: 'none',
+      canApprove: false,
+      approveBlockedReason: 'No fix and no reply to approve yet',
+    });
+
+    expect(screen.getByText('No agent reply yet')).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Approve fix' }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('marks a deliberate reply without a code change as exactly that', () => {
+    renderView({ proposalKind: 'reply_only' });
+
+    expect(screen.getByText('Reply only, no code change')).toBeDefined();
+    expect(screen.queryByText('No agent reply yet')).toBeNull();
+  });
+
+  it('leads with the answer while the agent is waiting on one', () => {
+    const onStartRevise = vi.fn();
+    renderView({ row: { ...LEAD, status: 'agent_asked' } as typeof LEAD, onStartRevise });
+
+    expect(screen.queryByRole('button', { name: 'Approve fix' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Answer agent' }));
+
+    expect(onStartRevise).toHaveBeenCalledOnce();
+  });
+
+  it('names the agent answer field for what it answers', () => {
+    renderView({
+      row: { ...LEAD, status: 'agent_asked' } as typeof LEAD,
+      mode: 'revise',
+      instruction: 'Cap the attempts at three.',
+    });
+
+    expect(screen.getByLabelText('Answer for agent')).toHaveProperty(
+      'value',
+      'Cap the attempts at three.',
+    );
   });
 
   it('says a refused comment was answered and its reviewer thread left open', () => {

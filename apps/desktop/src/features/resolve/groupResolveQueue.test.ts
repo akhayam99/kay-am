@@ -74,6 +74,7 @@ const row = ({
     line: null,
   },
   proposal: null,
+  proposalKind: 'none',
   coveredThreadIds: [],
   delivery: null,
 });

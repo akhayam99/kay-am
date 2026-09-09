@@ -86,6 +86,7 @@ import type { BugReportDraftState } from './slices/bugReportDraft/state';
 import type { ChangelogState } from './slices/changelog/state';
 import type { ProviderConnectMap, ProviderLifecycleMap } from './slices/providers';
 import type { ReviewPrsState } from './slices/review-prs/types';
+import type { ResolveItemDraft } from '../features/resolve/resolveItemDraft';
 import type {
   DiffFocus,
   FocusedExternalTask,
@@ -374,6 +375,9 @@ export type AppState = AppSliceState & {
   readonly diffMountPath: Readonly<Record<SessionId, string | null>>;
   readonly resolveQueueView: Readonly<Record<SessionId, ResolveQueueView>>;
   readonly resolveDiffReturn: Readonly<Record<SessionId, ResolveDiffReturn | null>>;
+  readonly resolveItemDrafts: Readonly<
+    Record<SessionId, Readonly<Record<string, ResolveItemDraft>>>
+  >;
   readonly sessionCreations: Readonly<Record<SessionId, ReadonlyArray<SessionCreation>>>;
   readonly sessionStudio: Readonly<Record<SessionId, SessionStudio | null>>;
   readonly focusedPlanId: Readonly<Record<SessionId, PlanId | null>>;
