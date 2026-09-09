@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from 'react';
+import type { KeyboardEvent, SyntheticEvent } from 'react';
 import { CalendarClock, ChevronRight, RotateCcw } from 'lucide-react';
 import { CardAction, CardActionSlot, Chip, ClampedProse, Tooltip, cn } from '@goodboy/ui';
 import { formatAbsoluteDateTime, formatRelativeAge } from '../../../../shared/utils/relativeDate';
@@ -27,6 +27,20 @@ const REVEAL_GROUP =
 
 const deliveryTimeMs = ({ row }: { readonly row: QueueRow }): number | null =>
   row.delivery === null ? null : (row.delivery.replyPostedAt ?? row.delivery.resolvedAt);
+
+const INNER_CONTROL_SELECTOR = 'a, button';
+
+const stopOnInnerControl = (event: SyntheticEvent<HTMLElement>): void => {
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return;
+  }
+  const control = target.closest(INNER_CONTROL_SELECTOR);
+  if (control === null || !event.currentTarget.contains(control)) {
+    return;
+  }
+  event.stopPropagation();
+};
 
 export const ResolveQueueRow = ({
   row,
@@ -78,8 +92,8 @@ export const ResolveQueueRow = ({
             </p>
           ) : (
             <div
-              onClick={(event) => event.stopPropagation()}
-              onKeyDown={(event) => event.stopPropagation()}
+              onClick={stopOnInnerControl}
+              onKeyDown={stopOnInnerControl}
               className="min-w-0 text-sm font-medium leading-5 text-foreground"
             >
               <ClampedProse text={body} lines={2} className="text-foreground" />
@@ -105,14 +119,16 @@ export const ResolveQueueRow = ({
             onClick={onOpen}
           />
         </CardActionSlot>
-        <span className="col-start-1 row-start-2 flex min-w-0 items-center gap-2 text-3xs text-muted-foreground">
-          {reviewerNote?.author != null && (
-            <span className="shrink-0 truncate">{reviewerNote.author}</span>
-          )}
-          {reviewerNote?.location != null && (
-            <span className="min-w-0 truncate font-mono">{reviewerNote.location}</span>
-          )}
-          <span className="ml-auto flex shrink-0 items-center gap-2">
+        <span className="col-start-1 row-start-2 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-3xs text-muted-foreground">
+          <span className="flex min-w-0 items-center gap-2">
+            {reviewerNote?.author != null && (
+              <span className="shrink-0 truncate">{reviewerNote.author}</span>
+            )}
+            {reviewerNote?.location != null && (
+              <span className="min-w-0 truncate font-mono">{reviewerNote.location}</span>
+            )}
+          </span>
+          <span className="flex shrink-0 items-center gap-2">
             {integratedSha !== null && (
               <Tooltip content={integratedSha} side="top">
                 <button
